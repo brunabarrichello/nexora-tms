@@ -18,7 +18,20 @@ export interface DriverInput {
   readonly statusReason: string | null;
 }
 
-export type DriverPatch = Partial<DriverInput>;
+export interface DriverPatch {
+  carrierPartyId?: string | null;
+  fullName?: string;
+  taxId?: string;
+  email?: string | null;
+  phone?: string;
+  whatsapp?: string | null;
+  cnhNumber?: string;
+  cnhCategory?: string;
+  cnhExpiresOn?: string;
+  registrationStatus?: DriverRegistrationStatus;
+  operationalStatus?: DriverOperationalStatus;
+  statusReason?: string | null;
+}
 
 function objectBody(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
