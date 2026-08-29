@@ -5,6 +5,7 @@ import { CapacityModule } from './capacity/capacity.module.js';
 import { FreightModule } from './freight/freight.module.js';
 import { HealthController } from './health.controller.js';
 import { MasterDataModule } from './master-data/master-data.module.js';
+import { MatchingModule } from './matching/matching.module.js';
 import { AuthenticationModule } from './security/authentication.module.js';
 import { TenantRuntimeGateModule } from './tenant-runtime-gate.module.js';
 import { TenancyModule } from './tenancy/tenancy.module.js';
@@ -17,6 +18,7 @@ import { TenancyModule } from './tenancy/tenancy.module.js';
     MasterDataModule,
     FreightModule,
     CapacityModule,
+    MatchingModule,
   ],
   controllers: [ApiController, HealthController],
 })
