@@ -1,10 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import {
-  ExecutionContext,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { generateKeyPair, SignJWT } from 'jose';
 
 import type { AuthenticatedHttpRequest } from './authenticated-principal.js';
@@ -16,9 +13,7 @@ import { verifyOidcJwt } from './oidc-token-verifier.service.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
-function executionContextFor(
-  request: AuthenticatedHttpRequest,
-): ExecutionContext {
+function executionContextFor(request: AuthenticatedHttpRequest): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => request,
@@ -26,9 +21,7 @@ function executionContextFor(
   } as unknown as ExecutionContext;
 }
 
-function verifier(
-  result: { providerKey: string; subject: string },
-): OidcTokenVerifierService {
+function verifier(result: { providerKey: string; subject: string }): OidcTokenVerifierService {
   return {
     verify: async () => result,
   } as unknown as OidcTokenVerifierService;
@@ -92,15 +85,15 @@ test('OIDC configuration preserves the canonical issuer including a trailing sla
     'OIDC_AUDIENCE',
     'OIDC_ALLOWED_ALGORITHMS',
   ] as const;
-  const previous = Object.fromEntries(
-    names.map((name) => [name, process.env[name]]),
-  ) as Record<(typeof names)[number], string | undefined>;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]])) as Record<
+    (typeof names)[number],
+    string | undefined
+  >;
 
   try {
     process.env.OIDC_PROVIDER_KEY = 'auth0';
     process.env.OIDC_ISSUER_URL = 'https://nexora-dev.us.auth0.com/';
-    process.env.OIDC_JWKS_URL =
-      'https://nexora-dev.us.auth0.com/.well-known/jwks.json';
+    process.env.OIDC_JWKS_URL = 'https://nexora-dev.us.auth0.com/.well-known/jwks.json';
     process.env.OIDC_AUDIENCE = 'urn:nexora:tms:api:development';
     process.env.OIDC_ALLOWED_ALGORITHMS = 'RS256';
 

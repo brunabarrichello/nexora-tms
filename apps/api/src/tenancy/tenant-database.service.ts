@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool, type PoolClient } from 'pg';
 
 import type { TenantContextSnapshot } from './tenant-context.js';
@@ -40,9 +36,7 @@ export class TenantDatabaseService implements OnModuleDestroy {
 
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
-      throw new ServiceUnavailableException(
-        'DATABASE_URL is not configured for the API runtime',
-      );
+      throw new ServiceUnavailableException('DATABASE_URL is not configured for the API runtime');
     }
 
     const configuredMax = Number.parseInt(process.env.DATABASE_POOL_MAX ?? '10', 10);

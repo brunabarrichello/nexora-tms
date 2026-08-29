@@ -26,8 +26,5 @@ test('authenticated probe rejects a request without an attached principal', () =
   const controller = new AuthController();
   const request: AuthenticatedHttpRequest = { headers: {} };
 
-  assert.throws(
-    () => controller.getAuthenticatedUser(request),
-    UnauthorizedException,
-  );
+  assert.throws(() => controller.getAuthenticatedUser(request), UnauthorizedException);
 });

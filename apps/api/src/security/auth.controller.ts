@@ -1,10 +1,4 @@
-import {
-  Controller,
-  Get,
-  Req,
-  UnauthorizedException,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Req, UnauthorizedException, UseGuards } from '@nestjs/common';
 
 import type { AuthenticatedHttpRequest } from './authenticated-principal.js';
 import { OidcAuthenticationGuard } from './oidc-authentication.guard.js';
@@ -13,9 +7,10 @@ import { OidcAuthenticationGuard } from './oidc-authentication.guard.js';
 @UseGuards(OidcAuthenticationGuard)
 export class AuthController {
   @Get('me')
-  getAuthenticatedUser(
-    @Req() request: AuthenticatedHttpRequest,
-  ): { authenticated: true; userId: string } {
+  getAuthenticatedUser(@Req() request: AuthenticatedHttpRequest): {
+    authenticated: true;
+    userId: string;
+  } {
     const principal = request.authenticatedPrincipal;
     if (!principal) {
       throw new UnauthorizedException('Authenticated principal is unavailable');

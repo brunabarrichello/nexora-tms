@@ -5,21 +5,21 @@
 
 ## Canonical stack
 
-| Layer | Decision |
-| --- | --- |
-| Runtime | Node.js 24 LTS, pinned in repository |
-| Language | TypeScript strict |
-| Monorepo | pnpm workspaces + Turborepo |
-| Web | Next.js App Router + React |
-| API | NestJS |
-| Worker | NestJS standalone / TypeScript |
-| Database | Neon PostgreSQL |
-| Persistence | Drizzle ORM + versioned explicit SQL |
-| Validation | Zod + boundary DTOs |
-| API | REST + OpenAPI |
-| Web runtime | Vercel |
-| API/Worker runtime | Railway |
-| Testing | unit, integration, contract, architecture and E2E |
+| Layer              | Decision                                          |
+| ------------------ | ------------------------------------------------- |
+| Runtime            | Node.js 24 LTS, pinned in repository              |
+| Language           | TypeScript strict                                 |
+| Monorepo           | pnpm workspaces + Turborepo                       |
+| Web                | Next.js App Router + React                        |
+| API                | NestJS                                            |
+| Worker             | NestJS standalone / TypeScript                    |
+| Database           | Neon PostgreSQL                                   |
+| Persistence        | Drizzle ORM + versioned explicit SQL              |
+| Validation         | Zod + boundary DTOs                               |
+| API                | REST + OpenAPI                                    |
+| Web runtime        | Vercel                                            |
+| API/Worker runtime | Railway                                           |
+| Testing            | unit, integration, contract, architecture and E2E |
 
 ## Backend structural rule
 
@@ -58,21 +58,21 @@ Rules:
 
 ## Bounded contexts v1
 
-| Context | Responsibility | Owned data examples |
-| --- | --- | --- |
-| Identity | local identity and IdP linkage | identity refs, sessions, auth audit |
-| Tenancy | organizations and memberships | organizations, memberships, tenant settings |
-| Master Data | customers, partners, contacts, locations | parties, addresses, contacts, operational points |
-| Capacity | drivers, vehicles and equipment | drivers, vehicles, equipment, assignments |
-| Freight | transport requests, cargo, route and quote | freight requests, cargo, stops, commercial quote |
-| Matching | proposals, negotiation, reservation and contracting | proposals, negotiations, reservations, contracts |
-| Trips | physical execution, milestones and incidents | trips, trip stops, milestones, incidents |
-| Documents | document metadata, validity and blocks | documents, requirements, compliance status |
-| Finance | cost, margin, payment and billing | obligations, receivables, settlements |
-| Notifications | internal notifications and preferences | notifications, delivery state |
-| Integrations | adapters, webhooks and integration metadata | configs, subscriptions, delivery logs |
-| Analytics | managerial projections/read models | projections/materialized read models |
-| Audit | immutable sensitive-event trail | audit events |
+| Context       | Responsibility                                      | Owned data examples                              |
+| ------------- | --------------------------------------------------- | ------------------------------------------------ |
+| Identity      | local identity and IdP linkage                      | identity refs, sessions, auth audit              |
+| Tenancy       | organizations and memberships                       | organizations, memberships, tenant settings      |
+| Master Data   | customers, partners, contacts, locations            | parties, addresses, contacts, operational points |
+| Capacity      | drivers, vehicles and equipment                     | drivers, vehicles, equipment, assignments        |
+| Freight       | transport requests, cargo, route and quote          | freight requests, cargo, stops, commercial quote |
+| Matching      | proposals, negotiation, reservation and contracting | proposals, negotiations, reservations, contracts |
+| Trips         | physical execution, milestones and incidents        | trips, trip stops, milestones, incidents         |
+| Documents     | document metadata, validity and blocks              | documents, requirements, compliance status       |
+| Finance       | cost, margin, payment and billing                   | obligations, receivables, settlements            |
+| Notifications | internal notifications and preferences              | notifications, delivery state                    |
+| Integrations  | adapters, webhooks and integration metadata         | configs, subscriptions, delivery logs            |
+| Analytics     | managerial projections/read models                  | projections/materialized read models             |
+| Audit         | immutable sensitive-event trail                     | audit events                                     |
 
 ## Allowed dependency flow
 
@@ -193,18 +193,18 @@ System jobs run under an auditable service identity and do not silently bypass b
 
 ## Shared packages governance
 
-| Package | May contain | Must not contain |
-| --- | --- | --- |
-| `ui` | reusable visual components | domain rules |
-| `database` | client/schema/migration helpers | business services |
-| `auth` | identity adapters/helpers | module-specific RBAC |
-| `config` | environment/config validation | hardcoded secrets |
-| `contracts` | public DTOs/schemas/events | ORM/domain entities |
-| `validation` | genuinely common validators | use-case logic |
-| `observability` | logging/correlation/telemetry | functional rules |
-| `security` | cross-cutting security primitives | one-module policies |
-| `testing` | fixtures/builders/helpers | real sensitive data |
-| `shared` | truly universal primitives | unowned generic code |
+| Package         | May contain                       | Must not contain     |
+| --------------- | --------------------------------- | -------------------- |
+| `ui`            | reusable visual components        | domain rules         |
+| `database`      | client/schema/migration helpers   | business services    |
+| `auth`          | identity adapters/helpers         | module-specific RBAC |
+| `config`        | environment/config validation     | hardcoded secrets    |
+| `contracts`     | public DTOs/schemas/events        | ORM/domain entities  |
+| `validation`    | genuinely common validators       | use-case logic       |
+| `observability` | logging/correlation/telemetry     | functional rules     |
+| `security`      | cross-cutting security primitives | one-module policies  |
+| `testing`       | fixtures/builders/helpers         | real sensitive data  |
+| `shared`        | truly universal primitives        | unowned generic code |
 
 Shared packages are created only when real reuse exists across two or more deployables.
 

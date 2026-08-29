@@ -11,9 +11,7 @@ export class TenantAuthorizationService {
     const active = this.tenantContext.require();
 
     if (!isUuid(resourceTenantId) || resourceTenantId !== active.tenantId) {
-      throw new ForbiddenException(
-        'The requested resource is outside the active tenant boundary',
-      );
+      throw new ForbiddenException('The requested resource is outside the active tenant boundary');
     }
   }
 }

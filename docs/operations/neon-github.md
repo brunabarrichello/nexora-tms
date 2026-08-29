@@ -19,11 +19,11 @@ The SQL verification lives at `scripts/neon/verify.sql` and is read-only.
 
 The workflow input is an environment selector only; it does not use GitHub Environments.
 
-| Workflow input | Neon branch |
-| --- | --- |
-| `production` | `main` |
-| `staging` | `staging` |
-| `development` | `development` |
+| Workflow input | Neon branch   |
+| -------------- | ------------- |
+| `production`   | `main`        |
+| `staging`      | `staging`     |
+| `development`  | `development` |
 
 This repository is private and currently uses GitHub Free. The workflow intentionally avoids GitHub Environment secrets.
 

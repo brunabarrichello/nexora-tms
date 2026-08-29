@@ -19,11 +19,11 @@ An Auth0 token or Auth0 Organization claim must never authorize a Nexora tenant 
 
 Create one Auth0 tenant per lifecycle environment when the subscription permits it.
 
-| Nexora environment | Suggested Auth0 tenant purpose | Auth0 API identifier / `OIDC_AUDIENCE` | `OIDC_PROVIDER_KEY` | Algorithm |
-| --- | --- | --- | --- | --- |
-| development | Nexora non-production development | `urn:nexora:tms:api:development` | `auth0` | `RS256` |
-| staging | Nexora pre-production validation | `urn:nexora:tms:api:staging` | `auth0` | `RS256` |
-| production | Nexora production identities | `urn:nexora:tms:api:production` | `auth0` | `RS256` |
+| Nexora environment | Suggested Auth0 tenant purpose    | Auth0 API identifier / `OIDC_AUDIENCE` | `OIDC_PROVIDER_KEY` | Algorithm |
+| ------------------ | --------------------------------- | -------------------------------------- | ------------------- | --------- |
+| development        | Nexora non-production development | `urn:nexora:tms:api:development`       | `auth0`             | `RS256`   |
+| staging            | Nexora pre-production validation  | `urn:nexora:tms:api:staging`           | `auth0`             | `RS256`   |
+| production         | Nexora production identities      | `urn:nexora:tms:api:production`        | `auth0`             | `RS256`   |
 
 Auth0 tenant names/domains are globally assigned and must be recorded after creation; do not invent or reuse a production domain for a lower environment.
 

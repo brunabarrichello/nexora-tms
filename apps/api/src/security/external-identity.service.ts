@@ -1,18 +1,11 @@
-import {
-  Injectable,
-  OnModuleDestroy,
-  ServiceUnavailableException,
-} from '@nestjs/common';
+import { Injectable, OnModuleDestroy, ServiceUnavailableException } from '@nestjs/common';
 import { Pool } from 'pg';
 
 @Injectable()
 export class ExternalIdentityService implements OnModuleDestroy {
   private pool?: Pool;
 
-  async resolveActiveUser(
-    providerKey: string,
-    subject: string,
-  ): Promise<string | undefined> {
+  async resolveActiveUser(providerKey: string, subject: string): Promise<string | undefined> {
     const result = await this.getPool().query<{ user_id: string }>(
       `SELECT external_identities.user_id::text AS user_id
          FROM external_identities
@@ -45,12 +38,8 @@ export class ExternalIdentityService implements OnModuleDestroy {
       );
     }
 
-    const configuredMax = Number.parseInt(
-      process.env.AUTH_DATABASE_POOL_MAX ?? '4',
-      10,
-    );
-    const max =
-      Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 4;
+    const configuredMax = Number.parseInt(process.env.AUTH_DATABASE_POOL_MAX ?? '4', 10);
+    const max = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 4;
 
     this.pool = new Pool({
       application_name: 'nexora-tms-api-auth',

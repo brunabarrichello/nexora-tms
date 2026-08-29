@@ -1,9 +1,4 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
 
 import type { AuthenticatedHttpRequest } from './authenticated-principal.js';
 import { ExternalIdentityService } from './external-identity.service.js';
@@ -17,16 +12,11 @@ export class OidcAuthenticationGuard implements CanActivate {
   ) {}
 
   async canActivate(executionContext: ExecutionContext): Promise<boolean> {
-    const request = executionContext
-      .switchToHttp()
-      .getRequest<AuthenticatedHttpRequest>();
+    const request = executionContext.switchToHttp().getRequest<AuthenticatedHttpRequest>();
 
     const token = this.readBearerToken(request);
     const identity = await this.verifier.verify(token);
-    const userId = await this.identities.resolveActiveUser(
-      identity.providerKey,
-      identity.subject,
-    );
+    const userId = await this.identities.resolveActiveUser(identity.providerKey, identity.subject);
 
     if (!userId) {
       throw new UnauthorizedException(

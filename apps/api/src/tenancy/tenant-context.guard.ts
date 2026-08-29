@@ -22,32 +22,19 @@ export class TenantContextGuard implements CanActivate {
   ) {}
 
   async canActivate(executionContext: ExecutionContext): Promise<boolean> {
-    const request = executionContext
-      .switchToHttp()
-      .getRequest<AuthenticatedHttpRequest>();
+    const request = executionContext.switchToHttp().getRequest<AuthenticatedHttpRequest>();
 
     const principal = request.authenticatedPrincipal;
-    if (
-      !principal ||
-      !isUuid(principal.userId) ||
-      principal.subject.trim().length === 0
-    ) {
-      throw new UnauthorizedException(
-        'A trusted authenticated principal is required',
-      );
+    if (!principal || !isUuid(principal.userId) || principal.subject.trim().length === 0) {
+      throw new UnauthorizedException('A trusted authenticated principal is required');
     }
 
     const tenantId = this.readTenantSelection(request);
     if (!tenantId || !isUuid(tenantId)) {
-      throw new BadRequestException(
-        `${TENANT_SELECTION_HEADER} must contain a valid tenant UUID`,
-      );
+      throw new BadRequestException(`${TENANT_SELECTION_HEADER} must contain a valid tenant UUID`);
     }
 
-    const activeMember = await this.memberships.isActiveMember(
-      principal.userId,
-      tenantId,
-    );
+    const activeMember = await this.memberships.isActiveMember(principal.userId, tenantId);
     if (!activeMember) {
       throw new ForbiddenException(
         'The authenticated user is not an active member of the selected tenant',
@@ -63,9 +50,7 @@ export class TenantContextGuard implements CanActivate {
     return true;
   }
 
-  private readTenantSelection(
-    request: AuthenticatedHttpRequest,
-  ): string | undefined {
+  private readTenantSelection(request: AuthenticatedHttpRequest): string | undefined {
     const header = request.headers[TENANT_SELECTION_HEADER];
     if (Array.isArray(header)) {
       return header.length === 1 ? header[0]?.trim() : undefined;
