@@ -12,8 +12,11 @@ import {
 import type { AuthenticatedHttpRequest } from '../security/authenticated-principal.js';
 import { TenantAuthorizationService } from './tenant-authorization.service.js';
 import { TenantContextGuard } from './tenant-context.guard.js';
-import { TenantContext } from './tenant-context.js';
-import type { TenantDatabaseService } from './tenant-database.service.js';
+import { TenantContext, type TenantContextSnapshot } from './tenant-context.js';
+import type {
+  TenantDatabaseService,
+  TenantQueryClient,
+} from './tenant-database.service.js';
 import type { TenantMembershipService } from './tenant-membership.service.js';
 import { TenantRuntimeGateController } from './tenant-runtime-gate.controller.js';
 
@@ -41,10 +44,13 @@ function databaseService(
   rows: Array<{ id: string; slug: string; name: string; status: string }>,
 ): TenantDatabaseService {
   return {
-    withTenantContext: async (_context, work) =>
+    withTenantContext: async (
+      _context: TenantContextSnapshot,
+      work: (client: TenantQueryClient) => Promise<unknown>,
+    ) =>
       work({
         query: async () => ({ rows }),
-      } as never),
+      } as unknown as TenantQueryClient),
   } as unknown as TenantDatabaseService;
 }
 
