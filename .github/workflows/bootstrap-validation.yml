@@ -1,0 +1,51 @@
+name: Bootstrap validation
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate monorepo bootstrap
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up pinned pnpm and Node.js
+        uses: pnpm/setup@v1
+        with:
+          version: 11.23.0
+          runtime: node@24.20.0
+          install: false
+          cache: false
+
+      - name: Verify toolchain
+        run: |
+          node --version
+          pnpm --version
+          pnpm check:toolchain
+
+      - name: Install dependencies and generate lockfile
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run quality gates
+        run: pnpm validate
+
+      - name: Build deployables
+        run: pnpm build
+
+      - name: Upload generated lockfile
+        if: ${{ always() && hashFiles('pnpm-lock.yaml') != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: pnpm-lock
+          path: pnpm-lock.yaml
+          retention-days: 1
