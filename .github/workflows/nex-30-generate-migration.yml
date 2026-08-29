@@ -1,0 +1,67 @@
+name: NEX-30 Generate Migration
+
+on:
+  push:
+    branches:
+      - feature/NEX-30-route-stops
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-30-route-stops
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test API
+        run: pnpm --filter @nexora/api test
+
+      - name: Generate Drizzle migration
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Add runtime grant to generated migration
+        shell: bash
+        run: |
+          migration="$(find packages/database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%T@ %p\n' | sort -nr | head -1 | cut -d' ' -f2-)"
+          test -n "$migration" || { echo "No generated migration found."; exit 1; }
+          cat >> "$migration" <<'SQL'
+          --> statement-breakpoint
+          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE transport_request_stops TO nexora_app;
+          SQL
+
+      - name: Commit generated migration
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/database/migrations
+          if git diff --cached --quiet; then
+            echo "No migration changes to commit."
+            exit 0
+          fi
+          SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "NEX-30 feat(db): generate route stops migration"
+          SKIP_SIMPLE_GIT_HOOKS=1 git push origin HEAD:feature/NEX-30-route-stops
