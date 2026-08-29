@@ -1,0 +1,56 @@
+name: Bug report
+description: Report a reproducible defect in Nexora TMS
+title: "[Bug]: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a defect. Do not include secrets, credentials, or sensitive production data.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Describe the defect clearly.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reliable reproduction.
+      placeholder: |
+        1. Go to ...
+        2. Perform ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      options:
+        - Local development
+        - Development
+        - Staging
+        - Production
+        - Unknown / not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact and additional context
+      description: Include severity, affected module, logs without secrets, or screenshots when useful.
