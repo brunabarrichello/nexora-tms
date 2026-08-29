@@ -29,6 +29,13 @@
       "when": 1788036485163,
       "tag": "0003_fearless_zzzax",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788037033584,
+      "tag": "0004_chilly_shaman",
+      "breakpoints": true
     }
   ]
 }
