@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { TenantContext } from '../tenancy/tenant-context.js';
 import {
@@ -6,9 +11,11 @@ import {
   type TenantQueryClient,
 } from '../tenancy/tenant-database.service.js';
 import {
+  hasPartnerRole,
   parseCreateBusinessParty,
   parseUpdateBusinessParty,
   requireUuid,
+  type BusinessPartyHomologationStatus,
   type BusinessPartyRole,
   type BusinessPartyStatus,
 } from './business-party.validation.js';
@@ -21,6 +28,8 @@ export interface BusinessParty {
   readonly email: string | null;
   readonly phone: string | null;
   readonly status: BusinessPartyStatus;
+  readonly homologationStatus: BusinessPartyHomologationStatus | null;
+  readonly homologationNotes: string | null;
   readonly roles: readonly BusinessPartyRole[];
   readonly createdAt: string;
   readonly updatedAt: string;
@@ -43,6 +52,8 @@ interface BusinessPartySnapshot {
   readonly email: string | null;
   readonly phone: string | null;
   readonly status: BusinessPartyStatus;
+  readonly homologationStatus: BusinessPartyHomologationStatus | null;
+  readonly homologationNotes: string | null;
   readonly roles: readonly BusinessPartyRole[];
 }
 
@@ -54,6 +65,8 @@ interface BusinessPartyRow {
   readonly email: string | null;
   readonly phone: string | null;
   readonly status: BusinessPartyStatus;
+  readonly homologation_status: BusinessPartyHomologationStatus | null;
+  readonly homologation_notes: string | null;
   readonly roles: BusinessPartyRole[] | null;
   readonly created_at: Date;
   readonly updated_at: Date;
@@ -77,6 +90,8 @@ const partySelect = `
     p.email,
     p.phone,
     p.status::text AS status,
+    p.homologation_status::text AS homologation_status,
+    p.homologation_notes,
     COALESCE(
       array_agg(r.role ORDER BY r.role) FILTER (WHERE r.role IS NOT NULL),
       ARRAY[]::varchar[]
@@ -130,10 +145,21 @@ export class BusinessPartyService {
              legal_name,
              trade_name,
              email,
-             phone
-           ) VALUES ($1::uuid, $2, $3, $4, $5, $6)
+             phone,
+             homologation_status,
+             homologation_notes
+           ) VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::business_party_homologation_status, $8)
            RETURNING id::text AS id`,
-          [context.tenantId, data.taxId, data.legalName, data.tradeName, data.email, data.phone],
+          [
+            context.tenantId,
+            data.taxId,
+            data.legalName,
+            data.tradeName,
+            data.email,
+            data.phone,
+            data.homologationStatus,
+            data.homologationNotes,
+          ],
         );
 
         const partyId = inserted.rows[0]!.id;
@@ -163,6 +189,26 @@ export class BusinessPartyService {
       return await this.database.withTenantContext(context, async (client) => {
         const before = await this.requireParty(client, partyId);
         const roles = patch.roles ?? before.roles;
+        const partnerScoped = hasPartnerRole(roles);
+
+        if (
+          !partnerScoped &&
+          patch.roles === undefined &&
+          (patch.homologationStatus !== undefined || patch.homologationNotes !== undefined)
+        ) {
+          throw new BadRequestException(
+            'homologation fields require at least one carrier, partner or supplier role',
+          );
+        }
+
+        const homologationStatus = partnerScoped
+          ? (patch.homologationStatus ?? before.homologationStatus ?? 'pending')
+          : null;
+        const homologationNotes = partnerScoped
+          ? patch.homologationNotes !== undefined
+            ? patch.homologationNotes
+            : before.homologationNotes
+          : null;
 
         await client.query(
           `UPDATE business_parties
@@ -172,6 +218,8 @@ export class BusinessPartyService {
                   email = $5,
                   phone = $6,
                   status = $7::business_party_status,
+                  homologation_status = $8::business_party_homologation_status,
+                  homologation_notes = $9,
                   updated_at = now()
             WHERE id = $1::uuid`,
           [
@@ -182,6 +230,8 @@ export class BusinessPartyService {
             patch.email !== undefined ? patch.email : before.email,
             patch.phone !== undefined ? patch.phone : before.phone,
             patch.status ?? before.status,
+            homologationStatus,
+            homologationNotes,
           ],
         );
 
@@ -316,6 +366,8 @@ function mapBusinessParty(row: BusinessPartyRow): BusinessParty {
     email: row.email,
     phone: row.phone,
     status: row.status,
+    homologationStatus: row.homologation_status,
+    homologationNotes: row.homologation_notes,
     roles: row.roles ?? [],
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
@@ -331,6 +383,8 @@ function snapshot(party: BusinessParty): BusinessPartySnapshot {
     email: party.email,
     phone: party.phone,
     status: party.status,
+    homologationStatus: party.homologationStatus,
+    homologationNotes: party.homologationNotes,
     roles: party.roles,
   };
 }
