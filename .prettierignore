@@ -4,3 +4,4 @@
 **/coverage/**
 **/.turbo/**
 packages/database/migrations/**
+pnpm-lock.yaml
