@@ -45,8 +45,12 @@ export const drivers = pgTable(
     cnhNumber: varchar('cnh_number', { length: 11 }).notNull(),
     cnhCategory: varchar('cnh_category', { length: 4 }).notNull(),
     cnhExpiresOn: date('cnh_expires_on').notNull(),
-    registrationStatus: driverRegistrationStatusEnum('registration_status').default('pending').notNull(),
-    operationalStatus: driverOperationalStatusEnum('operational_status').default('inactive').notNull(),
+    registrationStatus: driverRegistrationStatusEnum('registration_status')
+      .default('pending')
+      .notNull(),
+    operationalStatus: driverOperationalStatusEnum('operational_status')
+      .default('inactive')
+      .notNull(),
     statusReason: varchar('status_reason', { length: 500 }),
     createdByUserId: uuid('created_by_user_id')
       .notNull()
@@ -111,7 +115,10 @@ export const driverAudit = pgTable(
       foreignColumns: [drivers.tenantId, drivers.id],
       name: 'driver_audit_driver_fk',
     }).onDelete('cascade'),
-    check('driver_audit_change_type_check', sql`${table.changeType} in ('created','updated','status_changed')`),
+    check(
+      'driver_audit_change_type_check',
+      sql`${table.changeType} in ('created','updated','status_changed')`,
+    ),
     index('driver_audit_tenant_driver_idx').on(table.tenantId, table.driverId, table.createdAt),
     pgPolicy('driver_audit_tenant_isolation', {
       for: 'all',

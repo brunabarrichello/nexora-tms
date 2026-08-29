@@ -107,7 +107,9 @@ export class DriverService {
   async getById(id: string): Promise<Driver> {
     const driverId = requireUuid(id);
     const context = this.tenantContext.require();
-    return this.database.withTenantContext(context, (client) => this.requireDriver(client, driverId));
+    return this.database.withTenantContext(context, (client) =>
+      this.requireDriver(client, driverId),
+    );
   }
 
   async create(input: unknown): Promise<Driver> {
@@ -161,12 +163,14 @@ export class DriverService {
     try {
       return await this.database.withTenantContext(context, async (client) => {
         const before = await this.requireDriver(client, driverId);
-        const carrierPartyId = patch.carrierPartyId !== undefined ? patch.carrierPartyId : before.carrierPartyId;
+        const carrierPartyId =
+          patch.carrierPartyId !== undefined ? patch.carrierPartyId : before.carrierPartyId;
         await this.validateCarrier(client, carrierPartyId);
 
         const registrationStatus = patch.registrationStatus ?? before.registrationStatus;
         const operationalStatus = patch.operationalStatus ?? before.operationalStatus;
-        const statusReason = patch.statusReason !== undefined ? patch.statusReason : before.statusReason;
+        const statusReason =
+          patch.statusReason !== undefined ? patch.statusReason : before.statusReason;
         validateDriverStatusCombination(registrationStatus, operationalStatus, statusReason);
 
         await client.query(
@@ -255,7 +259,10 @@ export class DriverService {
     return mapDriver(row);
   }
 
-  private async validateCarrier(client: TenantQueryClient, carrierPartyId: string | null): Promise<void> {
+  private async validateCarrier(
+    client: TenantQueryClient,
+    carrierPartyId: string | null,
+  ): Promise<void> {
     if (!carrierPartyId) return;
     const result = await client.query(
       `SELECT 1
@@ -269,7 +276,9 @@ export class DriverService {
       [carrierPartyId],
     );
     if (result.rowCount !== 1) {
-      throw new BadRequestException('carrierPartyId must reference an active carrier in the current tenant');
+      throw new BadRequestException(
+        'carrierPartyId must reference an active carrier in the current tenant',
+      );
     }
   }
 
@@ -285,14 +294,24 @@ export class DriverService {
       `INSERT INTO driver_audit (
          tenant_id, driver_id, actor_user_id, change_type, before_snapshot, after_snapshot
        ) VALUES ($1::uuid, $2::uuid, $3::uuid, $4, $5::jsonb, $6::jsonb)`,
-      [tenantId, after.id, actorUserId, changeType, before ? JSON.stringify(snapshot(before)) : null, JSON.stringify(snapshot(after))],
+      [
+        tenantId,
+        after.id,
+        actorUserId,
+        changeType,
+        before ? JSON.stringify(snapshot(before)) : null,
+        JSON.stringify(snapshot(after)),
+      ],
     );
   }
 
   private rethrowDatabaseConstraint(error: unknown): never {
-    const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
-    if (code === '23505') throw new ConflictException('Driver CPF or CNH is already registered for this tenant');
-    if (code === '23503' || code === '23514') throw new BadRequestException('Driver data violates a business constraint');
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+    if (code === '23505')
+      throw new ConflictException('Driver CPF or CNH is already registered for this tenant');
+    if (code === '23503' || code === '23514')
+      throw new BadRequestException('Driver data violates a business constraint');
     throw error;
   }
 }
@@ -317,7 +336,8 @@ function mapDriver(row: DriverRow): Driver {
     registrationStatus: row.registration_status,
     operationalStatus: row.operational_status,
     statusReason: row.status_reason,
-    eligibleForMatching: row.registration_status === 'qualified' && row.operational_status === 'active',
+    eligibleForMatching:
+      row.registration_status === 'qualified' && row.operational_status === 'active',
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };

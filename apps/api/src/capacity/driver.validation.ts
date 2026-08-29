@@ -66,7 +66,9 @@ function digits(value: unknown, field: string, size: number): string {
 function uuidOrNull(value: unknown, field: string): string | null {
   if (value === undefined || value === null || value === '') return null;
   const normalized = text(value, field, 36);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
@@ -82,7 +84,10 @@ function emailOrNull(value: unknown): string | null {
 
 function dateOnly(value: unknown, field: string): string {
   const normalized = text(value, field, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized) || Number.isNaN(Date.parse(`${normalized}T00:00:00Z`))) {
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(normalized) ||
+    Number.isNaN(Date.parse(`${normalized}T00:00:00Z`))
+  ) {
     throw new BadRequestException(`${field} must use YYYY-MM-DD`);
   }
   return normalized;
@@ -98,7 +103,8 @@ function category(value: unknown): string {
 
 function registration(value: unknown): DriverRegistrationStatus {
   if (value === undefined) return 'pending';
-  if (value === 'pending' || value === 'qualified' || value === 'blocked' || value === 'inactive') return value;
+  if (value === 'pending' || value === 'qualified' || value === 'blocked' || value === 'inactive')
+    return value;
   throw new BadRequestException('registrationStatus is invalid');
 }
 
@@ -117,10 +123,14 @@ function validateStatus(
     throw new BadRequestException('operationalStatus active requires registrationStatus qualified');
   }
   if (
-    (registrationStatus === 'blocked' || registrationStatus === 'inactive' || operationalStatus === 'blocked') &&
+    (registrationStatus === 'blocked' ||
+      registrationStatus === 'inactive' ||
+      operationalStatus === 'blocked') &&
     !statusReason
   ) {
-    throw new BadRequestException('statusReason is required for blocked or cadastrally inactive drivers');
+    throw new BadRequestException(
+      'statusReason is required for blocked or cadastrally inactive drivers',
+    );
   }
 }
 
@@ -150,7 +160,8 @@ export function parseCreateDriver(input: unknown): DriverInput {
 export function parseUpdateDriver(input: unknown): DriverPatch {
   const body = objectBody(input);
   const patch: DriverPatch = {};
-  if ('carrierPartyId' in body) patch.carrierPartyId = uuidOrNull(body.carrierPartyId, 'carrierPartyId');
+  if ('carrierPartyId' in body)
+    patch.carrierPartyId = uuidOrNull(body.carrierPartyId, 'carrierPartyId');
   if ('fullName' in body) patch.fullName = text(body.fullName, 'fullName', 180, 3);
   if ('taxId' in body) patch.taxId = digits(body.taxId, 'taxId', 11);
   if ('email' in body) patch.email = emailOrNull(body.email);
@@ -159,10 +170,13 @@ export function parseUpdateDriver(input: unknown): DriverPatch {
   if ('cnhNumber' in body) patch.cnhNumber = digits(body.cnhNumber, 'cnhNumber', 11);
   if ('cnhCategory' in body) patch.cnhCategory = category(body.cnhCategory);
   if ('cnhExpiresOn' in body) patch.cnhExpiresOn = dateOnly(body.cnhExpiresOn, 'cnhExpiresOn');
-  if ('registrationStatus' in body) patch.registrationStatus = registration(body.registrationStatus);
+  if ('registrationStatus' in body)
+    patch.registrationStatus = registration(body.registrationStatus);
   if ('operationalStatus' in body) patch.operationalStatus = operational(body.operationalStatus);
-  if ('statusReason' in body) patch.statusReason = optionalText(body.statusReason, 'statusReason', 500);
-  if (Object.keys(patch).length === 0) throw new BadRequestException('At least one field must be provided');
+  if ('statusReason' in body)
+    patch.statusReason = optionalText(body.statusReason, 'statusReason', 500);
+  if (Object.keys(patch).length === 0)
+    throw new BadRequestException('At least one field must be provided');
   return patch;
 }
 

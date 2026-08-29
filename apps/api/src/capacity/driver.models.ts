@@ -1,7 +1,4 @@
-import type {
-  DriverOperationalStatus,
-  DriverRegistrationStatus,
-} from './driver.validation.js';
+import type { DriverOperationalStatus, DriverRegistrationStatus } from './driver.validation.js';
 
 export interface DriverRow {
   readonly id: string;
