@@ -1,0 +1,1129 @@
+name: Neon Database Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - "packages/database/**"
+      - "apps/api/src/freight/**"
+      - "apps/api/src/capacity/**"
+      - "pnpm-workspace.yaml"
+      - ".github/workflows/neon-pr-gate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-db-gate-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  isolated-migration-rls:
+    name: Isolated migration and RLS
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || {
+            echo "NEON_API_KEY repository secret is not configured." >&2
+            exit 1
+          }
+
+      - name: Set ephemeral branch name and expiry
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-db-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch with admin connection
+        id: create-neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Bootstrap isolated DDL capability
+        shell: bash
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+          capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_owner', current_database(), 'CREATE'), has_schema_privilege('nexora_owner','public','CREATE')")"
+          [[ "$capabilities" == "t:t" ]] || {
+            echo "nexora_owner DDL capability bootstrap failed: $capabilities" >&2
+            exit 1
+          }
+
+      - name: Resolve migrator connection on isolated branch
+        id: migrator-connection
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Resolve migration capability
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator-connection.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
+          [[ "$roles" == "nexora_migrator:nexora_owner" ]] || {
+            echo "Unexpected migration role chain: $roles" >&2
+            exit 1
+          }
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Apply full versioned Drizzle migration chain
+        shell: bash
+        run: |
+          set -euo pipefail
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify migration ledger, schema, RLS and runtime grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            table_count integer;
+            rls_count integer;
+            migration_count integer;
+            request_enum_count integer;
+            stop_enum_count integer;
+            commercial_enum_count integer;
+            driver_registration_enum_count integer;
+            driver_operational_enum_count integer;
+            capacity_asset_kind_enum_count integer;
+            capacity_asset_status_enum_count integer;
+            capacity_assignment_enum_count integer;
+          BEGIN
+            SELECT count(*) INTO table_count
+              FROM information_schema.tables
+             WHERE table_schema='public'
+               AND table_name IN (
+                 'tenants','tenant_settings','organizations','business_units','users',
+                 'external_identities','memberships','permissions','roles','role_permissions',
+                 'membership_roles','membership_organization_scopes','membership_business_unit_scopes',
+                 'business_parties','business_party_roles','business_party_audit',
+                 'business_party_addresses','business_party_contacts','transport_requests',
+                 'transport_request_stops','transport_request_cargo_profiles',
+                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments'
+               );
+            IF table_count <> 28 THEN
+              RAISE EXCEPTION 'Expected 28 application tables, found %', table_count;
+            END IF;
+
+            SELECT count(*) INTO rls_count
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public'
+               AND c.relname IN (
+                 'tenants','tenant_settings','organizations','business_units','memberships',
+                 'roles','role_permissions','membership_roles',
+                 'membership_organization_scopes','membership_business_unit_scopes',
+                 'business_parties','business_party_roles','business_party_audit',
+                 'business_party_addresses','business_party_contacts','transport_requests',
+                 'transport_request_stops','transport_request_cargo_profiles',
+                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments'
+               )
+               AND c.relrowsecurity;
+            IF rls_count <> 25 THEN
+              RAISE EXCEPTION 'Expected RLS on 25 tenant-scoped tables, found %', rls_count;
+            END IF;
+
+            SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
+            IF migration_count <> 12 THEN
+              RAISE EXCEPTION 'Expected 12 Drizzle migration records, found %', migration_count;
+            END IF;
+
+            SELECT count(*) INTO request_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='transport_request_status'
+               AND e.enumlabel IN ('draft','ready_for_quote','in_negotiation','contracted','cancelled');
+            IF request_enum_count <> 5 THEN
+              RAISE EXCEPTION 'Expected five transport request status values, found %', request_enum_count;
+            END IF;
+
+            SELECT count(*) INTO stop_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='transport_stop_type'
+               AND e.enumlabel IN ('pickup','delivery','support');
+            IF stop_enum_count <> 3 THEN
+              RAISE EXCEPTION 'Expected three transport stop type values, found %', stop_enum_count;
+            END IF;
+
+            SELECT count(*) INTO commercial_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='commercial_terms_status'
+               AND e.enumlabel IN ('draft','pending_approval','approved','rejected');
+            IF commercial_enum_count <> 4 THEN
+              RAISE EXCEPTION 'Expected four commercial terms status values, found %', commercial_enum_count;
+            END IF;
+
+            SELECT count(*) INTO driver_registration_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='driver_registration_status'
+               AND e.enumlabel IN ('pending','qualified','blocked','inactive');
+            IF driver_registration_enum_count <> 4 THEN
+              RAISE EXCEPTION 'Expected four driver registration status values, found %', driver_registration_enum_count;
+            END IF;
+
+            SELECT count(*) INTO driver_operational_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='driver_operational_status'
+               AND e.enumlabel IN ('active','blocked','inactive');
+            IF driver_operational_enum_count <> 3 THEN
+              RAISE EXCEPTION 'Expected three driver operational status values, found %', driver_operational_enum_count;
+            END IF;
+
+            SELECT count(*) INTO capacity_asset_kind_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='capacity_asset_kind'
+               AND e.enumlabel IN ('vehicle','implement');
+            IF capacity_asset_kind_enum_count <> 2 THEN
+              RAISE EXCEPTION 'Expected two capacity asset kind values, found %', capacity_asset_kind_enum_count;
+            END IF;
+
+            SELECT count(*) INTO capacity_asset_status_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='capacity_asset_status'
+               AND e.enumlabel IN ('active','blocked','inactive');
+            IF capacity_asset_status_enum_count <> 3 THEN
+              RAISE EXCEPTION 'Expected three capacity asset status values, found %', capacity_asset_status_enum_count;
+            END IF;
+
+            SELECT count(*) INTO capacity_assignment_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='capacity_assignment_status'
+               AND e.enumlabel IN ('active','ended','cancelled');
+            IF capacity_assignment_enum_count <> 3 THEN
+              RAISE EXCEPTION 'Expected three capacity assignment status values, found %', capacity_assignment_enum_count;
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_roles
+               WHERE rolname='nexora_app' AND rolcanlogin AND NOT rolbypassrls
+            ) THEN
+              RAISE EXCEPTION 'nexora_app must be LOGIN and must not BYPASSRLS';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+                FROM pg_class c
+                JOIN pg_namespace n ON n.oid=c.relnamespace
+                JOIN pg_roles r ON r.oid=c.relowner
+               WHERE n.nspname='public'
+                 AND c.relname IN (
+                   'tenants','organizations','business_units','memberships','roles',
+                   'business_parties','business_party_roles','business_party_audit',
+                   'business_party_addresses','business_party_contacts','transport_requests',
+                   'transport_request_stops','transport_request_cargo_profiles',
+                   'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments'
+                 )
+                 AND r.rolname='nexora_app'
+            ) THEN
+              RAISE EXCEPTION 'nexora_app must not own application tables';
+            END IF;
+
+            IF NOT has_table_privilege('nexora_app','public.tenants','SELECT')
+               OR has_table_privilege('nexora_app','public.tenants','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_parties','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_parties','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_parties','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_parties','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_addresses','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_addresses','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_addresses','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_addresses','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_contacts','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_contacts','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_contacts','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_contacts','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_requests','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_requests','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_requests','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_requests','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','UPDATE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_request_cargo_profiles','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_terms','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_terms','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_terms','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_request_commercial_terms','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_history','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_history','INSERT')
+               OR has_table_privilege('nexora_app','public.transport_request_commercial_history','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_request_commercial_history','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.drivers','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.drivers','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.drivers','UPDATE')
+               OR has_table_privilege('nexora_app','public.drivers','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.driver_audit','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.driver_audit','INSERT')
+               OR has_table_privilege('nexora_app','public.driver_audit','UPDATE')
+               OR has_table_privilege('nexora_app','public.driver_audit','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.capacity_assets','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.capacity_assets','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.capacity_assets','UPDATE')
+               OR has_table_privilege('nexora_app','public.capacity_assets','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.capacity_asset_audit','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.capacity_asset_audit','INSERT')
+               OR has_table_privilege('nexora_app','public.capacity_asset_audit','UPDATE')
+               OR has_table_privilege('nexora_app','public.capacity_asset_audit','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.capacity_assignments','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.capacity_assignments','INSERT')
+               OR has_table_privilege('nexora_app','public.capacity_assignments','UPDATE')
+               OR has_table_privilege('nexora_app','public.capacity_assignments','DELETE')
+               OR NOT has_column_privilege('nexora_app','public.capacity_assignments','status','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.capacity_assignments','ends_at','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.capacity_assignments','status_reason','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.capacity_assignments','updated_by_user_id','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.capacity_assignments','updated_at','UPDATE')
+               OR has_column_privilege('nexora_app','public.capacity_assignments','tenant_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.capacity_assignments','driver_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.capacity_assignments','vehicle_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.capacity_assignments','carrier_party_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.capacity_assignments','starts_at','UPDATE') THEN
+              RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Seed isolated tenant fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO tenants (id, slug, name) VALUES
+            ('00000000-0000-4000-8000-000000000001','gate-tenant-a','Gate Tenant A'),
+            ('00000000-0000-4000-8000-000000000002','gate-tenant-b','Gate Tenant B');
+
+          INSERT INTO users (id, display_name) VALUES
+            ('00000000-0000-4000-8000-000000000101','Gate User A'),
+            ('00000000-0000-4000-8000-000000000102','Gate User B');
+
+          INSERT INTO organizations (id, tenant_id, code, name) VALUES
+            ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000001','ORG-A','Tenant A Org'),
+            ('00000000-0000-4000-8000-000000000202','00000000-0000-4000-8000-000000000002','ORG-B','Tenant B Org');
+
+          INSERT INTO memberships (id, tenant_id, user_id, status) VALUES
+            ('00000000-0000-4000-8000-000000000301','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000101','active'),
+            ('00000000-0000-4000-8000-000000000302','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000101','active'),
+            ('00000000-0000-4000-8000-000000000303','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000102','active');
+
+          INSERT INTO business_units (id, tenant_id, organization_id, code, name) VALUES
+            ('00000000-0000-4000-8000-000000000401','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000201','UNIT-A','Tenant A Unit');
+
+          INSERT INTO business_parties (
+            id, tenant_id, tax_id, legal_name, email, homologation_status, homologation_notes
+          ) VALUES
+            ('00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000001','12345678901','Tenant A Customer Shipper','shipper-a@example.test','approved','Approved carrier-capable shipper'),
+            ('00000000-0000-4000-8000-000000000503','00000000-0000-4000-8000-000000000001','12345678903','Tenant A Consignee','consignee-a@example.test',NULL,NULL),
+            ('00000000-0000-4000-8000-000000000504','00000000-0000-4000-8000-000000000001','12345678904','Tenant A Support','support-a@example.test',NULL,NULL),
+            ('00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000002','12345678902','Tenant B Supplier','supplier-b@example.test','pending','Pending supplier');
+
+          INSERT INTO business_party_roles (tenant_id, party_id, role) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','customer'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','shipper'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','carrier'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000503','consignee'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000504','partner'),
+            ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','supplier');
+
+          INSERT INTO business_party_addresses (
+            id, tenant_id, party_id, type, label, postal_code, street, number, city, state,
+            operational_reference, is_active
+          ) VALUES
+            ('00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','pickup','Tenant A Pickup','01234-567','Avenida A','100','São Paulo','SP','Portaria A',true),
+            ('00000000-0000-4000-8000-000000000703','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000503','delivery','Tenant A Delivery','78000-000','Rua C','300','Cuiabá','MT','Doca C',true),
+            ('00000000-0000-4000-8000-000000000704','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000504','operational','Tenant A Support','74000-000','Rua D','400','Goiânia','GO','Ponto de apoio',true),
+            ('00000000-0000-4000-8000-000000000702','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','delivery','Tenant B Delivery','80000-000','Rua B','200','Curitiba','PR','Doca B',true);
+
+          INSERT INTO business_party_contacts (
+            id, tenant_id, party_id, address_id, type, name, email, is_active
+          ) VALUES
+            ('00000000-0000-4000-8000-000000000711','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','logistics','Gate Logistics A','ops-a@example.test',true),
+            ('00000000-0000-4000-8000-000000000713','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000504','00000000-0000-4000-8000-000000000704','operational','Gate Support A','support-a@example.test',true),
+            ('00000000-0000-4000-8000-000000000712','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000702','delivery','Gate Delivery B','ops-b@example.test',true);
+
+          INSERT INTO business_party_audit (
+            id, tenant_id, party_id, actor_user_id, change_type, after_snapshot
+          ) VALUES
+            ('00000000-0000-4000-8000-000000000601','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000101','created','{"id":"00000000-0000-4000-8000-000000000501"}'::jsonb),
+            ('00000000-0000-4000-8000-000000000602','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000102','created','{"id":"00000000-0000-4000-8000-000000000502"}'::jsonb);
+
+          INSERT INTO transport_requests (
+            id, tenant_id, customer_party_id, shipper_party_id, consignee_party_id,
+            origin_address_id, destination_address_id, planned_pickup_at, planned_delivery_at,
+            cargo_description, status, created_by_user_id, updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000801','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000501',
+            '00000000-0000-4000-8000-000000000503','00000000-0000-4000-8000-000000000701',
+            '00000000-0000-4000-8000-000000000703','2026-09-01T08:00:00Z','2026-09-02T12:00:00Z',
+            'Gate cargo request','draft','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO transport_request_stops (
+            id, tenant_id, transport_request_id, sequence, type, party_id, address_id, contact_id,
+            window_start_at, window_end_at, instructions
+          ) VALUES
+            ('00000000-0000-4000-8000-000000000811','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',1,'pickup','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000711','2026-09-01T08:00:00Z','2026-09-01T10:00:00Z','Portaria A'),
+            ('00000000-0000-4000-8000-000000000812','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',2,'support','00000000-0000-4000-8000-000000000504','00000000-0000-4000-8000-000000000704','00000000-0000-4000-8000-000000000713','2026-09-01T18:00:00Z','2026-09-01T19:00:00Z','Apoio'),
+            ('00000000-0000-4000-8000-000000000813','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',3,'delivery','00000000-0000-4000-8000-000000000503','00000000-0000-4000-8000-000000000703',NULL,'2026-09-02T08:00:00Z','2026-09-02T12:00:00Z','Doca C');
+          SQL
+
+      - name: Resolve nexora_app connection on isolated branch
+        id: app-connection
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Validate positive and negative RLS scenarios
+        shell: bash
+        env:
+          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APP_DATABASE_URL"
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            visible_count integer;
+            ordered_sequences text;
+          BEGIN
+            PERFORM set_config('app.tenant_id','',false);
+            PERFORM set_config('app.user_id','',false);
+            SELECT count(*) INTO visible_count FROM transport_requests;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context transport requests must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_stops;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context route stops must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context cargo profiles must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_terms;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context commercial terms must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_history;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context commercial history must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM drivers;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context drivers must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM driver_audit;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context driver audit must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM capacity_assets;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context capacity assets must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM capacity_asset_audit;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context capacity asset audit must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM capacity_assignments;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context capacity assignments must be 0, got %', visible_count; END IF;
+
+            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+            SELECT count(*) INTO visible_count FROM memberships;
+            IF visible_count <> 2 THEN RAISE EXCEPTION 'User discovery must return 2 memberships, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_stops;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose route stops, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose cargo profiles, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_terms;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose commercial terms, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_history;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose commercial history, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM drivers;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose drivers, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM driver_audit;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose driver audit, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM capacity_assets;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose capacity assets, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM capacity_asset_audit;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose capacity asset audit, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM capacity_assignments;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose capacity assignments, got %', visible_count; END IF;
+
+            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+            SELECT count(*) INTO visible_count FROM transport_requests;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see one transport request, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_stops;
+            IF visible_count <> 3 THEN RAISE EXCEPTION 'Tenant A must see three route stops, got %', visible_count; END IF;
+            SELECT string_agg(sequence::text, ',' ORDER BY sequence) INTO ordered_sequences
+              FROM transport_request_stops
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            IF ordered_sequences <> '1,2,3' THEN RAISE EXCEPTION 'Route sequence must be 1,2,3, got %', ordered_sequences; END IF;
+          END $$;
+
+          DELETE FROM transport_request_stops
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          INSERT INTO transport_request_stops (
+            tenant_id, transport_request_id, sequence, type, party_id, address_id, contact_id,
+            window_start_at, window_end_at, instructions
+          ) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',1,'pickup','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000711','2026-09-01T08:30:00Z','2026-09-01T10:30:00Z','Runtime pickup'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',2,'delivery','00000000-0000-4000-8000-000000000503','00000000-0000-4000-8000-000000000703',NULL,'2026-09-02T08:30:00Z','2026-09-02T12:00:00Z','Runtime delivery');
+
+          UPDATE transport_request_stops
+             SET instructions='Updated pickup instruction', updated_at=now()
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801'
+             AND sequence=1;
+
+          DO $$ DECLARE c integer; note text; BEGIN
+            SELECT count(*) INTO c FROM transport_request_stops
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            IF c <> 2 THEN RAISE EXCEPTION 'Route replacement must leave 2 stops, got %', c; END IF;
+            SELECT instructions INTO note FROM transport_request_stops
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801' AND sequence=1;
+            IF note <> 'Updated pickup instruction' THEN RAISE EXCEPTION 'Runtime route stop update failed'; END IF;
+          END $$;
+
+          INSERT INTO transport_request_cargo_profiles (
+            tenant_id, transport_request_id, material, cargo_type, total_weight_kg,
+            volume_count, pallet_count, cubage_m3, max_length_m, max_width_m, max_height_m,
+            tracking_required, vehicle_type, body_type, non_stackable, special_cargo, special_instructions
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            'Eletrônicos gerais','general',5000,20,4,18.5,2.4,1.2,1.8,true,'carreta','sider',true,false,NULL
+          );
+
+          UPDATE transport_request_cargo_profiles
+             SET total_weight_kg=5250, pallet_count=5, updated_at=now()
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          DO $$ DECLARE c integer; weight numeric; pallets integer; BEGIN
+            SELECT count(*), max(total_weight_kg), max(pallet_count) INTO c, weight, pallets
+              FROM transport_request_cargo_profiles
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            IF c <> 1 THEN RAISE EXCEPTION 'Cargo profile must contain one row, got %', c; END IF;
+            IF weight <> 5250 OR pallets <> 5 THEN RAISE EXCEPTION 'Runtime cargo profile update failed'; END IF;
+          END $$;
+
+          INSERT INTO transport_request_commercial_terms (
+            tenant_id,transport_request_id,currency_code,customer_price,target_carrier_freight,toll_amount,additional_amount,
+            payment_terms,commercial_notes,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801','BRL',18500,16000,313.80,250,
+            '70% coleta / 30% entrega via Pix','Gate commercial terms','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO transport_request_commercial_history (
+            tenant_id,transport_request_id,commercial_terms_id,version,event_type,status,actor_user_id,snapshot
+          ) SELECT tenant_id,transport_request_id,id,1,'created','draft','00000000-0000-4000-8000-000000000101','{"status":"draft"}'::jsonb
+              FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          UPDATE transport_request_commercial_terms
+             SET status='pending_approval', version=2, updated_by_user_id='00000000-0000-4000-8000-000000000101', updated_at=now()
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+          INSERT INTO transport_request_commercial_history (
+            tenant_id,transport_request_id,commercial_terms_id,version,event_type,status,actor_user_id,snapshot
+          ) SELECT tenant_id,transport_request_id,id,2,'submitted','pending_approval','00000000-0000-4000-8000-000000000101','{"status":"pending_approval"}'::jsonb
+              FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          UPDATE transport_request_commercial_terms
+             SET status='approved', approval_note='Gate approved', approved_by_user_id='00000000-0000-4000-8000-000000000101',
+                 approved_at=now(), version=3, updated_by_user_id='00000000-0000-4000-8000-000000000101', updated_at=now()
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+          INSERT INTO transport_request_commercial_history (
+            tenant_id,transport_request_id,commercial_terms_id,version,event_type,status,actor_user_id,snapshot,note
+          ) SELECT tenant_id,transport_request_id,id,3,'approved','approved','00000000-0000-4000-8000-000000000101','{"status":"approved"}'::jsonb,'Gate approved'
+              FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          DO $$ DECLARE s text; v integer; h integer; BEGIN
+            SELECT status::text, version INTO s, v FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            SELECT count(*) INTO h FROM transport_request_commercial_history
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            IF s <> 'approved' OR v <> 3 THEN RAISE EXCEPTION 'Commercial approval state is invalid: % v%', s, v; END IF;
+            IF h <> 3 THEN RAISE EXCEPTION 'Commercial history must contain 3 versions, got %', h; END IF;
+          END $$;
+          SQL
+
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO drivers (
+            id,tenant_id,carrier_party_id,full_name,tax_id,email,phone,whatsapp,cnh_number,cnh_category,
+            cnh_expires_on,registration_status,operational_status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501',
+            'Gate Driver A','98765432100','driver-a@example.test','11999990000','11999990000','12345678901','E',
+            '2029-12-31','qualified','active','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          INSERT INTO driver_audit (tenant_id,driver_id,actor_user_id,change_type,after_snapshot)
+          VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000101',
+            'created','{"id":"00000000-0000-4000-8000-000000000901","registrationStatus":"qualified","operationalStatus":"active"}'::jsonb
+          );
+          DO $$ DECLARE d integer; a integer; BEGIN
+            SELECT count(*) INTO d FROM drivers WHERE id='00000000-0000-4000-8000-000000000901';
+            SELECT count(*) INTO a FROM driver_audit WHERE driver_id='00000000-0000-4000-8000-000000000901';
+            IF d <> 1 OR a <> 1 THEN RAISE EXCEPTION 'Driver runtime create/audit failed: driver %, audit %', d, a; END IF;
+          END $$;
+          SQL
+
+          set +e
+          driver_audit_update_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE driver_audit SET change_type='updated' WHERE driver_id='00000000-0000-4000-8000-000000000901';
+          SQL
+          )"
+          driver_audit_update_status=$?
+          set -e
+          if [[ "$driver_audit_update_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$driver_audit_update_output"; then
+            echo "Driver audit must be append-only for nexora_app." >&2
+            echo "$driver_audit_update_output" >&2
+            exit 1
+          fi
+
+          set +e
+          driver_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO drivers (
+            tenant_id,carrier_party_id,full_name,tax_id,phone,cnh_number,cnh_category,cnh_expires_on,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','Cross Tenant Driver',
+            '98765432101','11999990001','12345678902','D','2029-12-31',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          driver_cross_tenant_status=$?
+          set -e
+          if [[ "$driver_cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$driver_cross_tenant_output"; then
+            echo "Cross-tenant driver RLS rejection did not behave as expected." >&2
+            echo "$driver_cross_tenant_output" >&2
+            exit 1
+          fi
+
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO capacity_assets (
+            id,tenant_id,carrier_party_id,asset_kind,identifier,plate,vehicle_type,body_type,
+            capacity_weight_kg,capacity_volume_m3,max_length_m,max_width_m,max_height_m,
+            tracking_available,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501',
+            'vehicle','GATE-TRUCK-001','ABC1D23','truck','sider',14000,85,14.8,2.6,2.9,true,'active',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          INSERT INTO capacity_asset_audit (tenant_id,asset_id,actor_user_id,change_type,after_snapshot)
+          VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000101',
+            'created','{"id":"00000000-0000-4000-8000-000000000902","identifier":"GATE-TRUCK-001","status":"active"}'::jsonb
+          );
+          DO $$ DECLARE a integer; h integer; BEGIN
+            SELECT count(*) INTO a FROM capacity_assets WHERE id='00000000-0000-4000-8000-000000000902';
+            SELECT count(*) INTO h FROM capacity_asset_audit WHERE asset_id='00000000-0000-4000-8000-000000000902';
+            IF a <> 1 OR h <> 1 THEN RAISE EXCEPTION 'Capacity asset runtime create/audit failed: asset %, audit %', a, h; END IF;
+          END $$;
+          SQL
+
+          set +e
+          capacity_audit_update_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE capacity_asset_audit SET change_type='updated' WHERE asset_id='00000000-0000-4000-8000-000000000902';
+          SQL
+          )"
+          capacity_audit_update_status=$?
+          set -e
+          if [[ "$capacity_audit_update_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$capacity_audit_update_output"; then
+            echo "Capacity asset audit must be append-only for nexora_app." >&2
+            echo "$capacity_audit_update_output" >&2
+            exit 1
+          fi
+
+          set +e
+          capacity_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO capacity_assets (
+            tenant_id,carrier_party_id,asset_kind,identifier,plate,vehicle_type,body_type,capacity_weight_kg,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','vehicle','CROSS-TENANT-ASSET','ABC1234','truck','bau',10000,
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          capacity_cross_tenant_status=$?
+          set -e
+          if [[ "$capacity_cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$capacity_cross_tenant_output"; then
+            echo "Cross-tenant capacity asset RLS rejection did not behave as expected." >&2
+            echo "$capacity_cross_tenant_output" >&2
+            exit 1
+          fi
+
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO capacity_assignments (
+            id,tenant_id,driver_id,vehicle_id,carrier_party_id,status,starts_at,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000903','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000902',
+            '00000000-0000-4000-8000-000000000501','active','2026-09-01T08:00:00Z',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          UPDATE capacity_assignments
+             SET status='ended',ends_at='2026-09-02T08:00:00Z',updated_by_user_id='00000000-0000-4000-8000-000000000101',updated_at=now()
+           WHERE id='00000000-0000-4000-8000-000000000903';
+          INSERT INTO capacity_assignments (
+            id,tenant_id,driver_id,vehicle_id,carrier_party_id,status,starts_at,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000904','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000902',
+            '00000000-0000-4000-8000-000000000501','active','2026-09-03T08:00:00Z',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          DO $$ DECLARE h integer; a integer; BEGIN
+            SELECT count(*) INTO h FROM capacity_assignments WHERE driver_id='00000000-0000-4000-8000-000000000901';
+            SELECT count(*) INTO a FROM capacity_assignments WHERE driver_id='00000000-0000-4000-8000-000000000901' AND status='active';
+            IF h <> 2 OR a <> 1 THEN RAISE EXCEPTION 'Capacity assignment history/active composition failed: history %, active %', h, a; END IF;
+          END $$;
+          SQL
+
+          set +e
+          assignment_duplicate_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO capacity_assignments (
+            tenant_id,driver_id,vehicle_id,carrier_party_id,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','active',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          assignment_duplicate_status=$?
+          set -e
+          if [[ "$assignment_duplicate_status" -eq 0 ]] || ! grep -qi "capacity_assignments_active_" <<<"$assignment_duplicate_output"; then
+            echo "Duplicate active capacity assignment was not rejected as expected." >&2
+            echo "$assignment_duplicate_output" >&2
+            exit 1
+          fi
+
+          set +e
+          assignment_immutable_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE capacity_assignments SET carrier_party_id='00000000-0000-4000-8000-000000000503'
+           WHERE id='00000000-0000-4000-8000-000000000904';
+          SQL
+          )"
+          assignment_immutable_status=$?
+          set -e
+          if [[ "$assignment_immutable_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$assignment_immutable_output"; then
+            echo "Historical assignment identity columns must not be mutable by nexora_app." >&2
+            echo "$assignment_immutable_output" >&2
+            exit 1
+          fi
+
+          set +e
+          assignment_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO capacity_assignments (
+            tenant_id,driver_id,vehicle_id,carrier_party_id,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','active',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          assignment_cross_tenant_status=$?
+          set -e
+          if [[ "$assignment_cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$assignment_cross_tenant_output"; then
+            echo "Cross-tenant capacity assignment RLS rejection did not behave as expected." >&2
+            echo "$assignment_cross_tenant_output" >&2
+            exit 1
+          fi
+
+          set +e
+          commercial_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_request_commercial_terms (tenant_id,transport_request_id,target_carrier_freight,payment_terms,created_by_user_id,updated_by_user_id)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',1000,'Pix','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101');
+          SQL
+          )"
+          commercial_cross_tenant_status=$?
+          set -e
+          if [[ "$commercial_cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$commercial_cross_tenant_output"; then
+            echo "Cross-tenant commercial terms RLS rejection did not behave as expected." >&2
+            echo "$commercial_cross_tenant_output" >&2
+            exit 1
+          fi
+
+          set +e
+          history_update_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE transport_request_commercial_history SET note='tampered';
+          SQL
+          )"
+          history_update_status=$?
+          set -e
+          if [[ "$history_update_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$history_update_output"; then
+            echo "Commercial history must be append-only for nexora_app." >&2
+            echo "$history_update_output" >&2
+            exit 1
+          fi
+
+          set +e
+          cargo_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_request_cargo_profiles (tenant_id, transport_request_id, material, cargo_type, total_weight_kg, volume_count, vehicle_type, body_type)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801','Cross tenant cargo','general',1000,1,'toco','bau');
+          SQL
+          )"
+          cargo_cross_tenant_status=$?
+          set -e
+          if [[ "$cargo_cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cargo_cross_tenant_output"; then
+            echo "Cross-tenant cargo-profile RLS rejection did not behave as expected." >&2
+            echo "$cargo_cross_tenant_output" >&2
+            exit 1
+          fi
+
+          set +e
+          cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_request_stops (
+            tenant_id, transport_request_id, sequence, type, party_id, address_id,
+            window_start_at, window_end_at
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',9,'delivery',
+            '00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000702',
+            '2026-09-03T08:00:00Z','2026-09-03T09:00:00Z'
+          );
+          SQL
+          )"
+          cross_tenant_status=$?
+          set -e
+          if [[ "$cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cross_tenant_output"; then
+            echo "Cross-tenant route-stop RLS rejection did not behave as expected." >&2
+            echo "$cross_tenant_output" >&2
+            exit 1
+          fi
+
+      - name: Validate tenant-aware foreign-key rejection
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          set +e
+          driver_carrier_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO drivers (
+            tenant_id,carrier_party_id,full_name,tax_id,phone,cnh_number,cnh_category,cnh_expires_on,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000502','Invalid Cross Tenant Carrier Driver',
+            '98765432102','11999990002','12345678903','C','2029-12-31',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          driver_carrier_fk_status=$?
+          set -e
+          if [[ "$driver_carrier_fk_status" -eq 0 ]] || ! grep -qi "drivers_carrier_party_fk" <<<"$driver_carrier_fk_output"; then
+            echo "Cross-tenant driver/carrier FK rejection did not behave as expected." >&2
+            echo "$driver_carrier_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          capacity_carrier_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO capacity_assets (
+            tenant_id,carrier_party_id,owner_name,asset_kind,identifier,vehicle_type,body_type,capacity_weight_kg,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000502','Fallback Owner','vehicle','INVALID-CARRIER-ASSET','truck','sider',10000,
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          capacity_carrier_fk_status=$?
+          set -e
+          if [[ "$capacity_carrier_fk_status" -eq 0 ]] || ! grep -qi "capacity_assets_carrier_party_fk" <<<"$capacity_carrier_fk_output"; then
+            echo "Cross-tenant capacity asset/carrier FK rejection did not behave as expected." >&2
+            echo "$capacity_carrier_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          capacity_owner_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO capacity_assets (
+            tenant_id,owner_party_id,asset_kind,identifier,vehicle_type,body_type,capacity_weight_kg,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000502','implement','INVALID-OWNER-ASSET','carreta','sider',12000,
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          capacity_owner_fk_status=$?
+          set -e
+          if [[ "$capacity_owner_fk_status" -eq 0 ]] || ! grep -qi "capacity_assets_owner_party_fk" <<<"$capacity_owner_fk_output"; then
+            echo "Cross-tenant capacity asset/owner FK rejection did not behave as expected." >&2
+            echo "$capacity_owner_fk_output" >&2
+            exit 1
+          fi
+
+          # Close the runtime assignment so FK fixtures are not masked by the active uniqueness indexes.
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          UPDATE capacity_assignments
+             SET status='ended', ends_at='2026-09-04T08:00:00Z', updated_at=now()
+           WHERE id='00000000-0000-4000-8000-000000000904' AND status='active';
+
+          INSERT INTO drivers (
+            id,tenant_id,carrier_party_id,full_name,tax_id,phone,cnh_number,cnh_category,cnh_expires_on,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000905','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502',
+            'Gate Driver B','98765432103','11999990003','12345678904','D','2029-12-31',
+            '00000000-0000-4000-8000-000000000102','00000000-0000-4000-8000-000000000102'
+          );
+
+          INSERT INTO capacity_assets (
+            id,tenant_id,carrier_party_id,asset_kind,identifier,plate,vehicle_type,body_type,capacity_weight_kg,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000906','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502',
+            'vehicle','GATE-TRUCK-B','DEF2G34','truck','bau',12000,
+            '00000000-0000-4000-8000-000000000102','00000000-0000-4000-8000-000000000102'
+          );
+          SQL
+
+          set +e
+          assignment_carrier_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO capacity_assignments (
+            tenant_id,driver_id,vehicle_id,carrier_party_id,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000502','active',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          assignment_carrier_fk_status=$?
+          set -e
+          if [[ "$assignment_carrier_fk_status" -eq 0 ]] || ! grep -qi "capacity_assignments_carrier_party_fk" <<<"$assignment_carrier_fk_output"; then
+            echo "Cross-tenant capacity assignment/carrier FK rejection did not behave as expected." >&2
+            echo "$assignment_carrier_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          assignment_driver_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO capacity_assignments (
+            tenant_id,driver_id,vehicle_id,carrier_party_id,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000906','00000000-0000-4000-8000-000000000502','active',
+            '00000000-0000-4000-8000-000000000102','00000000-0000-4000-8000-000000000102'
+          );
+          SQL
+          )"
+          assignment_driver_fk_status=$?
+          set -e
+          if [[ "$assignment_driver_fk_status" -eq 0 ]] || ! grep -qi "capacity_assignments_driver_fk" <<<"$assignment_driver_fk_output"; then
+            echo "Cross-tenant capacity assignment/driver FK rejection did not behave as expected." >&2
+            echo "$assignment_driver_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          assignment_vehicle_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO capacity_assignments (
+            tenant_id,driver_id,vehicle_id,carrier_party_id,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000905',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000502','active',
+            '00000000-0000-4000-8000-000000000102','00000000-0000-4000-8000-000000000102'
+          );
+          SQL
+          )"
+          assignment_vehicle_fk_status=$?
+          set -e
+          if [[ "$assignment_vehicle_fk_status" -eq 0 ]] || ! grep -qi "capacity_assignments_vehicle_fk" <<<"$assignment_vehicle_fk_output"; then
+            echo "Cross-tenant capacity assignment/vehicle FK rejection did not behave as expected." >&2
+            echo "$assignment_vehicle_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          commercial_request_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_request_commercial_terms (tenant_id,transport_request_id,target_carrier_freight,payment_terms,created_by_user_id,updated_by_user_id)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',1000,'Pix','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101');
+          SQL
+          )"
+          commercial_request_fk_status=$?
+          set -e
+          if [[ "$commercial_request_fk_status" -eq 0 ]] || ! grep -qi "transport_request_commercial_terms_request_fk" <<<"$commercial_request_fk_output"; then
+            echo "Cross-tenant commercial request FK rejection did not behave as expected." >&2
+            echo "$commercial_request_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          cargo_request_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_request_cargo_profiles (tenant_id, transport_request_id, material, cargo_type, total_weight_kg, volume_count, vehicle_type, body_type)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801','Invalid cross tenant cargo','general',1000,1,'toco','bau');
+          SQL
+          )"
+          cargo_request_fk_status=$?
+          set -e
+          if [[ "$cargo_request_fk_status" -eq 0 ]] || ! grep -qi "transport_request_cargo_profiles_request_fk" <<<"$cargo_request_fk_output"; then
+            echo "Cross-tenant cargo request FK rejection did not behave as expected." >&2
+            echo "$cargo_request_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          request_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_request_stops (
+            tenant_id, transport_request_id, sequence, type, party_id, address_id,
+            window_start_at, window_end_at
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',10,'delivery',
+            '00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000702',
+            '2026-09-03T08:00:00Z','2026-09-03T09:00:00Z'
+          );
+          SQL
+          )"
+          request_fk_status=$?
+          set -e
+          if [[ "$request_fk_status" -eq 0 ]] || ! grep -qi "transport_request_stops_request_fk" <<<"$request_fk_output"; then
+            echo "Cross-tenant route request FK rejection did not behave as expected." >&2
+            echo "$request_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          address_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_request_stops (
+            tenant_id, transport_request_id, sequence, type, party_id, address_id,
+            window_start_at, window_end_at
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',10,'support',
+            '00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000703',
+            '2026-09-03T08:00:00Z','2026-09-03T09:00:00Z'
+          );
+          SQL
+          )"
+          address_fk_status=$?
+          set -e
+          if [[ "$address_fk_status" -eq 0 ]] || ! grep -qi "transport_request_stops_address_fk" <<<"$address_fk_output"; then
+            echo "Cross-party route address FK rejection did not behave as expected." >&2
+            echo "$address_fk_output" >&2
+            exit 1
+          fi
+
+          set +e
+          contact_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_request_stops (
+            tenant_id, transport_request_id, sequence, type, party_id, address_id, contact_id,
+            window_start_at, window_end_at
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',11,'pickup',
+            '00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000713',
+            '2026-09-03T10:00:00Z','2026-09-03T11:00:00Z'
+          );
+          SQL
+          )"
+          contact_fk_status=$?
+          set -e
+          if [[ "$contact_fk_status" -eq 0 ]] || ! grep -qi "transport_request_stops_contact_fk" <<<"$contact_fk_output"; then
+            echo "Cross-party route contact FK rejection did not behave as expected." >&2
+            echo "$contact_fk_output" >&2
+            exit 1
+          fi
+
+      - name: Gate summary
+        run: echo "Neon database gate passed through NEX-35 active capacity composition history."
+
+      - name: Delete isolated Neon branch
+        if: always()
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ env.NEON_TEST_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}
