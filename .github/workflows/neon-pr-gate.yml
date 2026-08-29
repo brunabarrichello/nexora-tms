@@ -161,10 +161,10 @@ jobs:
                  'membership_roles','membership_organization_scopes','membership_business_unit_scopes',
                  'business_parties','business_party_roles','business_party_audit',
                  'business_party_addresses','business_party_contacts','transport_requests',
-                 'transport_request_stops'
+                 'transport_request_stops','transport_request_cargo_profiles'
                );
-            IF table_count <> 20 THEN
-              RAISE EXCEPTION 'Expected 20 application tables, found %', table_count;
+            IF table_count <> 21 THEN
+              RAISE EXCEPTION 'Expected 21 application tables, found %', table_count;
             END IF;
 
             SELECT count(*) INTO rls_count
@@ -177,16 +177,16 @@ jobs:
                  'membership_organization_scopes','membership_business_unit_scopes',
                  'business_parties','business_party_roles','business_party_audit',
                  'business_party_addresses','business_party_contacts','transport_requests',
-                 'transport_request_stops'
+                 'transport_request_stops','transport_request_cargo_profiles'
                )
                AND c.relrowsecurity;
-            IF rls_count <> 17 THEN
-              RAISE EXCEPTION 'Expected RLS on 17 tenant-scoped tables, found %', rls_count;
+            IF rls_count <> 18 THEN
+              RAISE EXCEPTION 'Expected RLS on 18 tenant-scoped tables, found %', rls_count;
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 7 THEN
-              RAISE EXCEPTION 'Expected 7 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 8 THEN
+              RAISE EXCEPTION 'Expected 8 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
@@ -222,7 +222,7 @@ jobs:
                    'tenants','organizations','business_units','memberships','roles',
                    'business_parties','business_party_roles','business_party_audit',
                    'business_party_addresses','business_party_contacts','transport_requests',
-                   'transport_request_stops'
+                   'transport_request_stops','transport_request_cargo_profiles'
                  )
                  AND r.rolname='nexora_app'
             ) THEN
@@ -250,7 +250,11 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.transport_request_stops','SELECT')
                OR NOT has_table_privilege('nexora_app','public.transport_request_stops','INSERT')
                OR NOT has_table_privilege('nexora_app','public.transport_request_stops','UPDATE')
-               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','DELETE') THEN
+               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_request_cargo_profiles','DELETE') THEN
               RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
             END IF;
           END $$;
@@ -370,12 +374,16 @@ jobs:
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context transport requests must be 0, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM transport_request_stops;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context route stops must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context cargo profiles must be 0, got %', visible_count; END IF;
 
             PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
             SELECT count(*) INTO visible_count FROM memberships;
             IF visible_count <> 2 THEN RAISE EXCEPTION 'User discovery must return 2 memberships, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM transport_request_stops;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose route stops, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose cargo profiles, got %', visible_count; END IF;
 
             PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
             SELECT count(*) INTO visible_count FROM transport_requests;
@@ -411,7 +419,44 @@ jobs:
              WHERE transport_request_id='00000000-0000-4000-8000-000000000801' AND sequence=1;
             IF note <> 'Updated pickup instruction' THEN RAISE EXCEPTION 'Runtime route stop update failed'; END IF;
           END $$;
+
+          INSERT INTO transport_request_cargo_profiles (
+            tenant_id, transport_request_id, material, cargo_type, total_weight_kg,
+            volume_count, pallet_count, cubage_m3, max_length_m, max_width_m, max_height_m,
+            tracking_required, vehicle_type, body_type, non_stackable, special_cargo, special_instructions
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            'Eletrônicos gerais','general',5000,20,4,18.5,2.4,1.2,1.8,true,'carreta','sider',true,false,NULL
+          );
+
+          UPDATE transport_request_cargo_profiles
+             SET total_weight_kg=5250, pallet_count=5, updated_at=now()
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          DO $$ DECLARE c integer; weight numeric; pallets integer; BEGIN
+            SELECT count(*), max(total_weight_kg), max(pallet_count) INTO c, weight, pallets
+              FROM transport_request_cargo_profiles
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            IF c <> 1 THEN RAISE EXCEPTION 'Cargo profile must contain one row, got %', c; END IF;
+            IF weight <> 5250 OR pallets <> 5 THEN RAISE EXCEPTION 'Runtime cargo profile update failed'; END IF;
+          END $$;
           SQL
+
+          set +e
+          cargo_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_request_cargo_profiles (tenant_id, transport_request_id, material, cargo_type, total_weight_kg, volume_count, vehicle_type, body_type)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801','Cross tenant cargo','general',1000,1,'toco','bau');
+          SQL
+          )"
+          cargo_cross_tenant_status=$?
+          set -e
+          if [[ "$cargo_cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cargo_cross_tenant_output"; then
+            echo "Cross-tenant cargo-profile RLS rejection did not behave as expected." >&2
+            echo "$cargo_cross_tenant_output" >&2
+            exit 1
+          fi
 
           set +e
           cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
@@ -439,6 +484,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          set +e
+          cargo_request_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_request_cargo_profiles (tenant_id, transport_request_id, material, cargo_type, total_weight_kg, volume_count, vehicle_type, body_type)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801','Invalid cross tenant cargo','general',1000,1,'toco','bau');
+          SQL
+          )"
+          cargo_request_fk_status=$?
+          set -e
+          if [[ "$cargo_request_fk_status" -eq 0 ]] || ! grep -qi "transport_request_cargo_profiles_request_fk" <<<"$cargo_request_fk_output"; then
+            echo "Cross-tenant cargo request FK rejection did not behave as expected." >&2
+            echo "$cargo_request_fk_output" >&2
+            exit 1
+          fi
 
           set +e
           request_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
@@ -501,7 +560,7 @@ jobs:
           fi
 
       - name: Gate summary
-        run: echo "Neon database gate passed through NEX-30 route stops."
+        run: echo "Neon database gate passed through NEX-31 cargo profiles."
 
       - name: Delete isolated Neon branch
         if: always()

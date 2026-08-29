@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "start": "node dist/main.js",
-    "test": "pnpm build && node --test dist/health.controller.spec.js dist/freight/transport-request.validation.spec.js dist/freight/transport-route.validation.spec.js dist/master-data/business-party-directory.validation.spec.js dist/master-data/business-party.validation.spec.js dist/security/auth.controller.spec.js dist/security/oidc-authentication.spec.js dist/tenancy/tenant-context.spec.js",
+    "test": "pnpm build && node --test dist/health.controller.spec.js dist/freight/transport-request.validation.spec.js dist/freight/transport-route.validation.spec.js dist/freight/transport-cargo.validation.spec.js dist/master-data/business-party-directory.validation.spec.js dist/master-data/business-party.validation.spec.js dist/security/auth.controller.spec.js dist/security/oidc-authentication.spec.js dist/tenancy/tenant-context.spec.js",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
