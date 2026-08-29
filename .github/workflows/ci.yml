@@ -41,3 +41,27 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Generate Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Check Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Capture generated Drizzle artifacts
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          find packages/database/migrations -type f -print | sort
+          while IFS= read -r file; do
+            if [ "$(basename "$file")" = "README.md" ]; then
+              continue
+            fi
+            echo "===BEGIN:${file}==="
+            base64 -w0 "$file"
+            echo
+            echo "===END:${file}==="
+          done < <(find packages/database/migrations -type f -print | sort)
