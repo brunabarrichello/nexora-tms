@@ -181,14 +181,17 @@ export class CapacityAssetService {
     try {
       return await this.database.withTenantContext(context, async (client) => {
         const before = await this.requireAsset(client, assetId);
-        const carrierPartyId = patch.carrierPartyId !== undefined ? patch.carrierPartyId : before.carrierPartyId;
-        const ownerPartyId = patch.ownerPartyId !== undefined ? patch.ownerPartyId : before.ownerPartyId;
+        const carrierPartyId =
+          patch.carrierPartyId !== undefined ? patch.carrierPartyId : before.carrierPartyId;
+        const ownerPartyId =
+          patch.ownerPartyId !== undefined ? patch.ownerPartyId : before.ownerPartyId;
         const ownerName = patch.ownerName !== undefined ? patch.ownerName : before.ownerName;
         const maxLengthM = patch.maxLengthM !== undefined ? patch.maxLengthM : before.maxLengthM;
         const maxWidthM = patch.maxWidthM !== undefined ? patch.maxWidthM : before.maxWidthM;
         const maxHeightM = patch.maxHeightM !== undefined ? patch.maxHeightM : before.maxHeightM;
         const assetStatus = patch.status ?? before.status;
-        const statusReason = patch.statusReason !== undefined ? patch.statusReason : before.statusReason;
+        const statusReason =
+          patch.statusReason !== undefined ? patch.statusReason : before.statusReason;
 
         validateCapacityAssetOwnership(carrierPartyId, ownerPartyId, ownerName);
         validateCapacityAssetDimensions(maxLengthM, maxWidthM, maxHeightM);
@@ -244,14 +247,7 @@ export class CapacityAssetService {
           before.status !== after.status || before.statusReason !== after.statusReason
             ? 'status_changed'
             : 'updated';
-        await this.writeAudit(
-          client,
-          context.tenantId,
-          context.userId,
-          changeType,
-          before,
-          after,
-        );
+        await this.writeAudit(client, context.tenantId, context.userId, changeType, before, after);
         return after;
       });
     } catch (error) {
@@ -301,7 +297,9 @@ export class CapacityAssetService {
       [partyId],
     );
     if (result.rowCount !== 1) {
-      throw new BadRequestException('carrierPartyId must reference an active carrier in the current tenant');
+      throw new BadRequestException(
+        'carrierPartyId must reference an active carrier in the current tenant',
+      );
     }
   }
 
@@ -312,7 +310,9 @@ export class CapacityAssetService {
       [partyId],
     );
     if (result.rowCount !== 1) {
-      throw new BadRequestException('ownerPartyId must reference an active business party in the current tenant');
+      throw new BadRequestException(
+        'ownerPartyId must reference an active business party in the current tenant',
+      );
     }
   }
 
@@ -340,9 +340,12 @@ export class CapacityAssetService {
   }
 
   private rethrowConstraint(error: unknown): never {
-    const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+    const code =
+      typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
     if (code === '23505') {
-      throw new ConflictException('Asset identifier or plate is already registered for this tenant');
+      throw new ConflictException(
+        'Asset identifier or plate is already registered for this tenant',
+      );
     }
     if (code === '23503' || code === '23514') {
       throw new BadRequestException('Capacity asset data violates a business constraint');

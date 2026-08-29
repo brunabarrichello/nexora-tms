@@ -66,7 +66,9 @@ function optionalText(value: unknown, field: string, maxLength: number): string 
 function uuidOrNull(value: unknown, field: string): string | null {
   if (value === undefined || value === null || value === '') return null;
   const normalized = text(value, field, 36);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
@@ -74,7 +76,9 @@ function uuidOrNull(value: unknown, field: string): string | null {
 
 function plateOrNull(value: unknown): string | null {
   if (value === undefined || value === null || value === '') return null;
-  const normalized = text(value, 'plate', 12).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const normalized = text(value, 'plate', 12)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
   if (!/^([A-Z]{3}[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})$/.test(normalized)) {
     throw new BadRequestException('plate must be a valid Brazilian legacy or Mercosul plate');
   }
@@ -174,23 +178,31 @@ export function parseCreateCapacityAsset(input: unknown): CapacityAssetInput {
 export function parseUpdateCapacityAsset(input: unknown): CapacityAssetPatch {
   const body = objectBody(input);
   const patch: CapacityAssetPatch = {};
-  if ('carrierPartyId' in body) patch.carrierPartyId = uuidOrNull(body.carrierPartyId, 'carrierPartyId');
+  if ('carrierPartyId' in body)
+    patch.carrierPartyId = uuidOrNull(body.carrierPartyId, 'carrierPartyId');
   if ('ownerPartyId' in body) patch.ownerPartyId = uuidOrNull(body.ownerPartyId, 'ownerPartyId');
   if ('ownerName' in body) patch.ownerName = optionalText(body.ownerName, 'ownerName', 180);
   if ('assetKind' in body) patch.assetKind = assetKind(body.assetKind);
-  if ('identifier' in body) patch.identifier = text(body.identifier, 'identifier', 64, 2).toUpperCase();
+  if ('identifier' in body)
+    patch.identifier = text(body.identifier, 'identifier', 64, 2).toUpperCase();
   if ('plate' in body) patch.plate = plateOrNull(body.plate);
-  if ('vehicleType' in body) patch.vehicleType = text(body.vehicleType, 'vehicleType', 80, 2).toLowerCase();
+  if ('vehicleType' in body)
+    patch.vehicleType = text(body.vehicleType, 'vehicleType', 80, 2).toLowerCase();
   if ('bodyType' in body) patch.bodyType = text(body.bodyType, 'bodyType', 80, 2).toLowerCase();
-  if ('capacityWeightKg' in body) patch.capacityWeightKg = positiveNumber(body.capacityWeightKg, 'capacityWeightKg')!;
-  if ('capacityVolumeM3' in body) patch.capacityVolumeM3 = positiveNumber(body.capacityVolumeM3, 'capacityVolumeM3', true);
+  if ('capacityWeightKg' in body)
+    patch.capacityWeightKg = positiveNumber(body.capacityWeightKg, 'capacityWeightKg')!;
+  if ('capacityVolumeM3' in body)
+    patch.capacityVolumeM3 = positiveNumber(body.capacityVolumeM3, 'capacityVolumeM3', true);
   if ('maxLengthM' in body) patch.maxLengthM = positiveNumber(body.maxLengthM, 'maxLengthM', true);
   if ('maxWidthM' in body) patch.maxWidthM = positiveNumber(body.maxWidthM, 'maxWidthM', true);
   if ('maxHeightM' in body) patch.maxHeightM = positiveNumber(body.maxHeightM, 'maxHeightM', true);
-  if ('trackingAvailable' in body) patch.trackingAvailable = booleanValue(body.trackingAvailable, 'trackingAvailable');
+  if ('trackingAvailable' in body)
+    patch.trackingAvailable = booleanValue(body.trackingAvailable, 'trackingAvailable');
   if ('status' in body) patch.status = status(body.status);
-  if ('statusReason' in body) patch.statusReason = optionalText(body.statusReason, 'statusReason', 500);
-  if (Object.keys(patch).length === 0) throw new BadRequestException('At least one field must be provided');
+  if ('statusReason' in body)
+    patch.statusReason = optionalText(body.statusReason, 'statusReason', 500);
+  if (Object.keys(patch).length === 0)
+    throw new BadRequestException('At least one field must be provided');
   return patch;
 }
 
