@@ -1,0 +1,44 @@
+name: NEX-35 Fix FK Gate
+
+on:
+  push:
+    branches:
+      - feature/NEX-35-driver-vehicle-carrier-links
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-35-driver-vehicle-carrier-links
+
+      - name: Render corrected permanent gate
+        run: |
+          python scripts/nex-35-fix-fk-gate.py
+          cp .github/workflows/neon-pr-gate.yml scripts/.nex-35-neon-gate-fixed.yml
+          git checkout -- .github/workflows/neon-pr-gate.yml
+
+      - name: Validate corrected fixture isolation
+        run: |
+          grep -q "GATE-TRUCK-B" scripts/.nex-35-neon-gate-fixed.yml
+          grep -q "capacity_assignments_driver_fk" scripts/.nex-35-neon-gate-fixed.yml
+          grep -q "capacity_assignments_vehicle_fk" scripts/.nex-35-neon-gate-fixed.yml
+          grep -q "capacity_assignments_carrier_party_fk" scripts/.nex-35-neon-gate-fixed.yml
+          grep -q "WHERE id='00000000-0000-4000-8000-000000000904' AND status='active'" scripts/.nex-35-neon-gate-fixed.yml
+          git diff --check
+
+      - name: Commit corrected gate artifact
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/.nex-35-neon-gate-fixed.yml
+          git diff --cached --check
+          git -c core.hooksPath=/dev/null commit -m "NEX-35 render corrected FK gate"
+          git push origin HEAD:feature/NEX-35-driver-vehicle-carrier-links
