@@ -104,11 +104,10 @@ function validateStatus(
     throw new BadRequestException('operationalStatus active requires registrationStatus qualified');
   }
   if (
-    (registrationStatus === 'blocked' || registrationStatus === 'inactive' ||
-      operationalStatus === 'blocked' || operationalStatus === 'inactive') &&
+    (registrationStatus === 'blocked' || registrationStatus === 'inactive' || operationalStatus === 'blocked') &&
     !statusReason
   ) {
-    throw new BadRequestException('statusReason is required for blocked or inactive drivers');
+    throw new BadRequestException('statusReason is required for blocked or cadastrally inactive drivers');
   }
 }
 
