@@ -83,13 +83,27 @@ jobs:
           path.write_text(text)
           PY
 
-      - name: Remove temporary workflow and commit
+      - name: Publish rendered gate as Git blob
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm .github/workflows/nex-31-update-db-gate.yml
-          git add .github/workflows/neon-pr-gate.yml
-          SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "NEX-31 test(db): extend Neon gate for cargo profiles"
-          SKIP_SIMPLE_GIT_HOOKS=1 git push origin HEAD:feature/NEX-31-cargo-requirements
+          payload="$(base64 -w0 .github/workflows/neon-pr-gate.yml)"
+          body="$(python - "$payload" <<'PY'
+          import json, sys
+          print(json.dumps({'content': sys.argv[1], 'encoding': 'base64'}))
+          PY
+          )"
+          response="$(curl -fsSL -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/${{ github.repository }}/git/blobs \
+            -d "$body")"
+          sha="$(python - "$response" <<'PY'
+          import json, sys
+          print(json.loads(sys.argv[1])['sha'])
+          PY
+          )"
+          echo "RENDERED_GATE_BLOB_SHA=$sha"
