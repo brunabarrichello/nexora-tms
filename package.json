@@ -11,7 +11,15 @@
   "scripts": {
     "build": "turbo run build",
     "build:api": "pnpm --filter @nexora/api build",
+    "build:web": "pnpm --filter @nexora/web build",
+    "build:worker": "pnpm --filter @nexora/worker build",
+    "check": "pnpm typecheck && pnpm test && pnpm build",
+    "dev": "turbo run dev --parallel",
+    "dev:api": "pnpm --filter @nexora/api start",
+    "dev:web": "pnpm --filter @nexora/web dev",
     "start:api": "pnpm --filter @nexora/api start",
+    "start:web": "pnpm --filter @nexora/web start",
+    "start:worker": "pnpm --filter @nexora/worker start",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"
   },
