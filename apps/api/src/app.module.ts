@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 
 import { ApiController } from './api.controller.js';
+import { CapacityModule } from './capacity/capacity.module.js';
 import { FreightModule } from './freight/freight.module.js';
 import { HealthController } from './health.controller.js';
 import { MasterDataModule } from './master-data/master-data.module.js';
@@ -15,6 +16,7 @@ import { TenancyModule } from './tenancy/tenancy.module.js';
     TenantRuntimeGateModule,
     MasterDataModule,
     FreightModule,
+    CapacityModule,
   ],
   controllers: [ApiController, HealthController],
 })
