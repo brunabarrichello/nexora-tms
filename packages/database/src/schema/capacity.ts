@@ -77,7 +77,7 @@ export const drivers = pgTable(
     ),
     check(
       'drivers_status_reason_check',
-      sql`(${table.registrationStatus} NOT IN ('blocked','inactive') AND ${table.operationalStatus} NOT IN ('blocked','inactive')) OR ${table.statusReason} IS NOT NULL`,
+      sql`(${table.registrationStatus} NOT IN ('blocked','inactive') AND ${table.operationalStatus} <> 'blocked') OR ${table.statusReason} IS NOT NULL`,
     ),
     index('drivers_tenant_registration_status_idx').on(table.tenantId, table.registrationStatus),
     index('drivers_tenant_operational_status_idx').on(table.tenantId, table.operationalStatus),
