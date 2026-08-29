@@ -26,8 +26,9 @@ Use sequential names: `NNNN-short-decision-title.md`.
 8. [`0008-production-data-sanitization.md`](./0008-production-data-sanitization.md) — no production-data clones to lower environments without sanitization.
 9. [`0009-object-storage-port-adapter.md`](./0009-object-storage-port-adapter.md) — document storage behind a port/adapter.
 10. [`0010-security-observability-feature-gates.md`](./0010-security-observability-feature-gates.md) — security and observability are feature gates.
+11. [`0011-auth0-initial-managed-idp.md`](./0011-auth0-initial-managed-idp.md) — Auth0 is the initial concrete managed IdP behind the vendor-neutral adapter.
 
-These decisions are the accepted NEX-17 / NEX-64 Wave 0 baseline.
+ADRs 0001–0010 form the accepted NEX-17 / NEX-64 Wave 0 baseline. ADR-0011 concretizes the managed IdP implementation while preserving ADR-0005's authorization boundary.
 
 ## Process
 
