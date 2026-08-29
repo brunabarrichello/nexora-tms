@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { TenantContext } from '../tenancy/tenant-context.js';
 import {
@@ -149,14 +154,18 @@ export class TransportRequestService {
     return this.database.withTenantContext(context, async (client) => {
       const before = await this.requireRequest(client, requestId);
       if (before.status === 'contracted' || before.status === 'cancelled') {
-        throw new ConflictException(`Transport request cannot be edited while status is ${before.status}`);
+        throw new ConflictException(
+          `Transport request cannot be edited while status is ${before.status}`,
+        );
       }
       if (
         patch.status !== undefined &&
         before.status !== 'draft' &&
         before.status !== 'ready_for_quote'
       ) {
-        throw new ConflictException('Lifecycle status is controlled by negotiation after ready_for_quote');
+        throw new ConflictException(
+          'Lifecycle status is controlled by negotiation after ready_for_quote',
+        );
       }
 
       const merged = {
@@ -210,7 +219,10 @@ export class TransportRequestService {
     });
   }
 
-  private async requireRequest(client: TenantQueryClient, requestId: string): Promise<TransportRequest> {
+  private async requireRequest(
+    client: TenantQueryClient,
+    requestId: string,
+  ): Promise<TransportRequest> {
     const result = await client.query<TransportRequestRow>(`${requestSelect} WHERE id = $1::uuid`, [
       requestId,
     ]);

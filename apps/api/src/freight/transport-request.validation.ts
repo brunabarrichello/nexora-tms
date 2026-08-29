@@ -1,11 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 export type TransportRequestStatus =
-  | 'draft'
-  | 'ready_for_quote'
-  | 'in_negotiation'
-  | 'contracted'
-  | 'cancelled';
+  'draft' | 'ready_for_quote' | 'in_negotiation' | 'contracted' | 'cancelled';
 
 export interface CreateTransportRequestInput {
   readonly customerPartyId: string;
@@ -78,7 +74,9 @@ function parseEditableStatus(value: unknown): 'draft' | 'ready_for_quote' {
 
 function assertWindow(pickup: Date, delivery: Date): void {
   if (delivery.getTime() < pickup.getTime()) {
-    throw new BadRequestException('plannedDeliveryAt must be greater than or equal to plannedPickupAt');
+    throw new BadRequestException(
+      'plannedDeliveryAt must be greater than or equal to plannedPickupAt',
+    );
   }
 }
 
