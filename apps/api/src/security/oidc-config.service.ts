@@ -20,7 +20,9 @@ export class OidcConfigService {
       );
     }
 
-    const issuer = this.requiredHttpsUrl('OIDC_ISSUER_URL').toString().replace(/\/$/, '');
+    // Preserve the canonical issuer exactly as configured. OIDC issuer identifiers
+    // are exact-match values and providers such as Auth0 include a trailing slash.
+    const issuer = this.requiredHttpsUrl('OIDC_ISSUER_URL').toString();
     const jwksUrl = this.requiredHttpsUrl('OIDC_JWKS_URL');
     const audience = this.list('OIDC_AUDIENCE');
     const algorithms = this.list('OIDC_ALLOWED_ALGORITHMS', [

@@ -10,6 +10,7 @@ import { generateKeyPair, SignJWT } from 'jose';
 import type { AuthenticatedHttpRequest } from './authenticated-principal.js';
 import type { ExternalIdentityService } from './external-identity.service.js';
 import { OidcAuthenticationGuard } from './oidc-authentication.guard.js';
+import { OidcConfigService } from './oidc-config.service.js';
 import type { OidcTokenVerifierService } from './oidc-token-verifier.service.js';
 import { verifyOidcJwt } from './oidc-token-verifier.service.js';
 
@@ -83,12 +84,54 @@ test('OIDC guard rejects verified identities that are not linked to an active us
   );
 });
 
-test('OIDC JWT verification enforces signature, issuer and audience', async () => {
+test('OIDC configuration preserves the canonical issuer including a trailing slash', () => {
+  const names = [
+    'OIDC_PROVIDER_KEY',
+    'OIDC_ISSUER_URL',
+    'OIDC_JWKS_URL',
+    'OIDC_AUDIENCE',
+    'OIDC_ALLOWED_ALGORITHMS',
+  ] as const;
+  const previous = Object.fromEntries(
+    names.map((name) => [name, process.env[name]]),
+  ) as Record<(typeof names)[number], string | undefined>;
+
+  try {
+    process.env.OIDC_PROVIDER_KEY = 'auth0';
+    process.env.OIDC_ISSUER_URL = 'https://nexora-dev.us.auth0.com/';
+    process.env.OIDC_JWKS_URL =
+      'https://nexora-dev.us.auth0.com/.well-known/jwks.json';
+    process.env.OIDC_AUDIENCE = 'urn:nexora:tms:api:development';
+    process.env.OIDC_ALLOWED_ALGORITHMS = 'RS256';
+
+    const config = new OidcConfigService().require();
+    assert.equal(config.issuer, 'https://nexora-dev.us.auth0.com/');
+    assert.equal(
+      config.jwksUrl.toString(),
+      'https://nexora-dev.us.auth0.com/.well-known/jwks.json',
+    );
+    assert.deepEqual(config.audience, ['urn:nexora:tms:api:development']);
+    assert.deepEqual(config.algorithms, ['RS256']);
+  } finally {
+    for (const name of names) {
+      const value = previous[name];
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+});
+
+test('OIDC JWT verification enforces signature, exact issuer and audience', async () => {
   const { privateKey, publicKey } = await generateKeyPair('RS256');
+  const issuer = 'https://nexora-dev.us.auth0.com/';
+  const audience = 'urn:nexora:tms:api:development';
   const token = await new SignJWT({ scope: 'nexora:api' })
     .setProtectedHeader({ alg: 'RS256' })
-    .setIssuer('https://issuer.example.com')
-    .setAudience('nexora-api')
+    .setIssuer(issuer)
+    .setAudience(audience)
     .setSubject('external-user-123')
     .setIssuedAt()
     .setExpirationTime('5m')
@@ -96,8 +139,8 @@ test('OIDC JWT verification enforces signature, issuer and audience', async () =
 
   const subject = await verifyOidcJwt(token, publicKey, {
     algorithms: ['RS256'],
-    audience: ['nexora-api'],
-    issuer: 'https://issuer.example.com',
+    audience: [audience],
+    issuer,
   });
   assert.equal(subject, 'external-user-123');
 
@@ -105,7 +148,15 @@ test('OIDC JWT verification enforces signature, issuer and audience', async () =
     verifyOidcJwt(token, publicKey, {
       algorithms: ['RS256'],
       audience: ['different-api'],
-      issuer: 'https://issuer.example.com',
+      issuer,
+    }),
+  );
+
+  await assert.rejects(
+    verifyOidcJwt(token, publicKey, {
+      algorithms: ['RS256'],
+      audience: [audience],
+      issuer: issuer.replace(/\/$/, ''),
     }),
   );
 });
