@@ -34,7 +34,9 @@ function text(value: unknown, field: string, maxLength: number): string {
 
 function uuid(value: unknown, field: string): string {
   const normalized = text(value, field, 36);
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;

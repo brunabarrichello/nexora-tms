@@ -204,7 +204,8 @@ export class CapacityAssignmentService {
       [driverId],
     );
     const driver = result.rows[0];
-    if (!driver) throw new BadRequestException('driverId must reference a driver in the current tenant');
+    if (!driver)
+      throw new BadRequestException('driverId must reference a driver in the current tenant');
     if (driver.registration_status !== 'qualified' || driver.operational_status !== 'active') {
       throw new BadRequestException('driverId must reference a qualified and active driver');
     }
@@ -227,7 +228,9 @@ export class CapacityAssignmentService {
     );
     const vehicle = result.rows[0];
     if (!vehicle) {
-      throw new BadRequestException('vehicleId must reference a capacity asset in the current tenant');
+      throw new BadRequestException(
+        'vehicleId must reference a capacity asset in the current tenant',
+      );
     }
     if (vehicle.asset_kind !== 'vehicle') {
       throw new BadRequestException('vehicleId must reference an asset of kind vehicle');

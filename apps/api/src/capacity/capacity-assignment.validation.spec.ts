@@ -34,10 +34,7 @@ test('rejects invalid assignment identifiers', () => {
 });
 
 test('requires cancellation reason', () => {
-  assert.throws(
-    () => parseCloseCapacityAssignment({ status: 'cancelled' }),
-    BadRequestException,
-  );
+  assert.throws(() => parseCloseCapacityAssignment({ status: 'cancelled' }), BadRequestException);
 });
 
 test('parses an ended assignment without a reason', () => {
@@ -52,7 +49,8 @@ test('parses an ended assignment without a reason', () => {
 
 test('rejects assignment end before start', () => {
   assert.throws(
-    () => validateAssignmentPeriod(new Date('2026-09-02T12:00:00Z'), new Date('2026-09-01T12:00:00Z')),
+    () =>
+      validateAssignmentPeriod(new Date('2026-09-02T12:00:00Z'), new Date('2026-09-01T12:00:00Z')),
     BadRequestException,
   );
 });
