@@ -1,7 +1,14 @@
 import { BadRequestException } from '@nestjs/common';
 
-export type BusinessPartyRole = 'customer' | 'shipper' | 'consignee';
+export type BusinessPartyRole =
+  | 'customer'
+  | 'shipper'
+  | 'consignee'
+  | 'carrier'
+  | 'partner'
+  | 'supplier';
 export type BusinessPartyStatus = 'active' | 'inactive';
+export type BusinessPartyHomologationStatus = 'pending' | 'approved' | 'rejected';
 
 export interface CreateBusinessPartyInput {
   readonly taxId: string;
@@ -10,6 +17,8 @@ export interface CreateBusinessPartyInput {
   readonly email: string | null;
   readonly phone: string | null;
   readonly roles: readonly BusinessPartyRole[];
+  readonly homologationStatus: BusinessPartyHomologationStatus | null;
+  readonly homologationNotes: string | null;
 }
 
 export interface UpdateBusinessPartyInput {
@@ -20,10 +29,25 @@ export interface UpdateBusinessPartyInput {
   phone?: string | null;
   status?: BusinessPartyStatus;
   roles?: readonly BusinessPartyRole[];
+  homologationStatus?: BusinessPartyHomologationStatus;
+  homologationNotes?: string | null;
 }
 
-const allowedRoles = new Set<BusinessPartyRole>(['customer', 'shipper', 'consignee']);
+const allowedRoles = new Set<BusinessPartyRole>([
+  'customer',
+  'shipper',
+  'consignee',
+  'carrier',
+  'partner',
+  'supplier',
+]);
+const partnerRoles = new Set<BusinessPartyRole>(['carrier', 'partner', 'supplier']);
 const allowedStatuses = new Set<BusinessPartyStatus>(['active', 'inactive']);
+const allowedHomologationStatuses = new Set<BusinessPartyHomologationStatus>([
+  'pending',
+  'approved',
+  'rejected',
+]);
 
 function requireObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -114,7 +138,9 @@ function parseRoles(value: unknown, required: boolean): readonly BusinessPartyRo
 
   const roles = [...new Set(value)].map((role) => {
     if (typeof role !== 'string' || !allowedRoles.has(role as BusinessPartyRole)) {
-      throw new BadRequestException('roles may contain only customer, shipper or consignee');
+      throw new BadRequestException(
+        'roles may contain only customer, shipper, consignee, carrier, partner or supplier',
+      );
     }
     return role as BusinessPartyRole;
   });
@@ -122,8 +148,38 @@ function parseRoles(value: unknown, required: boolean): readonly BusinessPartyRo
   return roles.sort();
 }
 
+function parseHomologationStatus(value: unknown): BusinessPartyHomologationStatus | undefined {
+  if (value === undefined) return undefined;
+  if (
+    typeof value !== 'string' ||
+    !allowedHomologationStatuses.has(value as BusinessPartyHomologationStatus)
+  ) {
+    throw new BadRequestException('homologationStatus must be pending, approved or rejected');
+  }
+
+  return value as BusinessPartyHomologationStatus;
+}
+
+export function hasPartnerRole(roles: readonly BusinessPartyRole[]): boolean {
+  return roles.some((role) => partnerRoles.has(role));
+}
+
 export function parseCreateBusinessParty(input: unknown): CreateBusinessPartyInput {
   const body = requireObject(input);
+  const roles = parseRoles(body.roles, true)!;
+  const partnerScoped = hasPartnerRole(roles);
+  const requestedHomologationStatus = parseHomologationStatus(body.homologationStatus);
+  const requestedHomologationNotes = parseOptionalText(
+    body.homologationNotes,
+    'homologationNotes',
+    500,
+  );
+
+  if (!partnerScoped && (requestedHomologationStatus !== undefined || requestedHomologationNotes !== undefined)) {
+    throw new BadRequestException(
+      'homologation fields require at least one carrier, partner or supplier role',
+    );
+  }
 
   return {
     taxId: normalizeTaxId(body.taxId),
@@ -131,7 +187,9 @@ export function parseCreateBusinessParty(input: unknown): CreateBusinessPartyInp
     tradeName: parseOptionalText(body.tradeName, 'tradeName', 200) ?? null,
     email: parseEmail(body.email) ?? null,
     phone: parsePhone(body.phone) ?? null,
-    roles: parseRoles(body.roles, true)!,
+    roles,
+    homologationStatus: partnerScoped ? (requestedHomologationStatus ?? 'pending') : null,
+    homologationNotes: partnerScoped ? (requestedHomologationNotes ?? null) : null,
   };
 }
 
@@ -149,6 +207,13 @@ export function parseUpdateBusinessParty(input: unknown): UpdateBusinessPartyInp
   if (body.email !== undefined) update.email = parseEmail(body.email) ?? null;
   if (body.phone !== undefined) update.phone = parsePhone(body.phone) ?? null;
   if (body.roles !== undefined) update.roles = parseRoles(body.roles, false);
+  if (body.homologationStatus !== undefined) {
+    update.homologationStatus = parseHomologationStatus(body.homologationStatus);
+  }
+  if (body.homologationNotes !== undefined) {
+    update.homologationNotes =
+      parseOptionalText(body.homologationNotes, 'homologationNotes', 500) ?? null;
+  }
 
   if (body.status !== undefined) {
     if (
@@ -158,6 +223,16 @@ export function parseUpdateBusinessParty(input: unknown): UpdateBusinessPartyInp
       throw new BadRequestException('status must be active or inactive');
     }
     update.status = body.status as BusinessPartyStatus;
+  }
+
+  if (
+    update.roles !== undefined &&
+    !hasPartnerRole(update.roles) &&
+    (update.homologationStatus !== undefined || update.homologationNotes !== undefined)
+  ) {
+    throw new BadRequestException(
+      'homologation fields require at least one carrier, partner or supplier role',
+    );
   }
 
   if (Object.keys(update).length === 0) {
