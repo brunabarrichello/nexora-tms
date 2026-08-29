@@ -1,0 +1,45 @@
+name: NEX-37 Render API Tenant Gate
+
+on:
+  push:
+    branches:
+      - feature/NEX-37-compatible-capacity-search
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-37-compatible-capacity-search
+
+      - name: Render NEX-37 API Tenant Neon gate
+        run: |
+          python scripts/nex-37-render-api-tenant-gate.py
+          cp .github/workflows/api-tenant-neon-gate.yml scripts/.nex-37-api-tenant-gate-rendered.yml
+          git checkout -- .github/workflows/api-tenant-neon-gate.yml
+
+      - name: Validate rendered gate
+        run: |
+          grep -q 'pnpm --filter @nexora/database db:migrate' scripts/.nex-37-api-tenant-gate-rendered.yml
+          grep -q 'MATCH-COMPATIBLE' scripts/.nex-37-api-tenant-gate-rendered.yml
+          grep -q 'MATCH-INCOMPATIBLE' scripts/.nex-37-api-tenant-gate-rendered.yml
+          grep -q 'MATCH-BLOCKED-DRIVER' scripts/.nex-37-api-tenant-gate-rendered.yml
+          grep -q 'MATCH-TENANT-B' scripts/.nex-37-api-tenant-gate-rendered.yml
+          grep -q 'capacity-matching.integration.js' scripts/.nex-37-api-tenant-gate-rendered.yml
+          git diff --check
+
+      - name: Commit rendered artifact
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/.nex-37-api-tenant-gate-rendered.yml
+          git diff --cached --check
+          git -c core.hooksPath=/dev/null commit -m "NEX-37 render API Tenant matching gate"
+          git push origin HEAD:feature/NEX-37-compatible-capacity-search
