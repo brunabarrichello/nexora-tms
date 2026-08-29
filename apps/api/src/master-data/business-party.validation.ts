@@ -1,12 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 export type BusinessPartyRole =
-  | 'customer'
-  | 'shipper'
-  | 'consignee'
-  | 'carrier'
-  | 'partner'
-  | 'supplier';
+  'customer' | 'shipper' | 'consignee' | 'carrier' | 'partner' | 'supplier';
 export type BusinessPartyStatus = 'active' | 'inactive';
 export type BusinessPartyHomologationStatus = 'pending' | 'approved' | 'rejected';
 
@@ -175,7 +170,10 @@ export function parseCreateBusinessParty(input: unknown): CreateBusinessPartyInp
     500,
   );
 
-  if (!partnerScoped && (requestedHomologationStatus !== undefined || requestedHomologationNotes !== undefined)) {
+  if (
+    !partnerScoped &&
+    (requestedHomologationStatus !== undefined || requestedHomologationNotes !== undefined)
+  ) {
     throw new BadRequestException(
       'homologation fields require at least one carrier, partner or supplier role',
     );

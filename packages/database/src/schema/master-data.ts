@@ -46,10 +46,7 @@ export const businessParties = pgTable(
     unique('business_parties_tenant_id_id_unique').on(table.tenantId, table.id),
     unique('business_parties_tenant_tax_id_unique').on(table.tenantId, table.taxId),
     index('business_parties_tenant_status_idx').on(table.tenantId, table.status),
-    index('business_parties_tenant_homologation_idx').on(
-      table.tenantId,
-      table.homologationStatus,
-    ),
+    index('business_parties_tenant_homologation_idx').on(table.tenantId, table.homologationStatus),
     pgPolicy('business_parties_tenant_isolation', {
       for: 'all',
       to: 'public',
