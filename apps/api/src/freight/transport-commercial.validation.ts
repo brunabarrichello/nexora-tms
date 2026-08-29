@@ -53,19 +53,22 @@ function money(value: unknown, field: string, minimum: number): number {
 
 export function parseCommercialTerms(input: unknown): CommercialTermsInput {
   const body = objectBody(input);
-  const currencyCode = body.currencyCode === undefined ? 'BRL' : requiredText(body.currencyCode, 'currencyCode', 3).toUpperCase();
+  const currencyCode =
+    body.currencyCode === undefined
+      ? 'BRL'
+      : requiredText(body.currencyCode, 'currencyCode', 3).toUpperCase();
   if (!/^[A-Z]{3}$/.test(currencyCode)) {
     throw new BadRequestException('currencyCode must contain exactly three letters');
   }
 
-  const customerPrice = body.customerPrice === undefined || body.customerPrice === null
-    ? null
-    : money(body.customerPrice, 'customerPrice', 0);
+  const customerPrice =
+    body.customerPrice === undefined || body.customerPrice === null
+      ? null
+      : money(body.customerPrice, 'customerPrice', 0);
   const targetCarrierFreight = money(body.targetCarrierFreight, 'targetCarrierFreight', 0.01);
   const tollAmount = body.tollAmount === undefined ? 0 : money(body.tollAmount, 'tollAmount', 0);
-  const additionalAmount = body.additionalAmount === undefined
-    ? 0
-    : money(body.additionalAmount, 'additionalAmount', 0);
+  const additionalAmount =
+    body.additionalAmount === undefined ? 0 : money(body.additionalAmount, 'additionalAmount', 0);
 
   return {
     currencyCode,

@@ -1,7 +1,10 @@
 import { NotFoundException } from '@nestjs/common';
 
 import type { TenantQueryClient } from '../tenancy/tenant-database.service.js';
-import type { CommercialTermsInput, CommercialTermsStatus } from './transport-commercial.validation.js';
+import type {
+  CommercialTermsInput,
+  CommercialTermsStatus,
+} from './transport-commercial.validation.js';
 import {
   COMMERCIAL_COLUMNS,
   mapCommercialHistory,

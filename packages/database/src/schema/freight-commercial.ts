@@ -36,12 +36,16 @@ export const transportRequestCommercialTerms = pgTable(
     customerPrice: numeric('customer_price', { precision: 14, scale: 2 }),
     targetCarrierFreight: numeric('target_carrier_freight', { precision: 14, scale: 2 }).notNull(),
     tollAmount: numeric('toll_amount', { precision: 14, scale: 2 }).default('0').notNull(),
-    additionalAmount: numeric('additional_amount', { precision: 14, scale: 2 }).default('0').notNull(),
+    additionalAmount: numeric('additional_amount', { precision: 14, scale: 2 })
+      .default('0')
+      .notNull(),
     paymentTerms: varchar('payment_terms', { length: 300 }).notNull(),
     commercialNotes: varchar('commercial_notes', { length: 1000 }),
     status: commercialTermsStatusEnum('status').default('draft').notNull(),
     approvalNote: varchar('approval_note', { length: 1000 }),
-    approvedByUserId: uuid('approved_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    approvedByUserId: uuid('approved_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
     approvedAt: timestamp('approved_at', { withTimezone: true }),
     version: integer('version').default(1).notNull(),
     createdByUserId: uuid('created_by_user_id')
@@ -64,7 +68,10 @@ export const transportRequestCommercialTerms = pgTable(
       foreignColumns: [transportRequests.tenantId, transportRequests.id],
       name: 'transport_request_commercial_terms_request_fk',
     }).onDelete('cascade'),
-    check('transport_request_commercial_terms_currency_check', sql`${table.currencyCode} ~ '^[A-Z]{3}$'`),
+    check(
+      'transport_request_commercial_terms_currency_check',
+      sql`${table.currencyCode} ~ '^[A-Z]{3}$'`,
+    ),
     check(
       'transport_request_commercial_terms_customer_price_check',
       sql`${table.customerPrice} is null OR ${table.customerPrice} >= 0`,
@@ -78,7 +85,10 @@ export const transportRequestCommercialTerms = pgTable(
       'transport_request_commercial_terms_additional_check',
       sql`${table.additionalAmount} >= 0`,
     ),
-    check('transport_request_commercial_terms_payment_check', sql`length(trim(${table.paymentTerms})) > 0`),
+    check(
+      'transport_request_commercial_terms_payment_check',
+      sql`length(trim(${table.paymentTerms})) > 0`,
+    ),
     check('transport_request_commercial_terms_version_check', sql`${table.version} > 0`),
     check(
       'transport_request_commercial_terms_approval_check',
@@ -124,7 +134,10 @@ export const transportRequestCommercialHistory = pgTable(
     }).onDelete('cascade'),
     foreignKey({
       columns: [table.tenantId, table.commercialTermsId],
-      foreignColumns: [transportRequestCommercialTerms.tenantId, transportRequestCommercialTerms.id],
+      foreignColumns: [
+        transportRequestCommercialTerms.tenantId,
+        transportRequestCommercialTerms.id,
+      ],
       name: 'transport_request_commercial_history_terms_fk',
     }).onDelete('cascade'),
     check('transport_request_commercial_history_version_check', sql`${table.version} > 0`),

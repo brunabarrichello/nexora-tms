@@ -43,8 +43,14 @@ test('rejects negative tolls and additions', () => {
 
 test('accepts the approval workflow statuses', () => {
   assert.equal(parseCommercialStatus({ status: 'pending_approval' }).status, 'pending_approval');
-  assert.equal(parseCommercialStatus({ status: 'approved', note: 'Approved margin' }).status, 'approved');
-  assert.equal(parseCommercialStatus({ status: 'rejected', note: 'Adjust carrier target' }).status, 'rejected');
+  assert.equal(
+    parseCommercialStatus({ status: 'approved', note: 'Approved margin' }).status,
+    'approved',
+  );
+  assert.equal(
+    parseCommercialStatus({ status: 'rejected', note: 'Adjust carrier target' }).status,
+    'rejected',
+  );
 });
 
 test('requires a reason to reject commercial terms', () => {

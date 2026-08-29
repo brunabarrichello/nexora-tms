@@ -1,13 +1,8 @@
 import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
 
 import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
-import {
-  TransportCommercialService,
-} from './transport-commercial.service.js';
-import type {
-  CommercialHistoryView,
-  CommercialTermsView,
-} from './transport-commercial.models.js';
+import { TransportCommercialService } from './transport-commercial.service.js';
+import type { CommercialHistoryView, CommercialTermsView } from './transport-commercial.models.js';
 
 @Controller('api/v1/freight/transport-requests/:requestId/commercial-terms')
 @UseGuards(TenantRuntimeGateGuard)
