@@ -9,14 +9,17 @@
     "pnpm": "11.24.0"
   },
   "scripts": {
+    "bootstrap": "node scripts/bootstrap.mjs",
     "build": "turbo run build",
     "build:api": "pnpm --filter @nexora/api build",
     "build:web": "pnpm --filter @nexora/web build",
     "build:worker": "pnpm --filter @nexora/worker build",
     "check": "pnpm validate",
     "dev": "turbo run dev --parallel",
-    "dev:api": "pnpm --filter @nexora/api start",
+    "dev:api": "pnpm build:api && pnpm start:api",
     "dev:web": "pnpm --filter @nexora/web dev",
+    "dev:worker": "pnpm build:worker && pnpm start:worker",
+    "doctor": "node scripts/doctor.mjs",
     "format": "prettier --write . --ignore-unknown",
     "format:check": "prettier --check . --ignore-unknown",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
