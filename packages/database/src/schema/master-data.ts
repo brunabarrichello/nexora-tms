@@ -18,6 +18,11 @@ import { tenants } from './platform.js';
 import { tenantMatchesSession } from './rls.js';
 
 export const businessPartyStatusEnum = pgEnum('business_party_status', ['active', 'inactive']);
+export const businessPartyHomologationStatusEnum = pgEnum('business_party_homologation_status', [
+  'pending',
+  'approved',
+  'rejected',
+]);
 
 export const businessParties = pgTable(
   'business_parties',
@@ -32,6 +37,8 @@ export const businessParties = pgTable(
     email: varchar('email', { length: 254 }),
     phone: varchar('phone', { length: 32 }),
     status: businessPartyStatusEnum('status').default('active').notNull(),
+    homologationStatus: businessPartyHomologationStatusEnum('homologation_status'),
+    homologationNotes: varchar('homologation_notes', { length: 500 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -39,6 +46,7 @@ export const businessParties = pgTable(
     unique('business_parties_tenant_id_id_unique').on(table.tenantId, table.id),
     unique('business_parties_tenant_tax_id_unique').on(table.tenantId, table.taxId),
     index('business_parties_tenant_status_idx').on(table.tenantId, table.status),
+    index('business_parties_tenant_homologation_idx').on(table.tenantId, table.homologationStatus),
     pgPolicy('business_parties_tenant_isolation', {
       for: 'all',
       to: 'public',
@@ -68,7 +76,7 @@ export const businessPartyRoles = pgTable(
     }).onDelete('cascade'),
     check(
       'business_party_roles_role_check',
-      sql`${table.role} in ('customer', 'shipper', 'consignee')`,
+      sql`${table.role} in ('customer', 'shipper', 'consignee', 'carrier', 'partner', 'supplier')`,
     ),
     index('business_party_roles_tenant_role_idx').on(table.tenantId, table.role),
     pgPolicy('business_party_roles_tenant_isolation', {
@@ -88,6 +96,8 @@ export interface BusinessPartyAuditSnapshot {
   readonly email: string | null;
   readonly phone: string | null;
   readonly status: 'active' | 'inactive';
+  readonly homologationStatus: 'pending' | 'approved' | 'rejected' | null;
+  readonly homologationNotes: string | null;
   readonly roles: readonly string[];
 }
 
