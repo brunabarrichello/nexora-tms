@@ -151,7 +151,10 @@ export function parseUpdateBusinessParty(input: unknown): UpdateBusinessPartyInp
   if (body.roles !== undefined) update.roles = parseRoles(body.roles, false);
 
   if (body.status !== undefined) {
-    if (typeof body.status !== 'string' || !allowedStatuses.has(body.status as BusinessPartyStatus)) {
+    if (
+      typeof body.status !== 'string' ||
+      !allowedStatuses.has(body.status as BusinessPartyStatus)
+    ) {
       throw new BadRequestException('status must be active or inactive');
     }
     update.status = body.status as BusinessPartyStatus;

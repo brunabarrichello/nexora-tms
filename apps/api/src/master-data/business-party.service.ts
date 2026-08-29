@@ -133,14 +133,7 @@ export class BusinessPartyService {
              phone
            ) VALUES ($1::uuid, $2, $3, $4, $5, $6)
            RETURNING id::text AS id`,
-          [
-            context.tenantId,
-            data.taxId,
-            data.legalName,
-            data.tradeName,
-            data.email,
-            data.phone,
-          ],
+          [context.tenantId, data.taxId, data.legalName, data.tradeName, data.email, data.phone],
         );
 
         const partyId = inserted.rows[0]!.id;
@@ -245,9 +238,12 @@ export class BusinessPartyService {
   }
 
   private async requireParty(client: TenantQueryClient, partyId: string): Promise<BusinessParty> {
-    const result = await client.query<BusinessPartyRow>(`${partySelect}
+    const result = await client.query<BusinessPartyRow>(
+      `${partySelect}
       WHERE p.id = $1::uuid
-      GROUP BY p.id`, [partyId]);
+      GROUP BY p.id`,
+      [partyId],
+    );
 
     const row = result.rows[0];
     if (!row) {

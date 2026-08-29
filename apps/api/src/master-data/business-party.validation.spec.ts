@@ -3,10 +3,7 @@ import { test } from 'node:test';
 
 import { BadRequestException } from '@nestjs/common';
 
-import {
-  parseCreateBusinessParty,
-  parseUpdateBusinessParty,
-} from './business-party.validation.js';
+import { parseCreateBusinessParty, parseUpdateBusinessParty } from './business-party.validation.js';
 
 test('create validation normalizes fiscal id, contacts and roles', () => {
   const parsed = parseCreateBusinessParty({
