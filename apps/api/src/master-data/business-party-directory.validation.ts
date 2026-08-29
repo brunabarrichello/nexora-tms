@@ -4,13 +4,7 @@ import { requireUuid } from './business-party.validation.js';
 
 export type BusinessPartyAddressType = 'billing' | 'pickup' | 'delivery' | 'operational' | 'other';
 export type BusinessPartyContactType =
-  | 'commercial'
-  | 'logistics'
-  | 'billing'
-  | 'pickup'
-  | 'delivery'
-  | 'operational'
-  | 'other';
+  'commercial' | 'logistics' | 'billing' | 'pickup' | 'delivery' | 'operational' | 'other';
 
 export interface CreateBusinessPartyAddressInput {
   readonly type: BusinessPartyAddressType;
@@ -222,7 +216,8 @@ export function parseUpdateBusinessPartyAddress(input: unknown): UpdateBusinessP
     update.postalCode = parseOptionalText(body.postalCode, 'postalCode', 16) ?? null;
   }
   if (body.street !== undefined) update.street = parseRequiredText(body.street, 'street', 200);
-  if (body.number !== undefined) update.number = parseOptionalText(body.number, 'number', 40) ?? null;
+  if (body.number !== undefined)
+    update.number = parseOptionalText(body.number, 'number', 40) ?? null;
   if (body.complement !== undefined) {
     update.complement = parseOptionalText(body.complement, 'complement', 160) ?? null;
   }
@@ -268,7 +263,8 @@ export function parseUpdateBusinessPartyContact(input: unknown): UpdateBusinessP
   const body = requireObject(input);
   const update: UpdateBusinessPartyContactInput = {};
 
-  if (body.addressId !== undefined) update.addressId = parseOptionalAddressId(body.addressId) ?? null;
+  if (body.addressId !== undefined)
+    update.addressId = parseOptionalAddressId(body.addressId) ?? null;
   if (body.type !== undefined) update.type = parseContactType(body.type);
   if (body.name !== undefined) update.name = parseRequiredText(body.name, 'name', 160);
   if (body.title !== undefined) update.title = parseOptionalText(body.title, 'title', 120) ?? null;

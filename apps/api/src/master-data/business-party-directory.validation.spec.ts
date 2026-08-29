@@ -90,13 +90,10 @@ test('address update supports inactivation without deletion', () => {
 });
 
 test('contact update supports detaching an address and keeping another channel', () => {
-  assert.deepEqual(
-    parseUpdateBusinessPartyContact({ addressId: null, phone: '(41) 3333-4444' }),
-    {
-      addressId: null,
-      phone: '(41) 3333-4444',
-    },
-  );
+  assert.deepEqual(parseUpdateBusinessPartyContact({ addressId: null, phone: '(41) 3333-4444' }), {
+    addressId: null,
+    phone: '(41) 3333-4444',
+  });
 });
 
 test('directory updates reject empty patches', () => {

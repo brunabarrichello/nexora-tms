@@ -52,10 +52,7 @@ export const businessPartyAddresses = pgTable(
       sql`${table.type} in ('billing', 'pickup', 'delivery', 'operational', 'other')`,
     ),
     check('business_party_addresses_state_check', sql`${table.state} ~ '^[A-Z]{2}$'`),
-    check(
-      'business_party_addresses_country_check',
-      sql`${table.countryCode} ~ '^[A-Z]{2}$'`,
-    ),
+    check('business_party_addresses_country_check', sql`${table.countryCode} ~ '^[A-Z]{2}$'`),
     index('business_party_addresses_tenant_party_active_idx').on(
       table.tenantId,
       table.partyId,
