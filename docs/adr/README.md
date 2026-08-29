@@ -1,10 +1,8 @@
 # Architecture Decision Records
 
-Architecture Decision Records (ADRs) document significant technical decisions for Nexora TMS.
+ADRs document significant technical decisions for Nexora TMS and preserve decision history.
 
 ## Status values
-
-Use one of:
 
 - Proposed
 - Accepted
@@ -14,34 +12,27 @@ Use one of:
 
 ## Naming
 
-Use sequential names:
+Use sequential names: `NNNN-short-decision-title.md`.
 
-`NNNN-short-decision-title.md`
+## Accepted foundational ADRs — Wave 0
 
-Example:
+1. [`0001-monorepo-modular-monolith.md`](./0001-monorepo-modular-monolith.md) — monorepo + modular monolith.
+2. [`0002-multi-tenant-isolation-rls.md`](./0002-multi-tenant-isolation-rls.md) — application tenant isolation + PostgreSQL RLS defense in depth.
+3. [`0003-drizzle-explicit-sql.md`](./0003-drizzle-explicit-sql.md) — Drizzle ORM + versioned explicit SQL.
+4. [`0004-deployment-platforms.md`](./0004-deployment-platforms.md) — Vercel Web; Railway API/Worker; Neon PostgreSQL.
+5. [`0005-managed-idp-membership-rbac.md`](./0005-managed-idp-membership-rbac.md) — managed IdP adapter; Nexora owns membership/RBAC.
+6. [`0006-transactional-outbox-durable-jobs.md`](./0006-transactional-outbox-durable-jobs.md) — transactional outbox + durable jobs.
+7. [`0007-rest-openapi.md`](./0007-rest-openapi.md) — REST + OpenAPI external API baseline.
+8. [`0008-production-data-sanitization.md`](./0008-production-data-sanitization.md) — no production-data clones to lower environments without sanitization.
+9. [`0009-object-storage-port-adapter.md`](./0009-object-storage-port-adapter.md) — document storage behind a port/adapter.
+10. [`0010-security-observability-feature-gates.md`](./0010-security-observability-feature-gates.md) — security and observability are feature gates.
 
-`0001-application-architecture-style.md`
+These decisions are the accepted NEX-17 / NEX-64 Wave 0 baseline.
 
 ## Process
 
-1. Copy `0000-template.md`.
-2. Describe context, decision drivers, options, decision, and consequences.
+1. Copy `0000-template.md` for a new decision.
+2. Document context, drivers, options, decision, consequences, security/data/operational impact and validation.
 3. Open the ADR through the normal pull-request process.
-4. Reference related Jira work or GitHub issues when available.
-5. If a decision changes later, create a new ADR and mark the prior ADR as superseded rather than rewriting history.
-
-## Wave 0 candidates
-
-Initial ADRs are expected to cover at least:
-
-- application architecture style;
-- monorepo/workspace strategy;
-- frontend technology;
-- backend technology;
-- API style and versioning;
-- multi-tenant isolation model;
-- PostgreSQL access and migration model;
-- authentication and authorization;
-- asynchronous jobs/events;
-- observability and audit;
-- deployment and environment topology.
+4. Reference related Jira work.
+5. Never silently change the historical meaning of an Accepted ADR. Create a new ADR and mark the previous decision Superseded.
