@@ -5,8 +5,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 
-import { OidcAuthenticationGuard } from '../security/oidc-authentication.guard.js';
-import { TenantContextGuard } from './tenant-context.guard.js';
+import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
 import { TenantContext } from './tenant-context.js';
 import { TenantDatabaseService } from './tenant-database.service.js';
 
@@ -18,7 +17,7 @@ interface VisibleTenant {
 }
 
 @Controller('api/v1/tenant')
-@UseGuards(OidcAuthenticationGuard, TenantContextGuard)
+@UseGuards(TenantRuntimeGateGuard)
 export class TenantRuntimeGateController {
   constructor(
     private readonly tenantContext: TenantContext,
