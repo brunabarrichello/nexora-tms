@@ -1,0 +1,45 @@
+name: NEX-34 Render Neon Gate
+
+on:
+  push:
+    branches:
+      - feature/NEX-34-vehicles-capacity
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-34-vehicles-capacity
+
+      - name: Render NEX-34 permanent Neon gate
+        run: |
+          python scripts/nex-34-render-neon-gate.py
+          cp .github/workflows/neon-pr-gate.yml scripts/.nex-34-neon-gate-rendered.yml
+          git checkout -- .github/workflows/neon-pr-gate.yml
+
+      - name: Validate rendered gate
+        run: |
+          grep -q 'Expected 27 application tables' scripts/.nex-34-neon-gate-rendered.yml
+          grep -q 'Expected RLS on 24 tenant-scoped tables' scripts/.nex-34-neon-gate-rendered.yml
+          grep -q 'Expected 11 Drizzle migration records' scripts/.nex-34-neon-gate-rendered.yml
+          grep -q 'capacity_asset_kind' scripts/.nex-34-neon-gate-rendered.yml
+          grep -q 'capacity_asset_audit' scripts/.nex-34-neon-gate-rendered.yml
+          grep -q 'capacity_assets_owner_party_fk' scripts/.nex-34-neon-gate-rendered.yml
+          git diff --check
+
+      - name: Commit rendered artifact
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add scripts/.nex-34-neon-gate-rendered.yml
+          git diff --cached --check
+          git -c core.hooksPath=/dev/null commit -m "NEX-34 render permanent Neon gate"
+          git push origin HEAD:feature/NEX-34-vehicles-capacity
