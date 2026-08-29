@@ -3,7 +3,6 @@ import {
   createRemoteJWKSet,
   jwtVerify,
   type JWTVerifyGetKey,
-  type KeyLike,
 } from 'jose';
 
 import { OidcConfigService, type OidcRuntimeConfig } from './oidc-config.service.js';
@@ -13,9 +12,11 @@ export interface VerifiedOidcIdentity {
   readonly subject: string;
 }
 
+type JwtVerificationKey = Parameters<typeof jwtVerify>[1];
+
 export async function verifyOidcJwt(
   token: string,
-  key: JWTVerifyGetKey | KeyLike | Uint8Array,
+  key: JwtVerificationKey,
   config: Pick<OidcRuntimeConfig, 'issuer' | 'audience' | 'algorithms'>,
 ): Promise<string> {
   const { payload } = await jwtVerify(token, key, {
