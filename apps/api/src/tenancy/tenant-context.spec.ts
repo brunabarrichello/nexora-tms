@@ -5,6 +5,7 @@ import {
   BadRequestException,
   ExecutionContext,
   ForbiddenException,
+  InternalServerErrorException,
   UnauthorizedException,
 } from '@nestjs/common';
 
@@ -12,7 +13,9 @@ import type { AuthenticatedHttpRequest } from '../security/authenticated-princip
 import { TenantAuthorizationService } from './tenant-authorization.service.js';
 import { TenantContextGuard } from './tenant-context.guard.js';
 import { TenantContext } from './tenant-context.js';
+import type { TenantDatabaseService } from './tenant-database.service.js';
 import type { TenantMembershipService } from './tenant-membership.service.js';
+import { TenantRuntimeGateController } from './tenant-runtime-gate.controller.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 const TENANT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -32,6 +35,17 @@ function membershipService(active: boolean): TenantMembershipService {
   return {
     isActiveMember: async () => active,
   } as unknown as TenantMembershipService;
+}
+
+function databaseService(
+  rows: Array<{ id: string; slug: string; name: string; status: string }>,
+): TenantDatabaseService {
+  return {
+    withTenantContext: async (_context, work) =>
+      work({
+        query: async () => ({ rows }),
+      } as never),
+  } as unknown as TenantDatabaseService;
 }
 
 test('tenant guard establishes context only after active membership validation', async () => {
@@ -136,5 +150,70 @@ test('resource authorization rejects tenant IDs outside the active tenant', () =
   assert.throws(
     () => authorization.assertResourceTenant(TENANT_B),
     ForbiddenException,
+  );
+});
+
+test('runtime gate succeeds only when RLS exposes the selected tenant', async () => {
+  const tenantContext = new TenantContext();
+  tenantContext.establish({
+    subject: 'idp|user-1',
+    tenantId: TENANT_A,
+    userId: USER_ID,
+  });
+
+  const controller = new TenantRuntimeGateController(
+    tenantContext,
+    databaseService([
+      {
+        id: TENANT_A,
+        slug: 'tenant-a',
+        name: 'Tenant A',
+        status: 'active',
+      },
+    ]),
+  );
+
+  assert.deepEqual(await controller.getRuntimeGate(), {
+    authenticated: true,
+    rlsIsolated: true,
+    tenantId: TENANT_A,
+    visibleTenant: {
+      id: TENANT_A,
+      slug: 'tenant-a',
+      name: 'Tenant A',
+      status: 'active',
+    },
+  });
+});
+
+test('runtime gate fails closed if RLS exposes another tenant', async () => {
+  const tenantContext = new TenantContext();
+  tenantContext.establish({
+    subject: 'idp|user-1',
+    tenantId: TENANT_A,
+    userId: USER_ID,
+  });
+
+  const controller = new TenantRuntimeGateController(
+    tenantContext,
+    databaseService([
+      {
+        id: TENANT_A,
+        slug: 'tenant-a',
+        name: 'Tenant A',
+        status: 'active',
+      },
+      {
+        id: TENANT_B,
+        slug: 'tenant-b',
+        name: 'Tenant B',
+        status: 'active',
+      },
+    ]),
+  );
+
+  await assert.rejects(
+    controller.getRuntimeGate(),
+    (error: unknown) => error instanceof InternalServerErrorException,
   );
 });
