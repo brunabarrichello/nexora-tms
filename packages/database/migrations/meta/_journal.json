@@ -15,6 +15,13 @@
       "when": 1788005800000,
       "tag": "0001_runtime_app_privileges",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788035562454,
+      "tag": "0002_conscious_midnight",
+      "breakpoints": true
     }
   ]
 }
