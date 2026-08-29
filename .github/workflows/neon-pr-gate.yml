@@ -59,7 +59,7 @@ jobs:
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-db-${{ github.run_id }}" >> "$GITHUB_ENV"
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
-      - name: Create isolated Neon branch
+      - name: Create isolated Neon branch with admin connection
         id: create-neon
         uses: neondatabase/create-branch-action@v6
         with:
@@ -67,7 +67,7 @@ jobs:
           parent_branch: main
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: neondb
-          role: nexora_migrator
+          role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -81,10 +81,36 @@ jobs:
           fi
           psql --version
 
+      - name: Bootstrap isolated DDL capability
+        shell: bash
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+          capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_owner', current_database(), 'CREATE'), has_schema_privilege('nexora_owner','public','CREATE')")"
+          [[ "$capabilities" == "t:t" ]] || { echo "nexora_owner DDL capability bootstrap failed: $capabilities" >&2; exit 1; }
+
+      - name: Resolve migrator connection on isolated branch
+        id: migrator-connection
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
       - name: Resolve migration capability
         shell: bash
         env:
-          MIGRATOR_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator-connection.outputs.db_url }}
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
@@ -110,10 +136,7 @@ jobs:
           set -euo pipefail
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
-          DECLARE
-            table_count integer;
-            rls_count integer;
-            migration_count integer;
+          DECLARE table_count integer; rls_count integer; migration_count integer;
           BEGIN
             SELECT count(*) INTO table_count
               FROM information_schema.tables
@@ -123,47 +146,33 @@ jobs:
                  'external_identities','memberships','permissions','roles','role_permissions',
                  'membership_roles','membership_organization_scopes','membership_business_unit_scopes'
                );
-            IF table_count <> 13 THEN
-              RAISE EXCEPTION 'Expected 13 foundation tables, found %', table_count;
-            END IF;
+            IF table_count <> 13 THEN RAISE EXCEPTION 'Expected 13 foundation tables, found %', table_count; END IF;
 
             SELECT count(*) INTO rls_count
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid=c.relnamespace
+              FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
              WHERE n.nspname='public'
                AND c.relname IN (
                  'tenants','tenant_settings','organizations','business_units','memberships',
                  'roles','role_permissions','membership_roles',
                  'membership_organization_scopes','membership_business_unit_scopes'
-               )
-               AND c.relrowsecurity;
-            IF rls_count <> 10 THEN
-              RAISE EXCEPTION 'Expected RLS on 10 tenant-scoped tables, found %', rls_count;
-            END IF;
+               ) AND c.relrowsecurity;
+            IF rls_count <> 10 THEN RAISE EXCEPTION 'Expected RLS on 10 tenant-scoped tables, found %', rls_count; END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 2 THEN
-              RAISE EXCEPTION 'Expected 2 Drizzle migration records, found %', migration_count;
-            END IF;
+            IF migration_count <> 2 THEN RAISE EXCEPTION 'Expected 2 Drizzle migration records, found %', migration_count; END IF;
 
-            IF NOT EXISTS (
-              SELECT 1 FROM pg_roles
-              WHERE rolname='nexora_app' AND rolcanlogin AND NOT rolbypassrls
-            ) THEN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nexora_app' AND rolcanlogin AND NOT rolbypassrls) THEN
               RAISE EXCEPTION 'nexora_app must be LOGIN and must not BYPASSRLS';
             END IF;
 
             IF EXISTS (
-              SELECT 1
-              FROM pg_class c
+              SELECT 1 FROM pg_class c
               JOIN pg_namespace n ON n.oid=c.relnamespace
               JOIN pg_roles r ON r.oid=c.relowner
               WHERE n.nspname='public'
                 AND c.relname IN ('tenants','organizations','business_units','memberships','roles')
                 AND r.rolname='nexora_app'
-            ) THEN
-              RAISE EXCEPTION 'nexora_app must not own application tables';
-            END IF;
+            ) THEN RAISE EXCEPTION 'nexora_app must not own application tables'; END IF;
 
             IF NOT has_table_privilege('nexora_app','public.tenants','SELECT')
                OR has_table_privilege('nexora_app','public.tenants','INSERT')
@@ -186,20 +195,16 @@ jobs:
           INSERT INTO tenants (id, slug, name) VALUES
             ('00000000-0000-4000-8000-000000000001', 'gate-tenant-a', 'Gate Tenant A'),
             ('00000000-0000-4000-8000-000000000002', 'gate-tenant-b', 'Gate Tenant B');
-
           INSERT INTO users (id, display_name) VALUES
             ('00000000-0000-4000-8000-000000000101', 'Gate User A'),
             ('00000000-0000-4000-8000-000000000102', 'Gate User B');
-
           INSERT INTO organizations (id, tenant_id, code, name) VALUES
             ('00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000001', 'ORG-A', 'Tenant A Org'),
             ('00000000-0000-4000-8000-000000000202', '00000000-0000-4000-8000-000000000002', 'ORG-B', 'Tenant B Org');
-
           INSERT INTO memberships (id, tenant_id, user_id, status) VALUES
             ('00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000101', 'active'),
             ('00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000101', 'active'),
             ('00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000102', 'active');
-
           INSERT INTO business_units (id, tenant_id, organization_id, code, name) VALUES
             ('00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000201', 'UNIT-A', 'Tenant A Unit');
           SQL
@@ -222,14 +227,12 @@ jobs:
         run: |
           set -euo pipefail
           echo "::add-mask::$APP_DATABASE_URL"
-
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
           DECLARE visible_count integer;
           BEGIN
             PERFORM set_config('app.tenant_id', '', false);
             PERFORM set_config('app.user_id', '', false);
-
             SELECT count(*) INTO visible_count FROM organizations;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context organizations must be 0, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM memberships;
@@ -277,12 +280,7 @@ jobs:
           set +e
           fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
           INSERT INTO business_units (tenant_id, organization_id, code, name)
-          VALUES (
-            '00000000-0000-4000-8000-000000000001',
-            '00000000-0000-4000-8000-000000000202',
-            'ILLEGAL-FK',
-            'Cross Tenant FK'
-          );
+          VALUES ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000202','ILLEGAL-FK','Cross Tenant FK');
           SQL
           )"
           fk_status=$?
@@ -300,19 +298,14 @@ jobs:
             echo "## Neon isolated database gate passed"
             echo ""
             echo "- Parent branch: main"
-            echo "- Ephemeral branch: ${NEON_TEST_BRANCH}"
             echo "- Database: neondb"
             echo "- Login role: nexora_migrator"
             echo "- Effective DDL role: nexora_owner"
+            echo "- DDL capability: explicit CREATE on database/public schema"
             echo "- Drizzle migration chain: applied from journal"
             echo "- Migration ledger: verified"
             echo "- Runtime privileges: verified"
-            echo "- RLS enabled tables: verified"
-            echo "- No-context visibility: denied"
-            echo "- User-only membership discovery: verified"
-            echo "- Tenant-scoped reads: verified"
-            echo "- Cross-tenant write: denied by RLS"
-            echo "- Cross-tenant association: denied by composite FK"
+            echo "- RLS and tenant isolation: verified"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
