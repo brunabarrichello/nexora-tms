@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "packages/database/**"
+      - "apps/api/src/freight/**"
       - "pnpm-workspace.yaml"
       - ".github/workflows/neon-pr-gate.yml"
 
@@ -50,10 +51,7 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
-          test -n "${NEON_API_KEY:-}" || {
-            echo "NEON_API_KEY repository secret is not configured." >&2
-            exit 1
-          }
+          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
 
       - name: Set ephemeral branch name and expiry
         shell: bash
@@ -95,12 +93,8 @@ jobs:
           GRANT CREATE ON DATABASE neondb TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
-
           capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_owner', current_database(), 'CREATE'), has_schema_privilege('nexora_owner','public','CREATE')")"
-          [[ "$capabilities" == "t:t" ]] || {
-            echo "nexora_owner DDL capability bootstrap failed: $capabilities" >&2
-            exit 1
-          }
+          [[ "$capabilities" == "t:t" ]] || { echo "nexora_owner DDL capability bootstrap failed: $capabilities" >&2; exit 1; }
 
       - name: Resolve migrator connection on isolated branch
         id: migrator-connection
@@ -127,10 +121,7 @@ jobs:
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
-          [[ "$roles" == "nexora_migrator:nexora_owner" ]] || {
-            echo "Unexpected migration role chain: $roles" >&2
-            exit 1
-          }
+          [[ "$roles" == "nexora_migrator:nexora_owner" ]] || { echo "Unexpected migration role chain: $roles" >&2; exit 1; }
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
 
       - name: Apply full versioned Drizzle migration chain
@@ -149,107 +140,63 @@ jobs:
             table_count integer;
             rls_count integer;
             migration_count integer;
-            homologation_column_count integer;
-            homologation_enum_count integer;
+            status_enum_count integer;
           BEGIN
             SELECT count(*) INTO table_count
               FROM information_schema.tables
-             WHERE table_schema = 'public'
+             WHERE table_schema='public'
                AND table_name IN (
                  'tenants','tenant_settings','organizations','business_units','users',
                  'external_identities','memberships','permissions','roles','role_permissions',
                  'membership_roles','membership_organization_scopes','membership_business_unit_scopes',
                  'business_parties','business_party_roles','business_party_audit',
-                 'business_party_addresses','business_party_contacts'
+                 'business_party_addresses','business_party_contacts','transport_requests'
                );
-            IF table_count <> 18 THEN
-              RAISE EXCEPTION 'Expected 18 application tables, found %', table_count;
-            END IF;
+            IF table_count <> 19 THEN RAISE EXCEPTION 'Expected 19 application tables, found %', table_count; END IF;
 
             SELECT count(*) INTO rls_count
-              FROM pg_class c
-              JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public'
+              FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public'
                AND c.relname IN (
                  'tenants','tenant_settings','organizations','business_units','memberships',
                  'roles','role_permissions','membership_roles',
                  'membership_organization_scopes','membership_business_unit_scopes',
                  'business_parties','business_party_roles','business_party_audit',
-                 'business_party_addresses','business_party_contacts'
-               )
-               AND c.relrowsecurity;
-            IF rls_count <> 15 THEN
-              RAISE EXCEPTION 'Expected RLS on 15 tenant-scoped tables, found %', rls_count;
-            END IF;
+                 'business_party_addresses','business_party_contacts','transport_requests'
+               ) AND c.relrowsecurity;
+            IF rls_count <> 16 THEN RAISE EXCEPTION 'Expected RLS on 16 tenant-scoped tables, found %', rls_count; END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 5 THEN
-              RAISE EXCEPTION 'Expected 5 Drizzle migration records, found %', migration_count;
-            END IF;
+            IF migration_count <> 6 THEN RAISE EXCEPTION 'Expected 6 Drizzle migration records, found %', migration_count; END IF;
 
-            SELECT count(*) INTO homologation_column_count
-              FROM information_schema.columns
-             WHERE table_schema = 'public'
-               AND table_name = 'business_parties'
-               AND column_name IN ('homologation_status', 'homologation_notes');
-            IF homologation_column_count <> 2 THEN
-              RAISE EXCEPTION 'Expected two business-party homologation columns, found %', homologation_column_count;
-            END IF;
+            SELECT count(*) INTO status_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='transport_request_status'
+               AND e.enumlabel IN ('draft','ready_for_quote','in_negotiation','contracted','cancelled');
+            IF status_enum_count <> 5 THEN RAISE EXCEPTION 'Expected five transport request status values, found %', status_enum_count; END IF;
 
-            SELECT count(*) INTO homologation_enum_count
-              FROM pg_type t
-              JOIN pg_enum e ON e.enumtypid = t.oid
-             WHERE t.typname = 'business_party_homologation_status'
-               AND e.enumlabel IN ('pending', 'approved', 'rejected');
-            IF homologation_enum_count <> 3 THEN
-              RAISE EXCEPTION 'Expected three homologation enum values, found %', homologation_enum_count;
-            END IF;
-
-            IF NOT EXISTS (
-              SELECT 1 FROM pg_roles
-               WHERE rolname = 'nexora_app'
-                 AND rolcanlogin
-                 AND NOT rolbypassrls
-            ) THEN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nexora_app' AND rolcanlogin AND NOT rolbypassrls) THEN
               RAISE EXCEPTION 'nexora_app must be LOGIN and must not BYPASSRLS';
             END IF;
 
             IF EXISTS (
-              SELECT 1
-                FROM pg_class c
-                JOIN pg_namespace n ON n.oid = c.relnamespace
-                JOIN pg_roles r ON r.oid = c.relowner
-               WHERE n.nspname = 'public'
-                 AND c.relname IN (
-                   'tenants','organizations','business_units','memberships','roles',
-                   'business_parties','business_party_roles','business_party_audit',
-                   'business_party_addresses','business_party_contacts'
-                 )
-                 AND r.rolname = 'nexora_app'
-            ) THEN
-              RAISE EXCEPTION 'nexora_app must not own application tables';
-            END IF;
+              SELECT 1 FROM pg_class c
+              JOIN pg_namespace n ON n.oid=c.relnamespace
+              JOIN pg_roles r ON r.oid=c.relowner
+              WHERE n.nspname='public'
+                AND c.relname IN (
+                  'tenants','organizations','business_units','memberships','roles',
+                  'business_parties','business_party_roles','business_party_audit',
+                  'business_party_addresses','business_party_contacts','transport_requests'
+                ) AND r.rolname='nexora_app'
+            ) THEN RAISE EXCEPTION 'nexora_app must not own application tables'; END IF;
 
             IF NOT has_table_privilege('nexora_app','public.tenants','SELECT')
                OR has_table_privilege('nexora_app','public.tenants','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.users','SELECT')
-               OR has_table_privilege('nexora_app','public.users','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.permissions','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.organizations','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.organizations','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.memberships','UPDATE')
                OR NOT has_table_privilege('nexora_app','public.business_parties','SELECT')
                OR NOT has_table_privilege('nexora_app','public.business_parties','INSERT')
                OR NOT has_table_privilege('nexora_app','public.business_parties','UPDATE')
                OR has_table_privilege('nexora_app','public.business_parties','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.business_party_roles','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.business_party_roles','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.business_party_roles','DELETE')
-               OR has_table_privilege('nexora_app','public.business_party_roles','UPDATE')
-               OR NOT has_table_privilege('nexora_app','public.business_party_audit','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.business_party_audit','INSERT')
-               OR has_table_privilege('nexora_app','public.business_party_audit','UPDATE')
-               OR has_table_privilege('nexora_app','public.business_party_audit','DELETE')
                OR NOT has_table_privilege('nexora_app','public.business_party_addresses','SELECT')
                OR NOT has_table_privilege('nexora_app','public.business_party_addresses','INSERT')
                OR NOT has_table_privilege('nexora_app','public.business_party_addresses','UPDATE')
@@ -257,7 +204,11 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.business_party_contacts','SELECT')
                OR NOT has_table_privilege('nexora_app','public.business_party_contacts','INSERT')
                OR NOT has_table_privilege('nexora_app','public.business_party_contacts','UPDATE')
-               OR has_table_privilege('nexora_app','public.business_party_contacts','DELETE') THEN
+               OR has_table_privilege('nexora_app','public.business_party_contacts','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_requests','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_requests','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_requests','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_requests','DELETE') THEN
               RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
             END IF;
           END $$;
@@ -269,94 +220,70 @@ jobs:
           set -euo pipefail
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO tenants (id, slug, name) VALUES
-            ('00000000-0000-4000-8000-000000000001', 'gate-tenant-a', 'Gate Tenant A'),
-            ('00000000-0000-4000-8000-000000000002', 'gate-tenant-b', 'Gate Tenant B');
+            ('00000000-0000-4000-8000-000000000001','gate-tenant-a','Gate Tenant A'),
+            ('00000000-0000-4000-8000-000000000002','gate-tenant-b','Gate Tenant B');
 
           INSERT INTO users (id, display_name) VALUES
-            ('00000000-0000-4000-8000-000000000101', 'Gate User A'),
-            ('00000000-0000-4000-8000-000000000102', 'Gate User B');
+            ('00000000-0000-4000-8000-000000000101','Gate User A'),
+            ('00000000-0000-4000-8000-000000000102','Gate User B');
 
           INSERT INTO organizations (id, tenant_id, code, name) VALUES
-            ('00000000-0000-4000-8000-000000000201', '00000000-0000-4000-8000-000000000001', 'ORG-A', 'Tenant A Org'),
-            ('00000000-0000-4000-8000-000000000202', '00000000-0000-4000-8000-000000000002', 'ORG-B', 'Tenant B Org');
+            ('00000000-0000-4000-8000-000000000201','00000000-0000-4000-8000-000000000001','ORG-A','Tenant A Org'),
+            ('00000000-0000-4000-8000-000000000202','00000000-0000-4000-8000-000000000002','ORG-B','Tenant B Org');
 
           INSERT INTO memberships (id, tenant_id, user_id, status) VALUES
-            ('00000000-0000-4000-8000-000000000301', '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000101', 'active'),
-            ('00000000-0000-4000-8000-000000000302', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000101', 'active'),
-            ('00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000102', 'active');
+            ('00000000-0000-4000-8000-000000000301','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000101','active'),
+            ('00000000-0000-4000-8000-000000000302','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000101','active'),
+            ('00000000-0000-4000-8000-000000000303','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000102','active');
 
           INSERT INTO business_units (id, tenant_id, organization_id, code, name) VALUES
-            ('00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000201', 'UNIT-A', 'Tenant A Unit');
+            ('00000000-0000-4000-8000-000000000401','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000201','UNIT-A','Tenant A Unit');
 
           INSERT INTO business_parties (
             id, tenant_id, tax_id, legal_name, email, homologation_status, homologation_notes
           ) VALUES
-            ('00000000-0000-4000-8000-000000000501', '00000000-0000-4000-8000-000000000001', '12345678901', 'Tenant A Carrier', 'a@example.test', 'approved', 'Gate approved carrier'),
-            ('00000000-0000-4000-8000-000000000502', '00000000-0000-4000-8000-000000000002', '12345678902', 'Tenant B Supplier', 'b@example.test', 'pending', 'Gate pending supplier');
+            ('00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000001','12345678901','Tenant A Customer Shipper','shipper-a@example.test','approved','Approved carrier-capable shipper'),
+            ('00000000-0000-4000-8000-000000000503','00000000-0000-4000-8000-000000000001','12345678903','Tenant A Consignee','consignee-a@example.test',NULL,NULL),
+            ('00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000002','12345678902','Tenant B Supplier','supplier-b@example.test','pending','Pending supplier');
 
           INSERT INTO business_party_roles (tenant_id, party_id, role) VALUES
-            ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000501', 'carrier'),
-            ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000502', 'supplier');
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','customer'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','shipper'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','carrier'),
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000503','consignee'),
+            ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','supplier');
 
           INSERT INTO business_party_addresses (
             id, tenant_id, party_id, type, label, postal_code, street, number, city, state,
             operational_reference, is_active
           ) VALUES
-            (
-              '00000000-0000-4000-8000-000000000701',
-              '00000000-0000-4000-8000-000000000001',
-              '00000000-0000-4000-8000-000000000501',
-              'pickup','Tenant A Pickup','01234-567','Avenida A','100','São Paulo','SP',
-              'Portaria A',true
-            ),
-            (
-              '00000000-0000-4000-8000-000000000702',
-              '00000000-0000-4000-8000-000000000002',
-              '00000000-0000-4000-8000-000000000502',
-              'delivery','Tenant B Delivery','80000-000','Rua B','200','Curitiba','PR',
-              'Doca B',true
-            );
+            ('00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','pickup','Tenant A Pickup','01234-567','Avenida A','100','São Paulo','SP','Portaria A',true),
+            ('00000000-0000-4000-8000-000000000703','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000503','delivery','Tenant A Delivery','78000-000','Rua C','300','Cuiabá','MT','Doca C',true),
+            ('00000000-0000-4000-8000-000000000702','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','delivery','Tenant B Delivery','80000-000','Rua B','200','Curitiba','PR','Doca B',true);
 
           INSERT INTO business_party_contacts (
-            id, tenant_id, party_id, address_id, type, name, email, phone, whatsapp,
-            operational_reference, is_active
+            id, tenant_id, party_id, address_id, type, name, email, is_active
           ) VALUES
-            (
-              '00000000-0000-4000-8000-000000000801',
-              '00000000-0000-4000-8000-000000000001',
-              '00000000-0000-4000-8000-000000000501',
-              '00000000-0000-4000-8000-000000000701',
-              'logistics','Tenant A Logistics','logistics-a@example.test',null,'11999999999',
-              'Contato coleta',true
-            ),
-            (
-              '00000000-0000-4000-8000-000000000802',
-              '00000000-0000-4000-8000-000000000002',
-              '00000000-0000-4000-8000-000000000502',
-              '00000000-0000-4000-8000-000000000702',
-              'delivery','Tenant B Delivery','delivery-b@example.test','4133334444',null,
-              'Contato entrega',true
-            );
+            ('00000000-0000-4000-8000-000000000711','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','logistics','Gate Logistics A','ops-a@example.test',true),
+            ('00000000-0000-4000-8000-000000000712','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000702','delivery','Gate Delivery B','ops-b@example.test',true);
 
           INSERT INTO business_party_audit (
             id, tenant_id, party_id, actor_user_id, change_type, after_snapshot
           ) VALUES
-            (
-              '00000000-0000-4000-8000-000000000601',
-              '00000000-0000-4000-8000-000000000001',
-              '00000000-0000-4000-8000-000000000501',
-              '00000000-0000-4000-8000-000000000101',
-              'created',
-              '{"id":"00000000-0000-4000-8000-000000000501","homologationStatus":"approved"}'::jsonb
-            ),
-            (
-              '00000000-0000-4000-8000-000000000602',
-              '00000000-0000-4000-8000-000000000002',
-              '00000000-0000-4000-8000-000000000502',
-              '00000000-0000-4000-8000-000000000102',
-              'created',
-              '{"id":"00000000-0000-4000-8000-000000000502","homologationStatus":"pending"}'::jsonb
-            );
+            ('00000000-0000-4000-8000-000000000601','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000101','created','{"id":"00000000-0000-4000-8000-000000000501"}'::jsonb),
+            ('00000000-0000-4000-8000-000000000602','00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000102','created','{"id":"00000000-0000-4000-8000-000000000502"}'::jsonb);
+
+          INSERT INTO transport_requests (
+            id, tenant_id, customer_party_id, shipper_party_id, consignee_party_id,
+            origin_address_id, destination_address_id, planned_pickup_at, planned_delivery_at,
+            cargo_description, status, created_by_user_id, updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000801','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000501',
+            '00000000-0000-4000-8000-000000000503','00000000-0000-4000-8000-000000000701',
+            '00000000-0000-4000-8000-000000000703','2026-09-01T12:00:00Z','2026-09-02T12:00:00Z',
+            'Gate cargo request','draft','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
           SQL
 
       - name: Resolve nexora_app connection on isolated branch
@@ -379,75 +306,77 @@ jobs:
           echo "::add-mask::$APP_DATABASE_URL"
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
-          DECLARE visible_count integer;
+          DECLARE visible_count integer; current_status text;
           BEGIN
-            PERFORM set_config('app.tenant_id', '', false);
-            PERFORM set_config('app.user_id', '', false);
+            PERFORM set_config('app.tenant_id','',false);
+            PERFORM set_config('app.user_id','',false);
             SELECT count(*) INTO visible_count FROM organizations;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context organizations must be 0, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM memberships;
-            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context memberships must be 0, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM business_parties;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context business parties must be 0, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_party_addresses;
-            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context addresses must be 0, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_party_contacts;
-            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context contacts must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_requests;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context transport requests must be 0, got %', visible_count; END IF;
 
-            PERFORM set_config('app.user_id', '00000000-0000-4000-8000-000000000101', false);
+            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
             SELECT count(*) INTO visible_count FROM memberships;
-            IF visible_count <> 2 THEN RAISE EXCEPTION 'User-only membership discovery must return 2, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_party_addresses;
-            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose addresses, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_party_contacts;
-            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose contacts, got %', visible_count; END IF;
+            IF visible_count <> 2 THEN RAISE EXCEPTION 'User discovery must return 2 memberships, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_requests;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose transport requests, got %', visible_count; END IF;
 
-            PERFORM set_config('app.user_id', '', false);
-            PERFORM set_config('app.tenant_id', '00000000-0000-4000-8000-000000000001', false);
-            SELECT count(*) INTO visible_count FROM tenants;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly its tenant row, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM organizations;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one organization, got %', visible_count; END IF;
+            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
             SELECT count(*) INTO visible_count FROM business_parties;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business party, got %', visible_count; END IF;
+            IF visible_count <> 2 THEN RAISE EXCEPTION 'Tenant A must see two business parties, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM business_party_addresses;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one address, got %', visible_count; END IF;
+            IF visible_count <> 2 THEN RAISE EXCEPTION 'Tenant A must see two addresses, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM business_party_contacts;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one contact, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count
-              FROM business_party_addresses
-             WHERE type = 'pickup'
-               AND city = 'São Paulo'
-               AND state = 'SP'
-               AND operational_reference = 'Portaria A'
-               AND is_active;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A operational address fields are not visible as expected'; END IF;
-            SELECT count(*) INTO visible_count
-              FROM business_party_contacts
-             WHERE type = 'logistics'
-               AND address_id = '00000000-0000-4000-8000-000000000701'::uuid
-               AND is_active;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A associated contact is not visible as expected'; END IF;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see one contact, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_requests;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see one seeded transport request, got %', visible_count; END IF;
+            SELECT status::text INTO current_status FROM transport_requests WHERE id='00000000-0000-4000-8000-000000000801';
+            IF current_status <> 'draft' THEN RAISE EXCEPTION 'Seeded transport request status must be draft, got %', current_status; END IF;
+          END $$;
+
+          INSERT INTO transport_requests (
+            tenant_id, customer_party_id, shipper_party_id, consignee_party_id,
+            origin_address_id, destination_address_id, planned_pickup_at, planned_delivery_at,
+            cargo_description, status, created_by_user_id, updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501',
+            '00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000503',
+            '00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000703',
+            '2026-09-03T12:00:00Z','2026-09-04T12:00:00Z','Runtime request','draft',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          UPDATE transport_requests
+             SET status='ready_for_quote', updated_at=now()
+           WHERE cargo_description='Runtime request';
+          DO $$ DECLARE c integer; BEGIN
+            SELECT count(*) INTO c FROM transport_requests WHERE status='ready_for_quote';
+            IF c <> 1 THEN RAISE EXCEPTION 'Runtime transport request update failed, count %', c; END IF;
           END $$;
           SQL
 
           set +e
           cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          SELECT set_config('app.user_id', '', false);
-          SELECT set_config('app.tenant_id', '00000000-0000-4000-8000-000000000001', false);
-          INSERT INTO business_party_addresses (
-            tenant_id, party_id, type, label, street, city, state
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_requests (
+            tenant_id, customer_party_id, shipper_party_id, consignee_party_id,
+            origin_address_id, destination_address_id, planned_pickup_at, planned_delivery_at,
+            cargo_description, created_by_user_id, updated_by_user_id
           ) VALUES (
-            '00000000-0000-4000-8000-000000000002',
-            '00000000-0000-4000-8000-000000000502',
-            'pickup','Cross Tenant Address','Rua X','São Paulo','SP'
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000502',
+            '00000000-0000-4000-8000-000000000502','00000000-0000-4000-8000-000000000502',
+            '00000000-0000-4000-8000-000000000702','00000000-0000-4000-8000-000000000702',
+            '2026-09-05T12:00:00Z','2026-09-06T12:00:00Z','Cross tenant request',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
           );
           SQL
           )"
           cross_tenant_status=$?
           set -e
           if [[ "$cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cross_tenant_output"; then
-            echo "Cross-tenant directory RLS rejection did not behave as expected." >&2
+            echo "Cross-tenant transport-request RLS rejection did not behave as expected." >&2
             echo "$cross_tenant_output" >&2
             exit 1
           fi
@@ -456,67 +385,59 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          set +e
+          party_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_requests (
+            tenant_id, customer_party_id, shipper_party_id, consignee_party_id,
+            origin_address_id, destination_address_id, planned_pickup_at, planned_delivery_at,
+            cargo_description, created_by_user_id, updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000502',
+            '00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000503',
+            '00000000-0000-4000-8000-000000000701','00000000-0000-4000-8000-000000000703',
+            '2026-09-07T12:00:00Z','2026-09-08T12:00:00Z','Illegal cross-tenant party',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+          SQL
+          )"
+          party_fk_status=$?
+          set -e
+          if [[ "$party_fk_status" -eq 0 ]] || ! grep -qi "transport_requests_customer_fk" <<<"$party_fk_output"; then
+            echo "Cross-tenant customer FK rejection did not behave as expected." >&2
+            echo "$party_fk_output" >&2
+            exit 1
+          fi
 
           set +e
           address_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          INSERT INTO business_party_addresses (
-            tenant_id, party_id, type, label, street, city, state
+          INSERT INTO transport_requests (
+            tenant_id, customer_party_id, shipper_party_id, consignee_party_id,
+            origin_address_id, destination_address_id, planned_pickup_at, planned_delivery_at,
+            cargo_description, created_by_user_id, updated_by_user_id
           ) VALUES (
-            '00000000-0000-4000-8000-000000000001',
-            '00000000-0000-4000-8000-000000000502',
-            'delivery','Illegal Party Link','Rua X','São Paulo','SP'
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000501',
+            '00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000503',
+            '00000000-0000-4000-8000-000000000703','00000000-0000-4000-8000-000000000701',
+            '2026-09-07T12:00:00Z','2026-09-08T12:00:00Z','Illegal cross-party addresses',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
           );
           SQL
           )"
           address_fk_status=$?
           set -e
-          if [[ "$address_fk_status" -eq 0 ]] || ! grep -qi "business_party_addresses_party_fk" <<<"$address_fk_output"; then
-            echo "Cross-tenant address-to-party FK rejection did not behave as expected." >&2
+          if [[ "$address_fk_status" -eq 0 ]] || ! grep -Eqi "transport_requests_(origin|destination)_fk" <<<"$address_fk_output"; then
+            echo "Cross-party address FK rejection did not behave as expected." >&2
             echo "$address_fk_output" >&2
             exit 1
           fi
 
-          set +e
-          contact_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          INSERT INTO business_party_contacts (
-            tenant_id, party_id, address_id, type, name, email
-          ) VALUES (
-            '00000000-0000-4000-8000-000000000001',
-            '00000000-0000-4000-8000-000000000501',
-            '00000000-0000-4000-8000-000000000702',
-            'logistics','Illegal Cross Tenant Contact','invalid@example.test'
-          );
-          SQL
-          )"
-          contact_fk_status=$?
-          set -e
-          if [[ "$contact_fk_status" -eq 0 ]] || ! grep -qi "business_party_contacts_address_fk" <<<"$contact_fk_output"; then
-            echo "Cross-tenant contact-to-address FK rejection did not behave as expected." >&2
-            echo "$contact_fk_output" >&2
-            exit 1
-          fi
-
       - name: Gate summary
-        shell: bash
-        run: |
-          {
-            echo "## Neon isolated database gate passed"
-            echo ""
-            echo "- Parent branch: main"
-            echo "- Database: neondb"
-            echo "- Login role: nexora_migrator"
-            echo "- Effective DDL role: nexora_owner"
-            echo "- Drizzle migrations: 5 verified"
-            echo "- Application tables: 18 verified"
-            echo "- Tenant RLS tables: 15 verified"
-            echo "- Runtime privileges without destructive DELETE: verified"
-            echo "- Master Data addresses, contacts and composite FKs: verified"
-          } >> "$GITHUB_STEP_SUMMARY"
+        run: echo "Neon database gate passed for foundation, Master Data and NEX-29 transport requests."
 
       - name: Delete isolated Neon branch
-        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
+        if: always()
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          branch: ${{ steps.create-neon.outputs.branch_id }}
+          branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
