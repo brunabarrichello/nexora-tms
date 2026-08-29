@@ -35,6 +35,9 @@ jobs:
         with:
           node-version: 24.20.0
 
+      - name: Toolchain doctor
+        run: node scripts/doctor.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
