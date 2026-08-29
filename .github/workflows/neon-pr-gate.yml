@@ -42,7 +42,7 @@ jobs:
           node-version: 24.20.0
 
       - name: Install dependencies
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Validate Neon API secret
         shell: bash
@@ -144,9 +144,10 @@ jobs:
                AND table_name IN (
                  'tenants','tenant_settings','organizations','business_units','users',
                  'external_identities','memberships','permissions','roles','role_permissions',
-                 'membership_roles','membership_organization_scopes','membership_business_unit_scopes'
+                 'membership_roles','membership_organization_scopes','membership_business_unit_scopes',
+                 'business_parties','business_party_roles','business_party_audit'
                );
-            IF table_count <> 13 THEN RAISE EXCEPTION 'Expected 13 foundation tables, found %', table_count; END IF;
+            IF table_count <> 16 THEN RAISE EXCEPTION 'Expected 16 application tables, found %', table_count; END IF;
 
             SELECT count(*) INTO rls_count
               FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -154,12 +155,13 @@ jobs:
                AND c.relname IN (
                  'tenants','tenant_settings','organizations','business_units','memberships',
                  'roles','role_permissions','membership_roles',
-                 'membership_organization_scopes','membership_business_unit_scopes'
+                 'membership_organization_scopes','membership_business_unit_scopes',
+                 'business_parties','business_party_roles','business_party_audit'
                ) AND c.relrowsecurity;
-            IF rls_count <> 10 THEN RAISE EXCEPTION 'Expected RLS on 10 tenant-scoped tables, found %', rls_count; END IF;
+            IF rls_count <> 13 THEN RAISE EXCEPTION 'Expected RLS on 13 tenant-scoped tables, found %', rls_count; END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 2 THEN RAISE EXCEPTION 'Expected 2 Drizzle migration records, found %', migration_count; END IF;
+            IF migration_count <> 3 THEN RAISE EXCEPTION 'Expected 3 Drizzle migration records, found %', migration_count; END IF;
 
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nexora_app' AND rolcanlogin AND NOT rolbypassrls) THEN
               RAISE EXCEPTION 'nexora_app must be LOGIN and must not BYPASSRLS';
@@ -170,7 +172,10 @@ jobs:
               JOIN pg_namespace n ON n.oid=c.relnamespace
               JOIN pg_roles r ON r.oid=c.relowner
               WHERE n.nspname='public'
-                AND c.relname IN ('tenants','organizations','business_units','memberships','roles')
+                AND c.relname IN (
+                  'tenants','organizations','business_units','memberships','roles',
+                  'business_parties','business_party_roles','business_party_audit'
+                )
                 AND r.rolname='nexora_app'
             ) THEN RAISE EXCEPTION 'nexora_app must not own application tables'; END IF;
 
@@ -181,7 +186,19 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.permissions','SELECT')
                OR NOT has_table_privilege('nexora_app','public.organizations','SELECT')
                OR NOT has_table_privilege('nexora_app','public.organizations','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.memberships','UPDATE') THEN
+               OR NOT has_table_privilege('nexora_app','public.memberships','UPDATE')
+               OR NOT has_table_privilege('nexora_app','public.business_parties','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_parties','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_parties','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_parties','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_roles','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_roles','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_roles','DELETE')
+               OR has_table_privilege('nexora_app','public.business_party_roles','UPDATE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_audit','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_audit','INSERT')
+               OR has_table_privilege('nexora_app','public.business_party_audit','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_audit','DELETE') THEN
               RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
             END IF;
           END $$;
@@ -207,6 +224,31 @@ jobs:
             ('00000000-0000-4000-8000-000000000303', '00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000102', 'active');
           INSERT INTO business_units (id, tenant_id, organization_id, code, name) VALUES
             ('00000000-0000-4000-8000-000000000401', '00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000201', 'UNIT-A', 'Tenant A Unit');
+          INSERT INTO business_parties (id, tenant_id, tax_id, legal_name, email) VALUES
+            ('00000000-0000-4000-8000-000000000501', '00000000-0000-4000-8000-000000000001', '12345678901', 'Tenant A Customer', 'a@example.test'),
+            ('00000000-0000-4000-8000-000000000502', '00000000-0000-4000-8000-000000000002', '12345678902', 'Tenant B Customer', 'b@example.test');
+          INSERT INTO business_party_roles (tenant_id, party_id, role) VALUES
+            ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000501', 'customer'),
+            ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000502', 'shipper');
+          INSERT INTO business_party_audit (
+            id, tenant_id, party_id, actor_user_id, change_type, after_snapshot
+          ) VALUES
+            (
+              '00000000-0000-4000-8000-000000000601',
+              '00000000-0000-4000-8000-000000000001',
+              '00000000-0000-4000-8000-000000000501',
+              '00000000-0000-4000-8000-000000000101',
+              'created',
+              '{"id":"00000000-0000-4000-8000-000000000501"}'::jsonb
+            ),
+            (
+              '00000000-0000-4000-8000-000000000602',
+              '00000000-0000-4000-8000-000000000002',
+              '00000000-0000-4000-8000-000000000502',
+              '00000000-0000-4000-8000-000000000102',
+              'created',
+              '{"id":"00000000-0000-4000-8000-000000000502"}'::jsonb
+            );
           SQL
 
       - name: Resolve nexora_app connection on isolated branch
@@ -237,12 +279,16 @@ jobs:
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context organizations must be 0, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM memberships;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context memberships must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_parties;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context business parties must be 0, got %', visible_count; END IF;
 
             PERFORM set_config('app.user_id', '00000000-0000-4000-8000-000000000101', false);
             SELECT count(*) INTO visible_count FROM memberships;
             IF visible_count <> 2 THEN RAISE EXCEPTION 'User-only membership discovery must return 2, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM organizations;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose organizations, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_parties;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose business parties, got %', visible_count; END IF;
 
             PERFORM set_config('app.user_id', '', false);
             PERFORM set_config('app.tenant_id', '00000000-0000-4000-8000-000000000001', false);
@@ -254,6 +300,12 @@ jobs:
             IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business unit, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM memberships;
             IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one membership, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_parties;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business party, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_roles;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business party role, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_audit;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business party audit row, got %', visible_count; END IF;
           END $$;
           SQL
 
@@ -261,14 +313,14 @@ jobs:
           cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
           SELECT set_config('app.user_id', '', false);
           SELECT set_config('app.tenant_id', '00000000-0000-4000-8000-000000000001', false);
-          INSERT INTO organizations (tenant_id, code, name)
-          VALUES ('00000000-0000-4000-8000-000000000002', 'ILLEGAL', 'Cross Tenant');
+          INSERT INTO business_parties (tenant_id, tax_id, legal_name)
+          VALUES ('00000000-0000-4000-8000-000000000002', '12345678903', 'Cross Tenant Party');
           SQL
           )"
           cross_tenant_status=$?
           set -e
           if [[ "$cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cross_tenant_output"; then
-            echo "Cross-tenant RLS rejection did not behave as expected." >&2
+            echo "Cross-tenant master-data RLS rejection did not behave as expected." >&2
             echo "$cross_tenant_output" >&2
             exit 1
           fi
@@ -291,6 +343,20 @@ jobs:
             exit 1
           fi
 
+          set +e
+          party_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO business_party_roles (tenant_id, party_id, role)
+          VALUES ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000502','consignee');
+          SQL
+          )"
+          party_fk_status=$?
+          set -e
+          if [[ "$party_fk_status" -eq 0 ]] || ! grep -qi "business_party_roles_party_fk" <<<"$party_fk_output"; then
+            echo "Cross-tenant business-party FK rejection did not behave as expected." >&2
+            echo "$party_fk_output" >&2
+            exit 1
+          fi
+
       - name: Gate summary
         shell: bash
         run: |
@@ -306,6 +372,7 @@ jobs:
             echo "- Migration ledger: verified"
             echo "- Runtime privileges: verified"
             echo "- RLS and tenant isolation: verified"
+            echo "- NEX-25 master-data tables: verified"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
