@@ -28,4 +28,6 @@ console.log('  pnpm validate');
 console.log('  pnpm dev:web');
 console.log('  pnpm dev:api');
 console.log('  pnpm dev:worker');
-console.log('\nBefore starting the API, configure runtime environment variables from apps/api/.env.example.');
+console.log(
+  '\nBefore starting the API, configure runtime environment variables from apps/api/.env.example.',
+);
