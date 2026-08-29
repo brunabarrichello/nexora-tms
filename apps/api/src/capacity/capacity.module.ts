@@ -1,14 +1,15 @@
 import { Module } from '@nestjs/common';
 
-import { TenantRuntimeGateModule } from '../tenant-runtime-gate.module.js';
+import { AuthenticationModule } from '../security/authentication.module.js';
+import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
 import { TenancyModule } from '../tenancy/tenancy.module.js';
 import { DriverController } from './driver.controller.js';
 import { DriverService } from './driver.service.js';
 
 @Module({
-  imports: [TenancyModule, TenantRuntimeGateModule],
+  imports: [AuthenticationModule, TenancyModule],
   controllers: [DriverController],
-  providers: [DriverService],
+  providers: [DriverService, TenantRuntimeGateGuard],
   exports: [DriverService],
 })
 export class CapacityModule {}
