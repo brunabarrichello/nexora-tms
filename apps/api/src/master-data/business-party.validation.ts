@@ -13,13 +13,13 @@ export interface CreateBusinessPartyInput {
 }
 
 export interface UpdateBusinessPartyInput {
-  readonly taxId?: string;
-  readonly legalName?: string;
-  readonly tradeName?: string | null;
-  readonly email?: string | null;
-  readonly phone?: string | null;
-  readonly status?: BusinessPartyStatus;
-  readonly roles?: readonly BusinessPartyRole[];
+  taxId?: string;
+  legalName?: string;
+  tradeName?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  status?: BusinessPartyStatus;
+  roles?: readonly BusinessPartyRole[];
 }
 
 const allowedRoles = new Set<BusinessPartyRole>(['customer', 'shipper', 'consignee']);
