@@ -1,0 +1,103 @@
+name: NEX-31 Update Database Gate
+
+on:
+  push:
+    branches:
+      - feature/NEX-31-cargo-requirements
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-31-cargo-requirements
+
+      - name: Extend permanent Neon gate
+        shell: bash
+        run: |
+          python <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/neon-pr-gate.yml')
+          text = path.read_text()
+
+          def replace_once(old: str, new: str) -> None:
+              global text
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected one anchor, found {text.count(old)}: {old[:80]!r}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              "                 'business_party_addresses','business_party_contacts','transport_requests',\n                 'transport_request_stops'\n",
+              "                 'business_party_addresses','business_party_contacts','transport_requests',\n                 'transport_request_stops','transport_request_cargo_profiles'\n",
+          )
+          replace_once(
+              "            IF table_count <> 20 THEN\n              RAISE EXCEPTION 'Expected 20 application tables, found %', table_count;\n",
+              "            IF table_count <> 21 THEN\n              RAISE EXCEPTION 'Expected 21 application tables, found %', table_count;\n",
+          )
+          replace_once(
+              "                 'business_party_addresses','business_party_contacts','transport_requests',\n                 'transport_request_stops'\n",
+              "                 'business_party_addresses','business_party_contacts','transport_requests',\n                 'transport_request_stops','transport_request_cargo_profiles'\n",
+          )
+          replace_once(
+              "            IF rls_count <> 17 THEN\n              RAISE EXCEPTION 'Expected RLS on 17 tenant-scoped tables, found %', rls_count;\n",
+              "            IF rls_count <> 18 THEN\n              RAISE EXCEPTION 'Expected RLS on 18 tenant-scoped tables, found %', rls_count;\n",
+          )
+          replace_once(
+              "            IF migration_count <> 7 THEN\n              RAISE EXCEPTION 'Expected 7 Drizzle migration records, found %', migration_count;\n",
+              "            IF migration_count <> 8 THEN\n              RAISE EXCEPTION 'Expected 8 Drizzle migration records, found %', migration_count;\n",
+          )
+          replace_once(
+              "                   'business_party_addresses','business_party_contacts','transport_requests',\n                   'transport_request_stops'\n",
+              "                   'business_party_addresses','business_party_contacts','transport_requests',\n                   'transport_request_stops','transport_request_cargo_profiles'\n",
+          )
+          replace_once(
+              "               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','DELETE') THEN\n",
+              "               OR NOT has_table_privilege('nexora_app','public.transport_request_stops','DELETE')\n               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','SELECT')\n               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','INSERT')\n               OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','UPDATE')\n               OR has_table_privilege('nexora_app','public.transport_request_cargo_profiles','DELETE') THEN\n",
+          )
+          replace_once(
+              "            SELECT count(*) INTO visible_count FROM transport_request_stops;\n            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context route stops must be 0, got %', visible_count; END IF;\n",
+              "            SELECT count(*) INTO visible_count FROM transport_request_stops;\n            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context route stops must be 0, got %', visible_count; END IF;\n            SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;\n            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context cargo profiles must be 0, got %', visible_count; END IF;\n",
+          )
+          replace_once(
+              "            SELECT count(*) INTO visible_count FROM transport_request_stops;\n            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose route stops, got %', visible_count; END IF;\n",
+              "            SELECT count(*) INTO visible_count FROM transport_request_stops;\n            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose route stops, got %', visible_count; END IF;\n            SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;\n            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose cargo profiles, got %', visible_count; END IF;\n",
+          )
+          replace_once(
+              "          DO $$ DECLARE c integer; note text; BEGIN\n            SELECT count(*) INTO c FROM transport_request_stops\n             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';\n            IF c <> 2 THEN RAISE EXCEPTION 'Route replacement must leave 2 stops, got %', c; END IF;\n            SELECT instructions INTO note FROM transport_request_stops\n             WHERE transport_request_id='00000000-0000-4000-8000-000000000801' AND sequence=1;\n            IF note <> 'Updated pickup instruction' THEN RAISE EXCEPTION 'Runtime route stop update failed'; END IF;\n          END $$;\n",
+              "          DO $$ DECLARE c integer; note text; BEGIN\n            SELECT count(*) INTO c FROM transport_request_stops\n             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';\n            IF c <> 2 THEN RAISE EXCEPTION 'Route replacement must leave 2 stops, got %', c; END IF;\n            SELECT instructions INTO note FROM transport_request_stops\n             WHERE transport_request_id='00000000-0000-4000-8000-000000000801' AND sequence=1;\n            IF note <> 'Updated pickup instruction' THEN RAISE EXCEPTION 'Runtime route stop update failed'; END IF;\n          END $$;\n\n          INSERT INTO transport_request_cargo_profiles (\n            tenant_id, transport_request_id, material, cargo_type, total_weight_kg,\n            volume_count, pallet_count, cubage_m3, max_length_m, max_width_m, max_height_m,\n            tracking_required, vehicle_type, body_type, non_stackable, special_cargo, special_instructions\n          ) VALUES (\n            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',\n            'Eletrônicos gerais','general',5000,20,4,18.5,2.4,1.2,1.8,true,'carreta','sider',true,false,NULL\n          );\n\n          UPDATE transport_request_cargo_profiles\n             SET total_weight_kg=5250, pallet_count=5, updated_at=now()\n           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';\n\n          DO $$ DECLARE c integer; weight numeric; pallets integer; BEGIN\n            SELECT count(*), max(total_weight_kg), max(pallet_count) INTO c, weight, pallets\n              FROM transport_request_cargo_profiles\n             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';\n            IF c <> 1 THEN RAISE EXCEPTION 'Cargo profile upsert baseline must contain one row, got %', c; END IF;\n            IF weight <> 5250 OR pallets <> 5 THEN RAISE EXCEPTION 'Runtime cargo profile update failed'; END IF;\n          END $$;\n",
+          )
+          replace_once(
+              "          set +e\n          cross_tenant_output=\"$(psql \"$APP_DATABASE_URL\" -v ON_ERROR_STOP=1 2>&1 <<'SQL'\n",
+              "          set +e\n          cargo_cross_tenant_output=\"$(psql \"$APP_DATABASE_URL\" -v ON_ERROR_STOP=1 2>&1 <<'SQL'\n          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);\n          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);\n          INSERT INTO transport_request_cargo_profiles (\n            tenant_id, transport_request_id, material, cargo_type, total_weight_kg, volume_count,\n            vehicle_type, body_type\n          ) VALUES (\n            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',\n            'Cross tenant cargo','general',1000,1,'toco','bau'\n          );\n          SQL\n          )\"\n          cargo_cross_tenant_status=$?\n          set -e\n          if [[ \"$cargo_cross_tenant_status\" -eq 0 ]] || ! grep -qi \"row-level security policy\" <<<\"$cargo_cross_tenant_output\"; then\n            echo \"Cross-tenant cargo-profile RLS rejection did not behave as expected.\" >&2\n            echo \"$cargo_cross_tenant_output\" >&2\n            exit 1\n          fi\n\n          set +e\n          cross_tenant_output=\"$(psql \"$APP_DATABASE_URL\" -v ON_ERROR_STOP=1 2>&1 <<'SQL'\n",
+          )
+          replace_once(
+              "          set +e\n          request_fk_output=\"$(psql \"$OWNER_DATABASE_URL\" -v ON_ERROR_STOP=1 2>&1 <<'SQL'\n",
+              "          set +e\n          cargo_request_fk_output=\"$(psql \"$OWNER_DATABASE_URL\" -v ON_ERROR_STOP=1 2>&1 <<'SQL'\n          INSERT INTO transport_request_cargo_profiles (\n            tenant_id, transport_request_id, material, cargo_type, total_weight_kg, volume_count,\n            vehicle_type, body_type\n          ) VALUES (\n            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',\n            'Invalid cross tenant cargo','general',1000,1,'toco','bau'\n          );\n          SQL\n          )\"\n          cargo_request_fk_status=$?\n          set -e\n          if [[ \"$cargo_request_fk_status\" -eq 0 ]] || ! grep -qi \"transport_request_cargo_profiles_request_fk\" <<<\"$cargo_request_fk_output\"; then\n            echo \"Cross-tenant cargo request FK rejection did not behave as expected.\" >&2\n            echo \"$cargo_request_fk_output\" >&2\n            exit 1\n          fi\n\n          set +e\n          request_fk_output=\"$(psql \"$OWNER_DATABASE_URL\" -v ON_ERROR_STOP=1 2>&1 <<'SQL'\n",
+          )
+          replace_once(
+              '      - name: Gate summary\n        run: echo "Neon database gate passed through NEX-30 route stops."\n',
+              '      - name: Gate summary\n        run: echo "Neon database gate passed through NEX-31 cargo profiles."\n',
+          )
+
+          path.write_text(text)
+          PY
+
+      - name: Remove temporary workflow and commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/nex-31-update-db-gate.yml
+          git add .github/workflows/neon-pr-gate.yml
+          SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "NEX-31 test(db): extend Neon gate for cargo profiles"
+          SKIP_SIMPLE_GIT_HOOKS=1 git push origin HEAD:feature/NEX-31-cargo-requirements
