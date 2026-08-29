@@ -25,18 +25,17 @@ The workflow input is an environment selector only; it does not use GitHub Envir
 | `staging` | `staging` |
 | `development` | `development` |
 
-This repository is private and currently uses GitHub Free. GitHub Environment secrets for private repositories require a paid plan, so the workflow intentionally uses repository-level Actions secrets instead.
+This repository is private and currently uses GitHub Free. The workflow intentionally avoids GitHub Environment secrets.
 
-## Required GitHub repository secrets
+## Required GitHub repository secret
 
-Configure these under **Settings → Secrets and variables → Actions → Repository secrets**:
+Configure this under **Settings → Secrets and variables → Actions → Repository secrets**:
 
-- `NEON_API_KEY` — Neon API key with access to project `raspy-river-76339604`;
-- `NEON_ADMIN_DATABASE_URL_DEVELOPMENT` — direct PostgreSQL connection string for database `nexora` on Neon branch `development`;
-- `NEON_ADMIN_DATABASE_URL_STAGING` — direct PostgreSQL connection string for database `nexora` on Neon branch `staging`;
-- `NEON_ADMIN_DATABASE_URL_PRODUCTION` — direct PostgreSQL connection string for database `nexora` on Neon branch `main`.
+- `NEON_API_KEY` — Neon API key with access to project `raspy-river-76339604`.
 
-Use an administrative database role only for this infrastructure verification. Do not use `nexora_app`, `nexora_worker`, or application runtime credentials for infrastructure verification.
+No branch-specific administrative database URL is required. The workflow installs the Neon CLI and derives the correct direct PostgreSQL connection string at runtime for the selected Neon branch, database `nexora`, and administrative role `neondb_owner`.
+
+If a legacy `NEON_ADMIN_DATABASE_URL` secret already exists, it is not used by the workflow and can be removed after the new verification flow has passed.
 
 Do not commit connection strings, passwords, API keys, or `.env` files containing secrets.
 
@@ -72,6 +71,8 @@ Required schemas:
 
 ## Security model
 
-GitHub Actions receives credentials only from repository Actions Secrets. The verification script never prints passwords or connection strings. Runtime application credentials remain separate from the administrative verification credential.
+GitHub Actions receives only `NEON_API_KEY` from repository Actions Secrets. The branch-specific administrative connection string is generated dynamically inside the runner, masked immediately, used only for the read-only verification step, and never committed.
+
+Runtime application credentials remain separate from infrastructure verification credentials.
 
 Future migration workflows must use a dedicated `MIGRATIONS_DATABASE_URL`/`nexora_migrator` credential and must not reuse the administrative verification connection.
