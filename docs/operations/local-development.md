@@ -7,7 +7,25 @@
 
 The exact versions are pinned by `.nvmrc`, `.node-version`, `package.json`, and `.npmrc`.
 
-## First bootstrap
+## GitHub Codespaces
+
+The repository includes `.devcontainer/devcontainer.json`. A Codespace created from the working
+branch installs Node.js `24.20.0` and pnpm `11.23.0`, forwards the Web/API ports, and runs the initial
+`pnpm install` automatically.
+
+After the Codespace is ready, validate the repository with:
+
+```bash
+node --version
+pnpm --version
+pnpm validate
+pnpm build
+```
+
+If `pnpm-lock.yaml` is generated or changed, review and commit it to the same pull request before
+closing NEX-18.
+
+## First bootstrap outside Codespaces
 
 ```bash
 corepack enable

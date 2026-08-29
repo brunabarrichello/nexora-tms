@@ -1,0 +1,30 @@
+{
+  "name": "Nexora TMS",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "features": {
+    "ghcr.io/devcontainers/features/node:2": {
+      "version": "24.20.0",
+      "npmVersion": "none",
+      "pnpmVersion": "11.23.0"
+    }
+  },
+  "forwardPorts": [3000, 3001],
+  "portsAttributes": {
+    "3000": {
+      "label": "Nexora Web"
+    },
+    "3001": {
+      "label": "Nexora API"
+    }
+  },
+  "postCreateCommand": "pnpm install --no-frozen-lockfile",
+  "remoteUser": "vscode",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}
