@@ -3,5 +3,6 @@
 **/.next/**
 **/coverage/**
 **/.turbo/**
+.github/workflows/**
 packages/database/migrations/**
 pnpm-lock.yaml
