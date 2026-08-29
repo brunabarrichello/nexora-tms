@@ -1,2 +1,6 @@
 blank_issues_enabled: false
-contact_links: []
+
+contact_links:
+  - name: Nexora TMS backlog (Jira)
+    url: https://brunabarrichello2018.atlassian.net/browse/NEX
+    about: Use Jira NEX as the source of truth for backlog, bugs, tasks and roadmap.
