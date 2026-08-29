@@ -14,11 +14,6 @@ import { TenantMembershipService } from './tenant-membership.service.js';
     TenantDatabaseService,
     TenantMembershipService,
   ],
-  exports: [
-    TenantAuthorizationService,
-    TenantContext,
-    TenantContextGuard,
-    TenantDatabaseService,
-  ],
+  exports: [TenantAuthorizationService, TenantContext, TenantContextGuard, TenantDatabaseService],
 })
 export class TenancyModule {}

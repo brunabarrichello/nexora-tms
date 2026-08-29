@@ -1,8 +1,9 @@
 packages:
-  - "apps/*"
-  - "packages/*"
+  - 'apps/*'
+  - 'packages/*'
 
 strictPeerDependencies: true
 
 allowBuilds:
   esbuild: true
+  simple-git-hooks: true

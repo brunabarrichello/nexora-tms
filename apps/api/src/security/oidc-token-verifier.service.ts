@@ -1,9 +1,5 @@
 import { Injectable, UnauthorizedException } from '@nestjs/common';
-import {
-  createRemoteJWKSet,
-  jwtVerify,
-  type JWTVerifyGetKey,
-} from 'jose';
+import { createRemoteJWKSet, jwtVerify, type JWTVerifyGetKey } from 'jose';
 
 import { OidcConfigService, type OidcRuntimeConfig } from './oidc-config.service.js';
 
@@ -44,11 +40,7 @@ export class OidcTokenVerifierService {
     const config = this.configService.require();
 
     try {
-      const subject = await verifyOidcJwt(
-        token,
-        this.getRemoteJwks(config),
-        config,
-      );
+      const subject = await verifyOidcJwt(token, this.getRemoteJwks(config), config);
       return {
         providerKey: config.providerKey,
         subject,

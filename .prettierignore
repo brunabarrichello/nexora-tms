@@ -1,0 +1,8 @@
+**/node_modules/**
+**/dist/**
+**/.next/**
+**/coverage/**
+**/.turbo/**
+.github/workflows/**
+packages/database/migrations/**
+pnpm-lock.yaml

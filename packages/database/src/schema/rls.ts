@@ -1,5 +1,5 @@
-import { sql } from "drizzle-orm";
-import type { AnyPgColumn } from "drizzle-orm/pg-core";
+import { sql } from 'drizzle-orm';
+import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 export function tenantMatchesSession(tenantId: AnyPgColumn) {
   return sql`${tenantId} = nullif(current_setting('app.tenant_id', true), '')::uuid`;

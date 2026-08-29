@@ -13,10 +13,7 @@ import type { AuthenticatedHttpRequest } from '../security/authenticated-princip
 import { TenantAuthorizationService } from './tenant-authorization.service.js';
 import { TenantContextGuard } from './tenant-context.guard.js';
 import { TenantContext, type TenantContextSnapshot } from './tenant-context.js';
-import type {
-  TenantDatabaseService,
-  TenantQueryClient,
-} from './tenant-database.service.js';
+import type { TenantDatabaseService, TenantQueryClient } from './tenant-database.service.js';
 import type { TenantMembershipService } from './tenant-membership.service.js';
 import { TenantRuntimeGateController } from './tenant-runtime-gate.controller.js';
 
@@ -24,9 +21,7 @@ const USER_ID = '11111111-1111-4111-8111-111111111111';
 const TENANT_A = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const TENANT_B = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 
-function executionContextFor(
-  request: AuthenticatedHttpRequest,
-): ExecutionContext {
+function executionContextFor(request: AuthenticatedHttpRequest): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => request,
@@ -56,10 +51,7 @@ function databaseService(
 
 test('tenant guard establishes context only after active membership validation', async () => {
   const tenantContext = new TenantContext();
-  const guard = new TenantContextGuard(
-    membershipService(true),
-    tenantContext,
-  );
+  const guard = new TenantContextGuard(membershipService(true), tenantContext);
 
   const allowed = await guard.canActivate(
     executionContextFor({
@@ -82,10 +74,7 @@ test('tenant guard establishes context only after active membership validation',
 });
 
 test('tenant guard rejects requests without a trusted authenticated principal', async () => {
-  const guard = new TenantContextGuard(
-    membershipService(true),
-    new TenantContext(),
-  );
+  const guard = new TenantContextGuard(membershipService(true), new TenantContext());
 
   await assert.rejects(
     guard.canActivate(
@@ -100,10 +89,7 @@ test('tenant guard rejects requests without a trusted authenticated principal', 
 });
 
 test('tenant guard rejects malformed tenant selection before membership lookup', async () => {
-  const guard = new TenantContextGuard(
-    membershipService(true),
-    new TenantContext(),
-  );
+  const guard = new TenantContextGuard(membershipService(true), new TenantContext());
 
   await assert.rejects(
     guard.canActivate(
@@ -122,10 +108,7 @@ test('tenant guard rejects malformed tenant selection before membership lookup',
 });
 
 test('tenant guard rejects a selected tenant without an active membership', async () => {
-  const guard = new TenantContextGuard(
-    membershipService(false),
-    new TenantContext(),
-  );
+  const guard = new TenantContextGuard(membershipService(false), new TenantContext());
 
   await assert.rejects(
     guard.canActivate(
@@ -153,10 +136,7 @@ test('resource authorization rejects tenant IDs outside the active tenant', () =
 
   const authorization = new TenantAuthorizationService(tenantContext);
   assert.doesNotThrow(() => authorization.assertResourceTenant(TENANT_A));
-  assert.throws(
-    () => authorization.assertResourceTenant(TENANT_B),
-    ForbiddenException,
-  );
+  assert.throws(() => authorization.assertResourceTenant(TENANT_B), ForbiddenException);
 });
 
 test('runtime gate succeeds only when RLS exposes the selected tenant', async () => {

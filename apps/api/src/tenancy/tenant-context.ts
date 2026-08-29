@@ -1,8 +1,4 @@
-import {
-  Injectable,
-  InternalServerErrorException,
-  Scope,
-} from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Scope } from '@nestjs/common';
 
 export interface TenantContextSnapshot {
   readonly userId: string;

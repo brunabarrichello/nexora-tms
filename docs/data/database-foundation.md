@@ -18,12 +18,12 @@ This project is greenfield and is not a clone or branch of Moventra.
 
 Target branch model:
 
-| Environment | Neon branch | Purpose |
-| --- | --- | --- |
-| Production | `main` | protected production data/schema baseline |
-| Staging | `staging` | pre-production validation and migration rehearsal |
-| Development | `development` | shared integration/development environment |
-| PR / migration validation | short-lived branch | disposable isolated validation |
+| Environment               | Neon branch        | Purpose                                           |
+| ------------------------- | ------------------ | ------------------------------------------------- |
+| Production                | `main`             | protected production data/schema baseline         |
+| Staging                   | `staging`          | pre-production validation and migration rehearsal |
+| Development               | `development`      | shared integration/development environment        |
+| PR / migration validation | short-lived branch | disposable isolated validation                    |
 
 Because the current Neon connector has a parameter-mapping defect in `create_branch`, only `main` is physically confirmed at this time. `development` and `staging` remain required NEX-77 work and must not be reported as created until verified.
 

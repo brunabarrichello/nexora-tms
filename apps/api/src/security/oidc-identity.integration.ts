@@ -10,9 +10,7 @@ import type { OidcTokenVerifierService } from './oidc-token-verifier.service.js'
 const ACTIVE_USER_ID = '52000000-0000-4000-8000-000000000101';
 const PROVIDER_KEY = 'ci-oidc';
 
-function executionContextFor(
-  request: AuthenticatedHttpRequest,
-): ExecutionContext {
+function executionContextFor(request: AuthenticatedHttpRequest): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => request,
@@ -49,10 +47,7 @@ async function run(): Promise<void> {
     const request: AuthenticatedHttpRequest = {
       headers: { authorization: 'Bearer integration-token' },
     };
-    const guard = new OidcAuthenticationGuard(
-      verifier('subject-active'),
-      identities,
-    );
+    const guard = new OidcAuthenticationGuard(verifier('subject-active'), identities);
 
     assert.equal(await guard.canActivate(executionContextFor(request)), true);
     assert.deepEqual(request.authenticatedPrincipal, {
@@ -60,10 +55,7 @@ async function run(): Promise<void> {
       userId: ACTIVE_USER_ID,
     });
 
-    const suspendedGuard = new OidcAuthenticationGuard(
-      verifier('subject-suspended'),
-      identities,
-    );
+    const suspendedGuard = new OidcAuthenticationGuard(verifier('subject-suspended'), identities);
     await assert.rejects(
       suspendedGuard.canActivate(
         executionContextFor({

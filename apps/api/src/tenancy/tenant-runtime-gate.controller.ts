@@ -1,9 +1,4 @@
-import {
-  Controller,
-  Get,
-  InternalServerErrorException,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, InternalServerErrorException, UseGuards } from '@nestjs/common';
 
 import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
 import { TenantContext } from './tenant-context.js';
@@ -32,26 +27,18 @@ export class TenantRuntimeGateController {
     visibleTenant: VisibleTenant;
   }> {
     const context = this.tenantContext.require();
-    const visibleTenants = await this.database.withTenantContext(
-      context,
-      async (client) => {
-        const result = await client.query<VisibleTenant>(
-          `SELECT id::text AS id, slug, name, status::text AS status
+    const visibleTenants = await this.database.withTenantContext(context, async (client) => {
+      const result = await client.query<VisibleTenant>(
+        `SELECT id::text AS id, slug, name, status::text AS status
              FROM tenants
             ORDER BY id`,
-        );
-
-        return result.rows;
-      },
-    );
-
-    if (
-      visibleTenants.length !== 1 ||
-      visibleTenants[0]?.id !== context.tenantId
-    ) {
-      throw new InternalServerErrorException(
-        'Tenant RLS isolation gate failed',
       );
+
+      return result.rows;
+    });
+
+    if (visibleTenants.length !== 1 || visibleTenants[0]?.id !== context.tenantId) {
+      throw new InternalServerErrorException('Tenant RLS isolation gate failed');
     }
 
     return {

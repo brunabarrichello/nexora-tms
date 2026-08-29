@@ -12,26 +12,23 @@ async function run(): Promise<void> {
   const memberships = new TenantMembershipService(database);
 
   try {
-    const runtimeIdentity = await database.withUserDiscoveryContext(
-      USER_A,
-      async (client) => {
-        const result = await client.query<{
-          bypass_rls: boolean;
-          current_user: string;
-          session_user: string;
-        }>(
-          `SELECT
+    const runtimeIdentity = await database.withUserDiscoveryContext(USER_A, async (client) => {
+      const result = await client.query<{
+        bypass_rls: boolean;
+        current_user: string;
+        session_user: string;
+      }>(
+        `SELECT
              current_user::text AS current_user,
              session_user::text AS session_user,
              COALESCE(
                (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user),
                true
              ) AS bypass_rls`,
-        );
+      );
 
-        return result.rows[0];
-      },
-    );
+      return result.rows[0];
+    });
 
     assert.ok(runtimeIdentity, 'runtime database identity must be observable');
     assert.equal(
@@ -109,11 +106,7 @@ async function run(): Promise<void> {
         return result.rows[0]?.count ?? -1;
       },
     );
-    assert.equal(
-      tenantBLeakCount,
-      0,
-      'tenant A context must not read tenant B organization',
-    );
+    assert.equal(tenantBLeakCount, 0, 'tenant A context must not read tenant B organization');
 
     await assert.rejects(
       database.withTenantContext(
@@ -131,8 +124,7 @@ async function run(): Promise<void> {
         },
       ),
       (error: unknown) =>
-        error instanceof Error &&
-        error.message.toLowerCase().includes('row-level security'),
+        error instanceof Error && error.message.toLowerCase().includes('row-level security'),
       'tenant A transaction must reject a tenant B write via RLS',
     );
   } finally {

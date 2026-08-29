@@ -25,11 +25,7 @@ export class OidcConfigService {
     const issuer = this.requiredHttpsUrl('OIDC_ISSUER_URL').toString();
     const jwksUrl = this.requiredHttpsUrl('OIDC_JWKS_URL');
     const audience = this.list('OIDC_AUDIENCE');
-    const algorithms = this.list('OIDC_ALLOWED_ALGORITHMS', [
-      'RS256',
-      'PS256',
-      'ES256',
-    ]);
+    const algorithms = this.list('OIDC_ALLOWED_ALGORITHMS', ['RS256', 'PS256', 'ES256']);
 
     return {
       providerKey,
@@ -67,7 +63,10 @@ export class OidcConfigService {
   private list(name: string, fallback?: string[]): string[] {
     const raw = process.env[name]?.trim();
     const values = raw
-      ? raw.split(',').map((value) => value.trim()).filter(Boolean)
+      ? raw
+          .split(',')
+          .map((value) => value.trim())
+          .filter(Boolean)
       : fallback;
 
     if (!values || values.length === 0) {
