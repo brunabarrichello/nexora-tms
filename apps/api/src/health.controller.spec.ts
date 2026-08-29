@@ -15,7 +15,7 @@ test('health endpoint reports the API as healthy', () => {
 });
 
 test('application module initializes with runtime dependencies resolvable', async () => {
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create(AppModule, { logger: ['error'] });
 
   try {
     await app.init();
