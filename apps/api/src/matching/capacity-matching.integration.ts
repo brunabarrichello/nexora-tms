@@ -24,22 +24,23 @@ async function run(): Promise<void> {
     assert.equal(result.transportRequestId, REQUEST_A);
     assert.equal(
       result.summary.evaluated,
-      2,
-      'tenant A must evaluate exactly two active compositions',
+      3,
+      'tenant A must evaluate exactly three active compositions',
     );
     assert.equal(result.summary.compatible, 1, 'exactly one composition must be compatible');
-    assert.equal(result.summary.incompatible, 1, 'exactly one composition must be incompatible');
+    assert.equal(result.summary.incompatible, 2, 'exactly two compositions must be incompatible');
 
     const compatible = result.compatible[0];
     assert.ok(compatible, 'compatible capacity candidate must be returned');
     assert.equal(compatible.vehicle.identifier, 'MATCH-COMPATIBLE');
     assert.deepEqual(compatible.reasons, []);
 
-    const incompatible = result.incompatible[0];
-    assert.ok(incompatible, 'incompatible capacity candidate must be returned');
-    assert.equal(incompatible.vehicle.identifier, 'MATCH-INCOMPATIBLE');
+    const capabilityMismatch = result.incompatible.find(
+      (candidate) => candidate.vehicle.identifier === 'MATCH-INCOMPATIBLE',
+    );
+    assert.ok(capabilityMismatch, 'capability mismatch candidate must be returned');
     assert.deepEqual(
-      incompatible.reasons.map((reason) => reason.code),
+      capabilityMismatch.reasons.map((reason) => reason.code),
       [
         'vehicle_type_mismatch',
         'body_type_mismatch',
@@ -51,6 +52,12 @@ async function run(): Promise<void> {
         'tracking_unavailable',
       ],
     );
+
+    const blockedDriver = result.incompatible.find(
+      (candidate) => candidate.vehicle.identifier === 'MATCH-BLOCKED-DRIVER',
+    );
+    assert.ok(blockedDriver, 'blocked driver composition must be returned as incompatible');
+    assert.deepEqual(blockedDriver.reasons.map((reason) => reason.code), ['driver_not_active']);
 
     assert.equal(result.requirements.vehicleType, 'carreta');
     assert.equal(result.requirements.bodyType, 'sider');
