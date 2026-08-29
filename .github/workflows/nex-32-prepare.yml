@@ -1,0 +1,97 @@
+name: NEX-32 Prepare
+
+on:
+  push:
+    branches:
+      - feature/NEX-32-commercial-terms
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nex-32-prepare
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-32-commercial-terms
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format NEX-32 files
+        run: >-
+          pnpm exec prettier --write
+          packages/database/src/schema/freight-commercial.ts
+          packages/database/src/schema/index.ts
+          apps/api/src/freight/transport-commercial.validation.ts
+          apps/api/src/freight/transport-commercial.validation.spec.ts
+          apps/api/src/freight/transport-commercial.models.ts
+          apps/api/src/freight/transport-commercial.persistence.ts
+          apps/api/src/freight/transport-commercial.service.ts
+          apps/api/src/freight/transport-commercial.controller.ts
+          apps/api/src/freight/freight.module.ts
+          apps/api/package.json
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test API
+        run: pnpm --filter @nexora/api test
+
+      - name: Generate Drizzle migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="$(find packages/database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort | tail -1)"
+          pnpm --filter @nexora/database db:generate
+          after="$(find packages/database/migrations -maxdepth 1 -type f -name '*.sql' -printf '%f\n' | sort | tail -1)"
+          test "$after" != "$before" || { echo "Expected a new migration for NEX-32." >&2; exit 1; }
+          echo "NEX32_MIGRATION=packages/database/migrations/$after" >> "$GITHUB_ENV"
+
+      - name: Add runtime grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat >> "$NEX32_MIGRATION" <<'SQL'
+          --> statement-breakpoint
+          GRANT SELECT, INSERT, UPDATE ON TABLE transport_request_commercial_terms TO nexora_app;
+          --> statement-breakpoint
+          GRANT SELECT, INSERT ON TABLE transport_request_commercial_history TO nexora_app;
+          SQL
+
+      - name: Verify generated migration
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Commit prepared vertical
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/database/migrations packages/database/src/schema apps/api/src/freight apps/api/package.json
+          if git diff --cached --quiet; then
+            echo "No preparation changes to commit."
+            exit 0
+          fi
+          SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "NEX-32 feat(freight): prepare commercial terms vertical"
+          SKIP_SIMPLE_GIT_HOOKS=1 git push origin HEAD:feature/NEX-32-commercial-terms
