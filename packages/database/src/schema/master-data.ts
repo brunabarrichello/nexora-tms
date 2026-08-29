@@ -68,7 +68,7 @@ export const businessPartyRoles = pgTable(
     }).onDelete('cascade'),
     check(
       'business_party_roles_role_check',
-      sql`${table.role} in ('customer', 'shipper', 'consignee')`,
+      sql`${table.role} in ('customer', 'shipper', 'consignee', 'carrier', 'partner', 'supplier')`,
     ),
     index('business_party_roles_tenant_role_idx').on(table.tenantId, table.role),
     pgPolicy('business_party_roles_tenant_isolation', {
