@@ -6,20 +6,64 @@ Nexora TMS is a next-generation Transportation Management System focused on road
 
 Project bootstrap in progress. The repository is currently in **Wave 0 — Architecture & Foundations**.
 
-## Initial goals
+The first executable backend foundation is defined under `apps/api` and follows the accepted architecture baseline: Node.js, TypeScript, pnpm workspaces, Turborepo and NestJS.
 
-- Define architecture, module boundaries, and ADRs.
-- Establish repository governance and contribution standards.
-- Prepare secure CI/CD and environment strategy.
-- Define the application, data, security, and integration foundations before feature implementation.
+## Runtime baseline
 
-## Repository
+- Node.js `24.20.0` LTS
+- pnpm `11.24.0`
+- Turborepo
+- TypeScript strict
+- NestJS API
+- Railway for API/worker runtime
+- Neon PostgreSQL for persistence
+- Vercel for the web runtime
 
-This repository is the canonical source code and technical governance location for Nexora TMS.
+## Monorepo
 
-## Documentation
+```text
+apps/
+  api/        Nexora HTTP API
+  web/        planned web application
+  worker/     planned persistent worker
+packages/     shared packages created only when real reuse exists
+```
 
-Architecture decisions and project documentation will live under `docs/`.
+## API bootstrap
+
+Install dependencies and run the API from the repository root:
+
+```bash
+pnpm install
+pnpm build:api
+pnpm start:api
+```
+
+Operational health endpoint:
+
+```text
+GET /health
+```
+
+API contract base path:
+
+```text
+/api/v1
+```
+
+## Quality gates
+
+```bash
+pnpm typecheck
+pnpm test
+pnpm build
+```
+
+GitHub Actions executes the same quality gates for pull requests and pushes to `main`.
+
+## Architecture and governance
+
+Canonical architecture, module boundaries, ADRs and operational documentation live under `docs/`. Material architecture changes require a new ADR and changes follow the branch + pull request workflow described in `CONTRIBUTING.md`.
 
 ---
 

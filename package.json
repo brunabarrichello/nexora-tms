@@ -1,0 +1,21 @@
+{
+  "name": "nexora-tms",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nexora Transportation Management System monorepo",
+  "packageManager": "pnpm@11.24.0",
+  "engines": {
+    "node": "24.20.0",
+    "pnpm": "11.24.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "build:api": "pnpm --filter @nexora/api build",
+    "start:api": "pnpm --filter @nexora/api start",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "turbo": "2.10.12"
+  }
+}
