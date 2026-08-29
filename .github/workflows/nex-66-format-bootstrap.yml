@@ -1,0 +1,51 @@
+name: NEX-66 Format Bootstrap
+
+on:
+  push:
+    branches:
+      - chore/NEX-66-dx-tooling
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: chore/NEX-66-dx-tooling
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies and generate lockfile
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Format repository
+        run: pnpm format
+
+      - name: Commit formatting baseline
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No formatting changes to commit."
+            exit 0
+          fi
+          SKIP_SIMPLE_GIT_HOOKS=1 git commit -m "NEX-66 style: apply repository formatting baseline"
+          SKIP_SIMPLE_GIT_HOOKS=1 git push origin HEAD:chore/NEX-66-dx-tooling
