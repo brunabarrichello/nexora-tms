@@ -185,7 +185,7 @@ export const capacityAssets = pgTable(
     check('capacity_assets_identifier_check', sql`length(trim(${table.identifier})) >= 2`),
     check(
       'capacity_assets_plate_check',
-      sql`${table.plate} IS NULL OR ${table.plate} ~ '^[A-Z]{3}[0-9A-Z][0-9][0-9A-Z][0-9]$'`,
+      sql`${table.plate} IS NULL OR ${table.plate} ~ '^([A-Z]{3}[0-9]{4}|[A-Z]{3}[0-9][A-Z][0-9]{2})$'`,
     ),
     check('capacity_assets_vehicle_type_check', sql`length(trim(${table.vehicleType})) >= 2`),
     check('capacity_assets_body_type_check', sql`length(trim(${table.bodyType})) >= 2`),
