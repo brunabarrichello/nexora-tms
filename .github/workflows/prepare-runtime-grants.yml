@@ -1,0 +1,53 @@
+name: Prepare Runtime Grants Migration
+
+on:
+  push:
+    branches:
+      - fix/nex-71-runtime-migration-capability
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/nex-71-runtime-migration-capability
+
+      - name: Create runtime privileges migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > packages/database/migrations/0001_runtime_app_privileges.sql <<'SQL'
+          GRANT USAGE ON SCHEMA public TO nexora_app;
+          --> statement-breakpoint
+          GRANT SELECT ON TABLE tenants, users, external_identities, permissions TO nexora_app;
+          --> statement-breakpoint
+          GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+            tenant_settings,
+            organizations,
+            business_units,
+            memberships,
+            roles,
+            role_permissions,
+            membership_roles,
+            membership_organization_scopes,
+            membership_business_unit_scopes
+          TO nexora_app;
+          SQL
+
+          jq '.entries += [{"idx":1,"version":"7","when":1788005800000,"tag":"0001_runtime_app_privileges","breakpoints":true}]' \
+            packages/database/migrations/meta/_journal.json > /tmp/journal.json
+          mv /tmp/journal.json packages/database/migrations/meta/_journal.json
+
+      - name: Commit migration artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add packages/database/migrations/0001_runtime_app_privileges.sql packages/database/migrations/meta/_journal.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "fix(db): version runtime app privileges"
+          git push origin HEAD:fix/nex-71-runtime-migration-capability
