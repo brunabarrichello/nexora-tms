@@ -151,6 +151,7 @@ jobs:
             migration_count integer;
             request_enum_count integer;
             stop_enum_count integer;
+            commercial_enum_count integer;
           BEGIN
             SELECT count(*) INTO table_count
               FROM information_schema.tables
@@ -161,10 +162,11 @@ jobs:
                  'membership_roles','membership_organization_scopes','membership_business_unit_scopes',
                  'business_parties','business_party_roles','business_party_audit',
                  'business_party_addresses','business_party_contacts','transport_requests',
-                 'transport_request_stops','transport_request_cargo_profiles'
+                 'transport_request_stops','transport_request_cargo_profiles',
+                 'transport_request_commercial_terms','transport_request_commercial_history'
                );
-            IF table_count <> 21 THEN
-              RAISE EXCEPTION 'Expected 21 application tables, found %', table_count;
+            IF table_count <> 23 THEN
+              RAISE EXCEPTION 'Expected 23 application tables, found %', table_count;
             END IF;
 
             SELECT count(*) INTO rls_count
@@ -177,16 +179,17 @@ jobs:
                  'membership_organization_scopes','membership_business_unit_scopes',
                  'business_parties','business_party_roles','business_party_audit',
                  'business_party_addresses','business_party_contacts','transport_requests',
-                 'transport_request_stops','transport_request_cargo_profiles'
+                 'transport_request_stops','transport_request_cargo_profiles',
+                 'transport_request_commercial_terms','transport_request_commercial_history'
                )
                AND c.relrowsecurity;
-            IF rls_count <> 18 THEN
-              RAISE EXCEPTION 'Expected RLS on 18 tenant-scoped tables, found %', rls_count;
+            IF rls_count <> 20 THEN
+              RAISE EXCEPTION 'Expected RLS on 20 tenant-scoped tables, found %', rls_count;
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 8 THEN
-              RAISE EXCEPTION 'Expected 8 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 9 THEN
+              RAISE EXCEPTION 'Expected 9 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
@@ -203,6 +206,14 @@ jobs:
                AND e.enumlabel IN ('pickup','delivery','support');
             IF stop_enum_count <> 3 THEN
               RAISE EXCEPTION 'Expected three transport stop type values, found %', stop_enum_count;
+            END IF;
+
+            SELECT count(*) INTO commercial_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='commercial_terms_status'
+               AND e.enumlabel IN ('draft','pending_approval','approved','rejected');
+            IF commercial_enum_count <> 4 THEN
+              RAISE EXCEPTION 'Expected four commercial terms status values, found %', commercial_enum_count;
             END IF;
 
             IF NOT EXISTS (
@@ -222,7 +233,8 @@ jobs:
                    'tenants','organizations','business_units','memberships','roles',
                    'business_parties','business_party_roles','business_party_audit',
                    'business_party_addresses','business_party_contacts','transport_requests',
-                   'transport_request_stops','transport_request_cargo_profiles'
+                   'transport_request_stops','transport_request_cargo_profiles',
+                   'transport_request_commercial_terms','transport_request_commercial_history'
                  )
                  AND r.rolname='nexora_app'
             ) THEN
@@ -254,7 +266,15 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','SELECT')
                OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','INSERT')
                OR NOT has_table_privilege('nexora_app','public.transport_request_cargo_profiles','UPDATE')
-               OR has_table_privilege('nexora_app','public.transport_request_cargo_profiles','DELETE') THEN
+               OR has_table_privilege('nexora_app','public.transport_request_cargo_profiles','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_terms','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_terms','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_terms','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_request_commercial_terms','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_history','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_commercial_history','INSERT')
+               OR has_table_privilege('nexora_app','public.transport_request_commercial_history','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_request_commercial_history','DELETE') THEN
               RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
             END IF;
           END $$;
@@ -376,6 +396,10 @@ jobs:
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context route stops must be 0, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context cargo profiles must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_terms;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context commercial terms must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_history;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context commercial history must be 0, got %', visible_count; END IF;
 
             PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
             SELECT count(*) INTO visible_count FROM memberships;
@@ -384,6 +408,10 @@ jobs:
             IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose route stops, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM transport_request_cargo_profiles;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose cargo profiles, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_terms;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose commercial terms, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_request_commercial_history;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose commercial history, got %', visible_count; END IF;
 
             PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
             SELECT count(*) INTO visible_count FROM transport_requests;
@@ -440,7 +468,80 @@ jobs:
             IF c <> 1 THEN RAISE EXCEPTION 'Cargo profile must contain one row, got %', c; END IF;
             IF weight <> 5250 OR pallets <> 5 THEN RAISE EXCEPTION 'Runtime cargo profile update failed'; END IF;
           END $$;
+
+          INSERT INTO transport_request_commercial_terms (
+            tenant_id,transport_request_id,currency_code,customer_price,target_carrier_freight,toll_amount,additional_amount,
+            payment_terms,commercial_notes,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801','BRL',18500,16000,313.80,250,
+            '70% coleta / 30% entrega via Pix','Gate commercial terms','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO transport_request_commercial_history (
+            tenant_id,transport_request_id,commercial_terms_id,version,event_type,status,actor_user_id,snapshot
+          ) SELECT tenant_id,transport_request_id,id,1,'created','draft','00000000-0000-4000-8000-000000000101','{"status":"draft"}'::jsonb
+              FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          UPDATE transport_request_commercial_terms
+             SET status='pending_approval', version=2, updated_by_user_id='00000000-0000-4000-8000-000000000101', updated_at=now()
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+          INSERT INTO transport_request_commercial_history (
+            tenant_id,transport_request_id,commercial_terms_id,version,event_type,status,actor_user_id,snapshot
+          ) SELECT tenant_id,transport_request_id,id,2,'submitted','pending_approval','00000000-0000-4000-8000-000000000101','{"status":"pending_approval"}'::jsonb
+              FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          UPDATE transport_request_commercial_terms
+             SET status='approved', approval_note='Gate approved', approved_by_user_id='00000000-0000-4000-8000-000000000101',
+                 approved_at=now(), version=3, updated_by_user_id='00000000-0000-4000-8000-000000000101', updated_at=now()
+           WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+          INSERT INTO transport_request_commercial_history (
+            tenant_id,transport_request_id,commercial_terms_id,version,event_type,status,actor_user_id,snapshot,note
+          ) SELECT tenant_id,transport_request_id,id,3,'approved','approved','00000000-0000-4000-8000-000000000101','{"status":"approved"}'::jsonb,'Gate approved'
+              FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+
+          DO $$ DECLARE s text; v integer; h integer; BEGIN
+            SELECT status::text, version INTO s, v FROM transport_request_commercial_terms
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            SELECT count(*) INTO h FROM transport_request_commercial_history
+             WHERE transport_request_id='00000000-0000-4000-8000-000000000801';
+            IF s <> 'approved' OR v <> 3 THEN RAISE EXCEPTION 'Commercial approval state is invalid: % v%', s, v; END IF;
+            IF h <> 3 THEN RAISE EXCEPTION 'Commercial history must contain 3 versions, got %', h; END IF;
+          END $$;
           SQL
+
+          set +e
+          commercial_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_request_commercial_terms (tenant_id,transport_request_id,target_carrier_freight,payment_terms,created_by_user_id,updated_by_user_id)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',1000,'Pix','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101');
+          SQL
+          )"
+          commercial_cross_tenant_status=$?
+          set -e
+          if [[ "$commercial_cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$commercial_cross_tenant_output"; then
+            echo "Cross-tenant commercial terms RLS rejection did not behave as expected." >&2
+            echo "$commercial_cross_tenant_output" >&2
+            exit 1
+          fi
+
+          set +e
+          history_update_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE transport_request_commercial_history SET note='tampered';
+          SQL
+          )"
+          history_update_status=$?
+          set -e
+          if [[ "$history_update_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$history_update_output"; then
+            echo "Commercial history must be append-only for nexora_app." >&2
+            echo "$history_update_output" >&2
+            exit 1
+          fi
 
           set +e
           cargo_cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
@@ -484,6 +585,20 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          set +e
+          commercial_request_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO transport_request_commercial_terms (tenant_id,transport_request_id,target_carrier_freight,payment_terms,created_by_user_id,updated_by_user_id)
+          VALUES ('00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801',1000,'Pix','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101');
+          SQL
+          )"
+          commercial_request_fk_status=$?
+          set -e
+          if [[ "$commercial_request_fk_status" -eq 0 ]] || ! grep -qi "transport_request_commercial_terms_request_fk" <<<"$commercial_request_fk_output"; then
+            echo "Cross-tenant commercial request FK rejection did not behave as expected." >&2
+            echo "$commercial_request_fk_output" >&2
+            exit 1
+          fi
 
           set +e
           cargo_request_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
@@ -560,7 +675,7 @@ jobs:
           fi
 
       - name: Gate summary
-        run: echo "Neon database gate passed through NEX-31 cargo profiles."
+        run: echo "Neon database gate passed through NEX-32 commercial terms."
 
       - name: Delete isolated Neon branch
         if: always()
