@@ -22,6 +22,13 @@
       "when": 1788035562454,
       "tag": "0002_conscious_midnight",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788036485163,
+      "tag": "0003_fearless_zzzax",
+      "breakpoints": true
     }
   ]
 }
