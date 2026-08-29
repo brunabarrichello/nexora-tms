@@ -33,17 +33,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${NEON_API_KEY:-}" ]]; then
+            echo "NEON_API_KEY repository secret is not configured." >&2
+            exit 1
+          fi
+
       - name: Resolve Neon branch
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
-
-          if [[ -z "${NEON_API_KEY:-}" ]]; then
-            echo "NEON_API_KEY repository secret is not configured." >&2
-            exit 1
-          fi
 
           case "${{ inputs.environment }}" in
             production) branch_name="main" ;;
@@ -68,7 +74,7 @@ jobs:
           echo "NEON_BRANCH_ID=$branch_id" >> "$GITHUB_ENV"
           echo "Resolved Neon branch: $branch_name"
 
-      - name: Verify Neon topology via API
+      - name: Verify Neon database via API
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -87,9 +93,17 @@ jobs:
 
           echo "Neon project, branch and database are present."
 
+      - name: Install Neon CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global neon
+          neon --version
+
       - name: Ensure PostgreSQL client is available
         shell: bash
         run: |
+          set -euo pipefail
           if ! command -v psql >/dev/null 2>&1; then
             sudo apt-get update
             sudo apt-get install -y postgresql-client
@@ -99,25 +113,21 @@ jobs:
       - name: Verify PostgreSQL foundation
         shell: bash
         env:
-          NEON_ADMIN_DATABASE_URL_DEVELOPMENT: ${{ secrets.NEON_ADMIN_DATABASE_URL_DEVELOPMENT }}
-          NEON_ADMIN_DATABASE_URL_STAGING: ${{ secrets.NEON_ADMIN_DATABASE_URL_STAGING }}
-          NEON_ADMIN_DATABASE_URL_PRODUCTION: ${{ secrets.NEON_ADMIN_DATABASE_URL_PRODUCTION }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
 
-          case "${{ inputs.environment }}" in
-            development) admin_url="${NEON_ADMIN_DATABASE_URL_DEVELOPMENT:-}" ;;
-            staging) admin_url="${NEON_ADMIN_DATABASE_URL_STAGING:-}" ;;
-            production) admin_url="${NEON_ADMIN_DATABASE_URL_PRODUCTION:-}" ;;
-            *) echo "Unsupported environment" >&2; exit 1 ;;
-          esac
+          admin_url="$(neon connection-string "$NEON_BRANCH_NAME" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name nexora \
+            --role-name neondb_owner)"
 
           if [[ -z "$admin_url" ]]; then
-            secret_name="NEON_ADMIN_DATABASE_URL_${{ inputs.environment }}"
-            secret_name="${secret_name^^}"
-            echo "$secret_name repository secret is not configured." >&2
+            echo "Neon CLI did not return a connection string." >&2
             exit 1
           fi
+
+          echo "::add-mask::$admin_url"
 
           psql "$admin_url" \
             -v ON_ERROR_STOP=1 \
@@ -132,6 +142,7 @@ jobs:
             echo "- Environment: ${{ inputs.environment }}"
             echo "- Branch: ${NEON_BRANCH_NAME}"
             echo "- Database: nexora"
+            echo "- Connection: generated dynamically via Neon CLI"
             echo "- Required roles: verified by PostgreSQL"
             echo "- Foundation schemas: verified"
           } >> "$GITHUB_STEP_SUMMARY"
