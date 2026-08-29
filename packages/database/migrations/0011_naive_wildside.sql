@@ -32,4 +32,6 @@ CREATE INDEX "capacity_assignments_tenant_driver_history_idx" ON "capacity_assig
 CREATE INDEX "capacity_assignments_tenant_vehicle_history_idx" ON "capacity_assignments" USING btree ("tenant_id","vehicle_id","starts_at");--> statement-breakpoint
 CREATE POLICY "capacity_assignments_tenant_isolation" ON "capacity_assignments" AS PERMISSIVE FOR ALL TO public USING ("capacity_assignments"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("capacity_assignments"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
 --> statement-breakpoint
-GRANT SELECT, INSERT, UPDATE ON TABLE capacity_assignments TO nexora_app;
+GRANT SELECT, INSERT ON TABLE capacity_assignments TO nexora_app;
+--> statement-breakpoint
+GRANT UPDATE (status, ends_at, status_reason, updated_by_user_id, updated_at) ON TABLE capacity_assignments TO nexora_app;
