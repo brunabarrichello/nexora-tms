@@ -57,7 +57,10 @@ async function run(): Promise<void> {
       (candidate) => candidate.vehicle.identifier === 'MATCH-BLOCKED-DRIVER',
     );
     assert.ok(blockedDriver, 'blocked driver composition must be returned as incompatible');
-    assert.deepEqual(blockedDriver.reasons.map((reason) => reason.code), ['driver_not_active']);
+    assert.deepEqual(
+      blockedDriver.reasons.map((reason) => reason.code),
+      ['driver_not_active'],
+    );
 
     assert.equal(result.requirements.vehicleType, 'carreta');
     assert.equal(result.requirements.bodyType, 'sider');
