@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.yarn/
+
+# Build output
+dist/
+build/
+.next/
+out/
+coverage/
+.turbo/
+*.tsbuildinfo
+
+# Runtime and logs
+*.log
+logs/
+*.pid
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local databases / tooling
+*.sqlite
+*.sqlite3
+.prisma/
+
+# IDE / editor
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test / temporary
+.tmp/
+tmp/
+.cache/
+playwright-report/
+test-results/
+
+# Infrastructure local state
+.terraform/
+*.tfstate
+*.tfstate.*
+.railway/
+.vercel/

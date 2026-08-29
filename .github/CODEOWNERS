@@ -1,0 +1,6 @@
+# Default ownership for the repository.
+* @brunabarrichello
+
+# Governance and architecture.
+/.github/ @brunabarrichello
+/docs/ @brunabarrichello
