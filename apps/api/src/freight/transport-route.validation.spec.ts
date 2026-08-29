@@ -40,7 +40,10 @@ test('route validation accepts intermediate support stops', () => {
     windowEndAt: '2026-09-01T19:00:00.000Z',
   };
   const result = parseReplaceTransportRoute({ stops: [pickup, support, delivery] });
-  assert.deepEqual(result.map((stop) => stop.type), ['pickup', 'support', 'delivery']);
+  assert.deepEqual(
+    result.map((stop) => stop.type),
+    ['pickup', 'support', 'delivery'],
+  );
 });
 
 test('route validation requires pickup first', () => {
@@ -62,7 +65,11 @@ test('route validation rejects inverted stop windows', () => {
     () =>
       parseReplaceTransportRoute({
         stops: [
-          { ...pickup, windowStartAt: '2026-09-01T10:00:00.000Z', windowEndAt: '2026-09-01T09:00:00.000Z' },
+          {
+            ...pickup,
+            windowStartAt: '2026-09-01T10:00:00.000Z',
+            windowEndAt: '2026-09-01T09:00:00.000Z',
+          },
           delivery,
         ],
       }),
@@ -75,7 +82,11 @@ test('route validation rejects temporal order that moves backwards', () => {
     () =>
       parseReplaceTransportRoute({
         stops: [
-          { ...pickup, windowStartAt: '2026-09-03T08:00:00.000Z', windowEndAt: '2026-09-03T10:00:00.000Z' },
+          {
+            ...pickup,
+            windowStartAt: '2026-09-03T08:00:00.000Z',
+            windowEndAt: '2026-09-03T10:00:00.000Z',
+          },
           delivery,
         ],
       }),

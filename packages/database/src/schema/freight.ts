@@ -14,10 +14,7 @@ import {
 } from 'drizzle-orm/pg-core';
 
 import { users } from './identity.js';
-import {
-  businessPartyAddresses,
-  businessPartyContacts,
-} from './master-data-directory.js';
+import { businessPartyAddresses, businessPartyContacts } from './master-data-directory.js';
 import { businessParties } from './master-data.js';
 import { tenantMatchesSession } from './rls.js';
 

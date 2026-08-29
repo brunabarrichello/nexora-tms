@@ -67,7 +67,9 @@ export function parseReplaceTransportRoute(input: unknown): readonly TransportRo
     const windowStartAt = parseDate(stop.windowStartAt, `${field}.windowStartAt`);
     const windowEndAt = parseDate(stop.windowEndAt, `${field}.windowEndAt`);
     if (windowEndAt.getTime() < windowStartAt.getTime()) {
-      throw new BadRequestException(`${field}.windowEndAt must be greater than or equal to windowStartAt`);
+      throw new BadRequestException(
+        `${field}.windowEndAt must be greater than or equal to windowStartAt`,
+      );
     }
 
     return {
