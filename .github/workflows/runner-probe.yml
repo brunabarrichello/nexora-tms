@@ -1,0 +1,18 @@
+name: Hosted runner probe
+
+on:
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  probe:
+    name: Probe ubuntu-latest allocation
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Confirm runner allocation
+        run: echo "GitHub-hosted runner allocated"
