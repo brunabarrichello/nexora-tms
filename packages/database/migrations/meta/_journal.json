@@ -50,6 +50,13 @@
       "when": 1788038865888,
       "tag": "0006_closed_karnak",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788039723343,
+      "tag": "0007_young_slyde",
+      "breakpoints": true
     }
   ]
 }

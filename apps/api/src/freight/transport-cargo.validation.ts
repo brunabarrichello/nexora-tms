@@ -94,9 +94,7 @@ export function parseTransportCargoProfile(input: unknown): TransportCargoProfil
     (value) => value !== null,
   ).length;
   if (informedDimensions !== 0 && informedDimensions !== 3) {
-    throw new BadRequestException(
-      'maxLengthM, maxWidthM and maxHeightM must be informed together',
-    );
+    throw new BadRequestException('maxLengthM, maxWidthM and maxHeightM must be informed together');
   }
 
   const specialCargo = optionalBoolean(body.specialCargo, 'specialCargo');
