@@ -12,6 +12,44 @@ async function run(): Promise<void> {
   const memberships = new TenantMembershipService(database);
 
   try {
+    const runtimeIdentity = await database.withUserDiscoveryContext(
+      USER_A,
+      async (client) => {
+        const result = await client.query<{
+          bypass_rls: boolean;
+          current_user: string;
+          session_user: string;
+        }>(
+          `SELECT
+             current_user::text AS current_user,
+             session_user::text AS session_user,
+             COALESCE(
+               (SELECT rolbypassrls FROM pg_roles WHERE rolname = current_user),
+               true
+             ) AS bypass_rls`,
+        );
+
+        return result.rows[0];
+      },
+    );
+
+    assert.ok(runtimeIdentity, 'runtime database identity must be observable');
+    assert.equal(
+      runtimeIdentity.current_user,
+      'nexora_app',
+      'API transactions must execute as nexora_app',
+    );
+    assert.equal(
+      runtimeIdentity.session_user,
+      'nexora_app',
+      'API sessions must authenticate as nexora_app',
+    );
+    assert.equal(
+      runtimeIdentity.bypass_rls,
+      false,
+      'nexora_app must never bypass row-level security',
+    );
+
     assert.equal(
       await memberships.isActiveMember(USER_A, TENANT_A),
       true,
