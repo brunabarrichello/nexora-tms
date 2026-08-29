@@ -1,3 +1,4 @@
+export * from './capacity.js';
 export * from './freight-cargo.js';
 export * from './freight-commercial.js';
 export * from './freight.js';
