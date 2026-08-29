@@ -1,0 +1,94 @@
+name: PR9 Finalize
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+concurrency:
+  group: pr9-finalize
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    name: Finalize PR 9 after clean-head gates
+    if: ${{ github.event.pull_request.number == 9 && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Remove temporary finalizer and push clean head
+        id: clean-head
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/pr9-finalize.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/pr9-finalize.yml
+          git commit -m "chore(ci): remove temporary PR #9 finalizer"
+          git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
+          final_sha="$(git rev-parse HEAD)"
+          echo "final_sha=$final_sha" >> "$GITHUB_OUTPUT"
+          echo "Final clean head: $final_sha"
+
+      - name: Wait for required CI and isolated Neon gate on clean head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FINAL_SHA: ${{ steps.clean-head.outputs.final_sha }}
+        run: |
+          set -euo pipefail
+          required_checks=("Build, typecheck and test" "Isolated migration and RLS")
+
+          for attempt in $(seq 1 180); do
+            checks_json="$(gh api "/repos/${GITHUB_REPOSITORY}/commits/${FINAL_SHA}/check-runs?per_page=100")"
+            all_green=true
+
+            for check_name in "${required_checks[@]}"; do
+              status="$(jq -r --arg name "$check_name" '[.check_runs[] | select(.name == $name)] | sort_by(.started_at) | last | .status // "missing"' <<<"$checks_json")"
+              conclusion="$(jq -r --arg name "$check_name" '[.check_runs[] | select(.name == $name)] | sort_by(.started_at) | last | .conclusion // ""' <<<"$checks_json")"
+              echo "${check_name}: status=${status} conclusion=${conclusion:-pending}"
+
+              case "$conclusion" in
+                success)
+                  ;;
+                failure|cancelled|timed_out|action_required|startup_failure|stale)
+                  echo "${check_name} failed with conclusion '${conclusion}'." >&2
+                  exit 1
+                  ;;
+                *)
+                  all_green=false
+                  ;;
+              esac
+            done
+
+            if [[ "$all_green" == true ]]; then
+              echo "Both clean-head gates are green."
+              exit 0
+            fi
+
+            sleep 5
+          done
+
+          echo "Timed out waiting for clean-head gates." >&2
+          exit 1
+
+      - name: Mark PR 9 ready for review
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh pr ready "${{ github.event.pull_request.number }}" --repo "$GITHUB_REPOSITORY"
