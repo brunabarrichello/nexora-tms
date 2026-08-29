@@ -1,7 +1,7 @@
 import { strict as assert } from 'node:assert';
 import { test } from 'node:test';
 
-import { HealthController } from './health.controller';
+import { HealthController } from './health.controller.js';
 
 test('health endpoint reports the API as healthy', () => {
   const health = new HealthController().getHealth();
