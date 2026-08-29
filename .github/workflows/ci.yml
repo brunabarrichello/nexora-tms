@@ -41,3 +41,15 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Generate Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Check Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Verify Drizzle artifacts are versioned
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: git diff --exit-code -- packages/database/migrations
