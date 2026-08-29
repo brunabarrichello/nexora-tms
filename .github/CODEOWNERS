@@ -4,3 +4,14 @@
 # Governance and architecture.
 /.github/ @brunabarrichello
 /docs/ @brunabarrichello
+
+# Database, infrastructure and migrations.
+/infrastructure/ @brunabarrichello
+/packages/database/ @brunabarrichello
+/**/migrations/ @brunabarrichello
+
+# Identity and security-sensitive areas.
+/packages/auth/ @brunabarrichello
+/packages/security/ @brunabarrichello
+/**/auth/ @brunabarrichello
+/**/security/ @brunabarrichello
