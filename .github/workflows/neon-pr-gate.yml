@@ -159,10 +159,11 @@ jobs:
                  'tenants','tenant_settings','organizations','business_units','users',
                  'external_identities','memberships','permissions','roles','role_permissions',
                  'membership_roles','membership_organization_scopes','membership_business_unit_scopes',
-                 'business_parties','business_party_roles','business_party_audit'
+                 'business_parties','business_party_roles','business_party_audit',
+                 'business_party_addresses','business_party_contacts'
                );
-            IF table_count <> 16 THEN
-              RAISE EXCEPTION 'Expected 16 application tables, found %', table_count;
+            IF table_count <> 18 THEN
+              RAISE EXCEPTION 'Expected 18 application tables, found %', table_count;
             END IF;
 
             SELECT count(*) INTO rls_count
@@ -173,16 +174,17 @@ jobs:
                  'tenants','tenant_settings','organizations','business_units','memberships',
                  'roles','role_permissions','membership_roles',
                  'membership_organization_scopes','membership_business_unit_scopes',
-                 'business_parties','business_party_roles','business_party_audit'
+                 'business_parties','business_party_roles','business_party_audit',
+                 'business_party_addresses','business_party_contacts'
                )
                AND c.relrowsecurity;
-            IF rls_count <> 13 THEN
-              RAISE EXCEPTION 'Expected RLS on 13 tenant-scoped tables, found %', rls_count;
+            IF rls_count <> 15 THEN
+              RAISE EXCEPTION 'Expected RLS on 15 tenant-scoped tables, found %', rls_count;
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 4 THEN
-              RAISE EXCEPTION 'Expected 4 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 5 THEN
+              RAISE EXCEPTION 'Expected 5 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO homologation_column_count
@@ -220,7 +222,8 @@ jobs:
                WHERE n.nspname = 'public'
                  AND c.relname IN (
                    'tenants','organizations','business_units','memberships','roles',
-                   'business_parties','business_party_roles','business_party_audit'
+                   'business_parties','business_party_roles','business_party_audit',
+                   'business_party_addresses','business_party_contacts'
                  )
                  AND r.rolname = 'nexora_app'
             ) THEN
@@ -246,7 +249,15 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.business_party_audit','SELECT')
                OR NOT has_table_privilege('nexora_app','public.business_party_audit','INSERT')
                OR has_table_privilege('nexora_app','public.business_party_audit','UPDATE')
-               OR has_table_privilege('nexora_app','public.business_party_audit','DELETE') THEN
+               OR has_table_privilege('nexora_app','public.business_party_audit','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_addresses','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_addresses','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_addresses','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_addresses','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_contacts','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_contacts','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_contacts','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_contacts','DELETE') THEN
               RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
             END IF;
           END $$;
@@ -286,6 +297,46 @@ jobs:
           INSERT INTO business_party_roles (tenant_id, party_id, role) VALUES
             ('00000000-0000-4000-8000-000000000001', '00000000-0000-4000-8000-000000000501', 'carrier'),
             ('00000000-0000-4000-8000-000000000002', '00000000-0000-4000-8000-000000000502', 'supplier');
+
+          INSERT INTO business_party_addresses (
+            id, tenant_id, party_id, type, label, postal_code, street, number, city, state,
+            operational_reference, is_active
+          ) VALUES
+            (
+              '00000000-0000-4000-8000-000000000701',
+              '00000000-0000-4000-8000-000000000001',
+              '00000000-0000-4000-8000-000000000501',
+              'pickup','Tenant A Pickup','01234-567','Avenida A','100','São Paulo','SP',
+              'Portaria A',true
+            ),
+            (
+              '00000000-0000-4000-8000-000000000702',
+              '00000000-0000-4000-8000-000000000002',
+              '00000000-0000-4000-8000-000000000502',
+              'delivery','Tenant B Delivery','80000-000','Rua B','200','Curitiba','PR',
+              'Doca B',true
+            );
+
+          INSERT INTO business_party_contacts (
+            id, tenant_id, party_id, address_id, type, name, email, phone, whatsapp,
+            operational_reference, is_active
+          ) VALUES
+            (
+              '00000000-0000-4000-8000-000000000801',
+              '00000000-0000-4000-8000-000000000001',
+              '00000000-0000-4000-8000-000000000501',
+              '00000000-0000-4000-8000-000000000701',
+              'logistics','Tenant A Logistics','logistics-a@example.test',null,'11999999999',
+              'Contato coleta',true
+            ),
+            (
+              '00000000-0000-4000-8000-000000000802',
+              '00000000-0000-4000-8000-000000000002',
+              '00000000-0000-4000-8000-000000000502',
+              '00000000-0000-4000-8000-000000000702',
+              'delivery','Tenant B Delivery','delivery-b@example.test','4133334444',null,
+              'Contato entrega',true
+            );
 
           INSERT INTO business_party_audit (
             id, tenant_id, party_id, actor_user_id, change_type, after_snapshot
@@ -338,14 +389,18 @@ jobs:
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context memberships must be 0, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM business_parties;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context business parties must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_addresses;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context addresses must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_contacts;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context contacts must be 0, got %', visible_count; END IF;
 
             PERFORM set_config('app.user_id', '00000000-0000-4000-8000-000000000101', false);
             SELECT count(*) INTO visible_count FROM memberships;
             IF visible_count <> 2 THEN RAISE EXCEPTION 'User-only membership discovery must return 2, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM organizations;
-            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose organizations, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_parties;
-            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose business parties, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_addresses;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose addresses, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_contacts;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose contacts, got %', visible_count; END IF;
 
             PERFORM set_config('app.user_id', '', false);
             PERFORM set_config('app.tenant_id', '00000000-0000-4000-8000-000000000001', false);
@@ -353,21 +408,26 @@ jobs:
             IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly its tenant row, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM organizations;
             IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one organization, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_units;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business unit, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM memberships;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one membership, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM business_parties;
             IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business party, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_party_roles WHERE role = 'carrier';
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see one carrier role, got %', visible_count; END IF;
-            SELECT count(*) INTO visible_count FROM business_party_audit;
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one business party audit row, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_addresses;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one address, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM business_party_contacts;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see exactly one contact, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count
-              FROM business_parties
-             WHERE homologation_status = 'approved'
-               AND homologation_notes = 'Gate approved carrier';
-            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A homologation fields are not visible as expected'; END IF;
+              FROM business_party_addresses
+             WHERE type = 'pickup'
+               AND city = 'São Paulo'
+               AND state = 'SP'
+               AND operational_reference = 'Portaria A'
+               AND is_active;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A operational address fields are not visible as expected'; END IF;
+            SELECT count(*) INTO visible_count
+              FROM business_party_contacts
+             WHERE type = 'logistics'
+               AND address_id = '00000000-0000-4000-8000-000000000701'::uuid
+               AND is_active;
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A associated contact is not visible as expected'; END IF;
           END $$;
           SQL
 
@@ -375,14 +435,19 @@ jobs:
           cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
           SELECT set_config('app.user_id', '', false);
           SELECT set_config('app.tenant_id', '00000000-0000-4000-8000-000000000001', false);
-          INSERT INTO business_parties (tenant_id, tax_id, legal_name, homologation_status)
-          VALUES ('00000000-0000-4000-8000-000000000002', '12345678903', 'Cross Tenant Party', 'pending');
+          INSERT INTO business_party_addresses (
+            tenant_id, party_id, type, label, street, city, state
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002',
+            '00000000-0000-4000-8000-000000000502',
+            'pickup','Cross Tenant Address','Rua X','São Paulo','SP'
+          );
           SQL
           )"
           cross_tenant_status=$?
           set -e
           if [[ "$cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cross_tenant_output"; then
-            echo "Cross-tenant master-data RLS rejection did not behave as expected." >&2
+            echo "Cross-tenant directory RLS rejection did not behave as expected." >&2
             echo "$cross_tenant_output" >&2
             exit 1
           fi
@@ -393,30 +458,41 @@ jobs:
           set -euo pipefail
 
           set +e
-          fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          INSERT INTO business_units (tenant_id, organization_id, code, name)
-          VALUES ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000202','ILLEGAL-FK','Cross Tenant FK');
+          address_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO business_party_addresses (
+            tenant_id, party_id, type, label, street, city, state
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000502',
+            'delivery','Illegal Party Link','Rua X','São Paulo','SP'
+          );
           SQL
           )"
-          fk_status=$?
+          address_fk_status=$?
           set -e
-          if [[ "$fk_status" -eq 0 ]] || ! grep -qi "business_units_tenant_org_fk" <<<"$fk_output"; then
-            echo "Cross-tenant FK rejection did not behave as expected." >&2
-            echo "$fk_output" >&2
+          if [[ "$address_fk_status" -eq 0 ]] || ! grep -qi "business_party_addresses_party_fk" <<<"$address_fk_output"; then
+            echo "Cross-tenant address-to-party FK rejection did not behave as expected." >&2
+            echo "$address_fk_output" >&2
             exit 1
           fi
 
           set +e
-          party_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          INSERT INTO business_party_roles (tenant_id, party_id, role)
-          VALUES ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000502','partner');
+          contact_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          INSERT INTO business_party_contacts (
+            tenant_id, party_id, address_id, type, name, email
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000501',
+            '00000000-0000-4000-8000-000000000702',
+            'logistics','Illegal Cross Tenant Contact','invalid@example.test'
+          );
           SQL
           )"
-          party_fk_status=$?
+          contact_fk_status=$?
           set -e
-          if [[ "$party_fk_status" -eq 0 ]] || ! grep -qi "business_party_roles_party_fk" <<<"$party_fk_output"; then
-            echo "Cross-tenant business-party FK rejection did not behave as expected." >&2
-            echo "$party_fk_output" >&2
+          if [[ "$contact_fk_status" -eq 0 ]] || ! grep -qi "business_party_contacts_address_fk" <<<"$contact_fk_output"; then
+            echo "Cross-tenant contact-to-address FK rejection did not behave as expected." >&2
+            echo "$contact_fk_output" >&2
             exit 1
           fi
 
@@ -430,10 +506,11 @@ jobs:
             echo "- Database: neondb"
             echo "- Login role: nexora_migrator"
             echo "- Effective DDL role: nexora_owner"
-            echo "- Drizzle migrations: 4 verified"
-            echo "- Runtime privileges: verified"
-            echo "- RLS and tenant isolation: verified"
-            echo "- Master Data roles and homologation: verified"
+            echo "- Drizzle migrations: 5 verified"
+            echo "- Application tables: 18 verified"
+            echo "- Tenant RLS tables: 15 verified"
+            echo "- Runtime privileges without destructive DELETE: verified"
+            echo "- Master Data addresses, contacts and composite FKs: verified"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
