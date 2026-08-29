@@ -8,6 +8,13 @@
       "when": 1788003652734,
       "tag": "0000_past_enchantress",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788005800000,
+      "tag": "0001_runtime_app_privileges",
+      "breakpoints": true
     }
   ]
 }
