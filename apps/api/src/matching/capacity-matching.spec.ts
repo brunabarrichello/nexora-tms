@@ -97,10 +97,6 @@ test('reports individual insufficient dimensions', () => {
   assert.equal(result.compatible, false);
   assert.deepEqual(
     result.reasons.map((reason) => reason.code),
-    [
-      'length_capacity_insufficient',
-      'width_capacity_insufficient',
-      'height_capacity_insufficient',
-    ],
+    ['length_capacity_insufficient', 'width_capacity_insufficient', 'height_capacity_insufficient'],
   );
 });

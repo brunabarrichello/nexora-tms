@@ -22,7 +22,11 @@ async function run(): Promise<void> {
     const result = await matching.search(REQUEST_A);
 
     assert.equal(result.transportRequestId, REQUEST_A);
-    assert.equal(result.summary.evaluated, 2, 'tenant A must evaluate exactly two active compositions');
+    assert.equal(
+      result.summary.evaluated,
+      2,
+      'tenant A must evaluate exactly two active compositions',
+    );
     assert.equal(result.summary.compatible, 1, 'exactly one composition must be compatible');
     assert.equal(result.summary.incompatible, 1, 'exactly one composition must be incompatible');
 

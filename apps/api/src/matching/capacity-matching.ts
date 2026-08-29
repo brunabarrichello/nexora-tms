@@ -125,9 +125,7 @@ export function evaluateCapacityCompatibility(
   const cargoHasDimensions =
     cargo.maxLengthM !== null || cargo.maxWidthM !== null || cargo.maxHeightM !== null;
   const candidateHasDimensions =
-    candidate.maxLengthM !== null &&
-    candidate.maxWidthM !== null &&
-    candidate.maxHeightM !== null;
+    candidate.maxLengthM !== null && candidate.maxWidthM !== null && candidate.maxHeightM !== null;
 
   if (cargoHasDimensions && !candidateHasDimensions) {
     reasons.push({
