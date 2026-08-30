@@ -1,3 +1,4 @@
+# final Wave 0022 API invariant pass
 name: Wave 0022 Consolidated Harden
 
 on:
@@ -118,6 +119,7 @@ jobs:
           GRANT SELECT, INSERT ON trip_status_history TO nexora_app;
           SQL
           grep -q 'trip_transport_requests_active_request_unique' "$migration"
+          grep -q 'trip_transport_requests_active_contract_unique' "$migration"
           if grep -Eiq '(^|[[:space:]])(DROP[[:space:]]|TRUNCATE[[:space:]]|ALTER[[:space:]].*RENAME)' "$migration"; then
             echo 'Destructive DDL detected in Wave 0022 migration' >&2
             exit 1
