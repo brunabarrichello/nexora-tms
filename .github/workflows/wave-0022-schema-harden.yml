@@ -1,0 +1,105 @@
+name: Wave 0022 Schema Harden
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0022-trips-core
+    paths:
+      - '.github/workflows/wave-0022-schema-harden.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0022-trips-core
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+      - run: pnpm install --frozen-lockfile
+      - name: Harden schema and reset unmerged 0022 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import json, glob
+
+          schema = Path('packages/database/src/schema/trips.ts')
+          text = schema.read_text()
+          if 'trip_transport_requests_active_request_unique' not in text:
+              marker = """    uniqueIndex('trip_transport_requests_active_sequence_unique')
+                .on(table.tenantId, table.tripId, table.sequence)
+                .where(sql`${table.removedAt} IS NULL`),
+          """
+              addition = marker + """    uniqueIndex('trip_transport_requests_active_request_unique')
+                .on(table.tenantId, table.transportRequestId)
+                .where(sql`${table.removedAt} IS NULL`),
+          """
+              if marker not in text:
+                  raise SystemExit('active sequence unique marker not found')
+              text = text.replace(marker, addition, 1)
+              schema.write_text(text)
+
+          for filename in glob.glob('packages/database/migrations/0022_*.sql'):
+              Path(filename).unlink()
+          snap = Path('packages/database/migrations/meta/0022_snapshot.json')
+          if snap.exists():
+              snap.unlink()
+
+          journal = Path('packages/database/migrations/meta/_journal.json')
+          data = json.loads(journal.read_text())
+          entries = data.get('entries', [])
+          if entries and entries[-1].get('idx') == 22:
+              entries.pop()
+          data['entries'] = entries
+          journal.write_text(json.dumps(data, indent=2) + '\n')
+          PY
+          pnpm exec prettier --write packages/database/src/schema/trips.ts packages/database/migrations/meta/_journal.json
+          pnpm --filter @nexora/database typecheck
+          pnpm --filter @nexora/database db:generate
+      - name: Add runtime grants and validate generated migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          migration="$(find packages/database/migrations -maxdepth 1 -type f -name '0022_*.sql' | head -n1)"
+          test -n "$migration"
+          cat >> "$migration" <<'SQL'
+          GRANT SELECT, INSERT, UPDATE ON trips TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_transport_requests TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_stops TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_drivers TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_assets TO nexora_app;
+          GRANT SELECT, INSERT ON trip_status_history TO nexora_app;
+          SQL
+          grep -q 'trip_transport_requests_active_request_unique' "$migration"
+          if grep -Eiq '(^|[[:space:]])(DROP[[:space:]]|TRUNCATE[[:space:]]|ALTER[[:space:]].*RENAME)' "$migration"; then
+            echo 'Destructive DDL detected in Wave 0022 migration' >&2
+            exit 1
+          fi
+          pnpm --filter @nexora/database db:check
+          pnpm --filter @nexora/database typecheck
+      - name: Commit hardened artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/database/src/schema/trips.ts packages/database/migrations
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo 'No schema changes to commit'
+            exit 0
+          fi
+          git commit -m 'fix(trips): enforce one active trip per transport request'
+          git push origin HEAD:feat/database-wave-0022-trips-core
