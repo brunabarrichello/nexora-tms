@@ -99,7 +99,9 @@ export class DocumentsService {
         filters.push(`d.document_type_id = ${parameter(query.documentTypeId)}::uuid`);
       }
       if (query.expiringBefore) {
-        filters.push(`d.expires_on IS NOT NULL AND d.expires_on <= ${parameter(query.expiringBefore)}::date`);
+        filters.push(
+          `d.expires_on IS NOT NULL AND d.expires_on <= ${parameter(query.expiringBefore)}::date`,
+        );
       }
       const where = filters.length > 0 ? `WHERE ${filters.join(' AND ')}` : '';
       const count = await client.query<{ total: number }>(
@@ -333,14 +335,7 @@ export class DocumentsService {
              tenant_id,document_id,target_kind,relation_type,${target.column},created_by_user_id
            ) VALUES ($1,$2,$3,$4,$5,$6)
            RETURNING id::text AS id`,
-          [
-            context.tenantId,
-            id,
-            data.targetKind,
-            data.relationType,
-            data.targetId,
-            context.userId,
-          ],
+          [context.tenantId, id, data.targetKind, data.relationType, data.targetId, context.userId],
         );
         return this.fetchLink(client, result.rows[0]!.id);
       }),
@@ -410,7 +405,10 @@ export class DocumentsService {
     return result.rows[0];
   }
 
-  private async requireDocumentType(client: TenantQueryClient, id: string): Promise<DocumentTypeRow> {
+  private async requireDocumentType(
+    client: TenantQueryClient,
+    id: string,
+  ): Promise<DocumentTypeRow> {
     const result = await client.query<DocumentTypeRow>(
       `SELECT id::text AS id,subject_scope,has_expiry,requires_validation
          FROM document_types WHERE id=$1::uuid AND is_active=true`,
@@ -444,7 +442,8 @@ export class DocumentsService {
   }
 
   private requireMutableDocument(document: DocumentAggregate): void {
-    if (document.status === 'archived') throw new ConflictException('archived document is immutable');
+    if (document.status === 'archived')
+      throw new ConflictException('archived document is immutable');
   }
 
   private async fetchById(
@@ -452,7 +451,9 @@ export class DocumentsService {
     table: 'document_versions' | 'document_validations',
     id: string,
   ): Promise<DocumentRecord> {
-    const result = await client.query<DocumentRecord>(`SELECT * FROM ${table} WHERE id=$1::uuid`, [id]);
+    const result = await client.query<DocumentRecord>(`SELECT * FROM ${table} WHERE id=$1::uuid`, [
+      id,
+    ]);
     if (!result.rows[0]) throw new NotFoundException('document child record not found');
     return result.rows[0];
   }
@@ -484,7 +485,8 @@ export class DocumentsService {
         typeof error === 'object' && error !== null && 'code' in error
           ? String((error as { code?: unknown }).code)
           : '';
-      if (code === '23505') throw new ConflictException('document record conflicts with existing data');
+      if (code === '23505')
+        throw new ConflictException('document record conflicts with existing data');
       if (code === '23503') {
         throw new BadRequestException('referenced document entity does not exist in this tenant');
       }

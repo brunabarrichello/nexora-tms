@@ -276,7 +276,7 @@ export const documentTypes = pgTable(
     check('document_types_name_check', sql`length(trim(${table.name})) > 0`),
     check(
       'document_types_subject_scope_check',
-      sql`${table.subjectScope} in ('party','driver','asset','request','trip','financial','other')`,
+      sql`${table.subjectScope} in ('party','driver','asset','request','trip','financial','contract','other')`,
     ),
     index('document_types_tenant_scope_active_idx').on(
       table.tenantId,

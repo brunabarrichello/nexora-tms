@@ -1,11 +1,7 @@
 import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 
 import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
-import {
-  DocumentsService,
-  type DocumentPage,
-  type DocumentRecord,
-} from './documents.service.js';
+import { DocumentsService, type DocumentPage, type DocumentRecord } from './documents.service.js';
 
 @Controller('api/v1/documents')
 @UseGuards(TenantRuntimeGateGuard)

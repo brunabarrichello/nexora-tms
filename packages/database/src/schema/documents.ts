@@ -190,11 +190,7 @@ export const documentValidations = pgTable(
     }).onDelete('restrict'),
     foreignKey({
       columns: [table.tenantId, table.documentId, table.versionId],
-      foreignColumns: [
-        documentVersions.tenantId,
-        documentVersions.documentId,
-        documentVersions.id,
-      ],
+      foreignColumns: [documentVersions.tenantId, documentVersions.documentId, documentVersions.id],
       name: 'document_validations_version_fk',
     }).onDelete('restrict'),
     check(

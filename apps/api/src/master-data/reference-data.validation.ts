@@ -53,6 +53,7 @@ const subjectScopes = new Set([
   'request',
   'trip',
   'financial',
+  'contract',
   'other',
 ]);
 

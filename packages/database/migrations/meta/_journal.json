@@ -127,6 +127,13 @@
       "when": 1788058085531,
       "tag": "0017_supreme_scalphunter",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788062096120,
+      "tag": "0018_thin_the_liberteens",
+      "breakpoints": true
     }
   ]
 }

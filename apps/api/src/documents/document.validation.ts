@@ -1,13 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 export type DocumentTargetKind =
-  | 'party'
-  | 'driver'
-  | 'driver_document'
-  | 'asset'
-  | 'asset_document'
-  | 'request'
-  | 'contract';
+  'party' | 'driver' | 'driver_document' | 'asset' | 'asset_document' | 'request' | 'contract';
 
 export interface DocumentListQuery {
   readonly q: string | null;
@@ -132,9 +126,7 @@ export function parseDocumentVersion(input: unknown): DocumentVersionInput {
     sizeBytes,
     sha256,
     source:
-      body.source === undefined
-        ? 'upload'
-        : requiredEnum(body.source, 'source', versionSources),
+      body.source === undefined ? 'upload' : requiredEnum(body.source, 'source', versionSources),
     metadata: objectValue(body.metadata, 'metadata', {}),
   };
 }
@@ -159,9 +151,7 @@ export function parseDocumentLink(input: unknown): DocumentLinkInput {
     targetKind: kind,
     targetId: uuid(body.targetId, 'targetId'),
     relationType:
-      body.relationType === undefined
-        ? 'attachment'
-        : text(body.relationType, 'relationType', 64),
+      body.relationType === undefined ? 'attachment' : text(body.relationType, 'relationType', 64),
   };
 }
 
