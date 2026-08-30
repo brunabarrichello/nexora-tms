@@ -33,7 +33,9 @@ async function run(): Promise<void> {
     assert.equal(accepted.capacityAssignmentId, ASSIGNMENT_A);
 
     const reservationHistory = await reservations.list(REQUEST_A);
-    const initiallyActive = reservationHistory.find((reservation) => reservation.status === 'active');
+    const initiallyActive = reservationHistory.find(
+      (reservation) => reservation.status === 'active',
+    );
     assert.ok(initiallyActive, 'NEX-39 integration must leave one active reservation');
 
     const refused = await contracts.refuse(initiallyActive.id, {
