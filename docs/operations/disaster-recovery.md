@@ -44,17 +44,63 @@ Record and verify:
 
 Do not assume a read replica, cross-region database replica, automatic failover or a backup retention period unless it is objectively verified in the active provider configuration.
 
-## 5. Scenario matrix
+## 5. Disaster scenarios
 
-| Scenario | Immediate containment | Recovery path | Mandatory validation |
-| --- | --- | --- | --- |
-| Total database outage | stop/limit writes; confirm provider incident | recover service or restore/fail over to approved database target | migrations, RLS, tenant isolation, critical CRUD |
-| Logical data corruption | freeze affected writes; capture timestamp/scope | restore isolated point before corruption, validate, then controlled cutover/repair | row counts, invariants, tenant ownership, audit trail |
-| Cloud-region outage | declare regional incident | activate documented alternate deployment/region when available | health, dependencies, latency, DNS, auth |
-| API outage | stop bad rollout if correlated | rollback to last known-good artifact or redeploy known-good commit | `/health`, auth, tenant gate, critical APIs |
-| Web outage | rollback/redeploy known-good Web build | shift traffic only after smoke validation | login flow, navigation, server/API connectivity |
-| DNS loss/misconfiguration | preserve current records; restrict edits | restore versioned/known-good records or provider failover | resolution from independent resolvers, TLS, endpoints |
-| Privileged credential compromise | revoke/disable credential, freeze risky automation | rotate secrets/tokens/keys, audit usage, redeploy consumers | old credential rejected, new credential works, audit reviewed |
+### Total database outage
+
+Containment: stop or limit writes and confirm provider incident scope.
+
+Recovery: recover the database service or restore/fail over to an approved database target.
+
+Validation: migrations, RLS, tenant isolation and critical CRUD.
+
+### Logical data corruption
+
+Containment: freeze affected writes and capture the suspected timestamp/scope.
+
+Recovery: restore an isolated point before corruption, validate it, then perform controlled cutover or repair.
+
+Validation: row counts, invariants, tenant ownership and audit trail.
+
+### Cloud-region outage
+
+Containment: declare a regional incident and prevent uncontrolled retries or conflicting writes.
+
+Recovery: activate the documented alternate deployment/region when one actually exists.
+
+Validation: health, dependencies, latency, DNS and authentication.
+
+### API outage
+
+Containment: stop a bad rollout when correlated with the incident.
+
+Recovery: roll back to the last known-good artifact or redeploy a known-good commit.
+
+Validation: `/health`, authentication, tenant gate and critical APIs.
+
+### Web outage
+
+Containment: stop the faulty Web rollout or traffic shift.
+
+Recovery: rollback or redeploy the known-good Web build.
+
+Validation: login flow, navigation and Web-to-API connectivity.
+
+### DNS loss or misconfiguration
+
+Containment: preserve current records and restrict edits.
+
+Recovery: restore versioned/known-good records or activate documented provider failover.
+
+Validation: independent DNS resolution, TLS and endpoint reachability.
+
+### Privileged credential compromise
+
+Containment: revoke or disable the credential and freeze risky automation.
+
+Recovery: rotate secrets/tokens/keys, audit usage and redeploy consumers as required.
+
+Validation: old credential rejected, new credential works and usage audit reviewed.
 
 ## 6. Database restore drill
 
