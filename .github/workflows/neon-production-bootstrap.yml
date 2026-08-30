@@ -1,0 +1,83 @@
+name: Neon Production Bootstrap
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type PROVISION-PRODUCTION to provision/resolve the canonical Neon production branch
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-production-bootstrap
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  bootstrap:
+    name: Provision canonical Neon production branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+    steps:
+      - name: Validate explicit production confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.confirmation }}" == "PROVISION-PRODUCTION" ]] || {
+            echo "Explicit confirmation PROVISION-PRODUCTION is required." >&2
+            exit 1
+          }
+
+      - name: Resolve or create Neon production branch
+        id: production
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: production
+          database: neondb
+          role: neondb_owner
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Verify production connection read-only
+        shell: bash
+        env:
+          PRODUCTION_ADMIN_DATABASE_URL: ${{ steps.production.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$PRODUCTION_ADMIN_DATABASE_URL"
+          psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
+            "select current_database(), current_user, current_setting('server_version_num');"
+          psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
+            "select count(*) from pg_roles where rolname in ('nexora_owner','nexora_migrator','nexora_app','nexora_worker');"
+
+      - name: Bootstrap summary
+        shell: bash
+        run: |
+          {
+            echo "## Neon Production bootstrap passed"
+            echo ""
+            echo "- Project: ${NEON_PROJECT_ID}"
+            echo "- Branch: production"
+            echo "- Parent branch: main"
+            echo "- Database: neondb"
+            echo "- Verification: read-only connectivity and Nexora role presence"
+            echo "- Migrations applied: no"
+            echo "- Railway variables changed: no"
+            echo "- API redeployed: no"
+          } >> "$GITHUB_STEP_SUMMARY"
