@@ -5,6 +5,7 @@ on:
     branches:
       - feat/database-wave-0022-trips-core
     paths:
+      - '.github/scripts/wave0022_patch_gates.py'
       - '.github/workflows/wave0022-permanent-gates-patch.yml'
 
 permissions:
