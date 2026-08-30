@@ -68,7 +68,11 @@ export default async function Page({
       totalRows={data?.total}
       tabs={documentTabs()}
       emptyTitle="Nenhum vencimento no horizonte"
-      emptyDescription={result.kind === 'ready' ? 'Nenhum documento com validade dentro do período.' : result.message}
+      emptyDescription={
+        result.kind === 'ready'
+          ? 'Nenhum documento com validade dentro do período.'
+          : result.message
+      }
       integrationNotes={[
         'O status efetivo marca documentos vencidos mesmo antes de um job materializar o lifecycle.',
         'O horizonte é enviado como filtro server-side expiringBefore.',

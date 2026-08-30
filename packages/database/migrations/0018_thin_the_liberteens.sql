@@ -163,3 +163,10 @@ CREATE POLICY "document_links_tenant_isolation" ON "document_links" AS PERMISSIV
 CREATE POLICY "document_validations_tenant_isolation" ON "document_validations" AS PERMISSIVE FOR ALL TO public USING ("document_validations"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("document_validations"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "document_versions_tenant_isolation" ON "document_versions" AS PERMISSIVE FOR ALL TO public USING ("document_versions"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("document_versions"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "documents_tenant_isolation" ON "documents" AS PERMISSIVE FOR ALL TO public USING ("documents"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("documents"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
+--> statement-breakpoint
+-- Wave 0018 runtime document privileges
+REVOKE ALL PRIVILEGES ON TABLE documents, document_versions, document_validations, document_links FROM nexora_app;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE documents TO nexora_app;--> statement-breakpoint
+GRANT SELECT, INSERT ON TABLE document_versions TO nexora_app;--> statement-breakpoint
+GRANT SELECT, INSERT ON TABLE document_validations TO nexora_app;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE document_links TO nexora_app;

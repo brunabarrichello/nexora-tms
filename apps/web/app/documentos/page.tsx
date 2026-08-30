@@ -124,10 +124,22 @@ function apiState(result: ApiResult<unknown>) {
         message: 'A consulta foi executada com sucesso e não retornou registros.',
       };
     case 'unconfigured':
-      return { status: 'API não configurada', emptyTitle: 'Integração aguardando ambiente', message: result.message };
+      return {
+        status: 'API não configurada',
+        emptyTitle: 'Integração aguardando ambiente',
+        message: result.message,
+      };
     case 'unauthorized':
-      return { status: 'Autorização pendente', emptyTitle: 'Sessão sem acesso à API', message: result.message };
+      return {
+        status: 'Autorização pendente',
+        emptyTitle: 'Sessão sem acesso à API',
+        message: result.message,
+      };
     case 'error':
-      return { status: 'API indisponível', emptyTitle: 'Falha ao consultar documentos', message: result.message };
+      return {
+        status: 'API indisponível',
+        emptyTitle: 'Falha ao consultar documentos',
+        message: result.message,
+      };
   }
 }

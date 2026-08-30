@@ -20,7 +20,9 @@ export default async function Page({
 }>) {
   const { documentId } = await params;
   const values = singleValues(await searchParams);
-  const view = ['versions', 'validations', 'links'].includes(values.view) ? values.view : 'versions';
+  const view = ['versions', 'validations', 'links'].includes(values.view)
+    ? values.view
+    : 'versions';
   const document = await apiGet<DocumentRecord>(`/api/v1/documents/${documentId}`);
   if (document.kind !== 'ready') {
     return (
@@ -38,9 +40,7 @@ export default async function Page({
     );
   }
 
-  const child = await apiGet<readonly DocumentRecord[]>(
-    `/api/v1/documents/${documentId}/${view}`,
-  );
+  const child = await apiGet<readonly DocumentRecord[]>(`/api/v1/documents/${documentId}/${view}`);
   const items = child.kind === 'ready' ? child.data : [];
   let columns: Array<{ key: string; label: string; hrefKey?: string }> = [];
   let rows: Array<Record<string, string>> = [];
@@ -100,9 +100,7 @@ export default async function Page({
         target: documentText(item.target_id),
         relation: documentText(item.relation_type),
         created: documentDateTime(item.created_at),
-        status: active
-          ? 'Desvincular'
-          : `Desvinculado • ${documentDateTime(item.unlinked_at)}`,
+        status: active ? 'Desvincular' : `Desvinculado • ${documentDateTime(item.unlinked_at)}`,
         statusHref: active
           ? `/documentos/${documentId}/vinculos/${documentText(item.id)}/desvincular`
           : '',

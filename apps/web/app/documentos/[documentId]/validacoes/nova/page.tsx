@@ -6,7 +6,9 @@ export default async function Page({
   params,
 }: Readonly<{ params: Promise<{ documentId: string }> }>) {
   const { documentId } = await params;
-  const versions = await apiGet<readonly DocumentRecord[]>(`/api/v1/documents/${documentId}/versions`);
+  const versions = await apiGet<readonly DocumentRecord[]>(
+    `/api/v1/documents/${documentId}/versions`,
+  );
   const options =
     versions.kind === 'ready'
       ? versions.data.map((version) => ({

@@ -6,8 +6,7 @@ import { redirect } from 'next/navigation';
 import { apiSend } from '../_lib/api-client';
 
 export type DocumentSaveState =
-  | { readonly status: 'idle' }
-  | { readonly status: 'error'; readonly message: string };
+  { readonly status: 'idle' } | { readonly status: 'error'; readonly message: string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -68,7 +67,8 @@ export async function createDocumentValidation(
   return execute(async () => {
     const documentId = requireUuid(formData.get('documentId'), 'Documento');
     const versionId = optionalText(formData.get('versionId'));
-    if (versionId && !uuidPattern.test(versionId)) throw new Error('Versão deve ser um UUID válido.');
+    if (versionId && !uuidPattern.test(versionId))
+      throw new Error('Versão deve ser um UUID válido.');
     const payload = {
       versionId,
       validationType: requiredText(formData.get('validationType'), 'Tipo de validação'),
@@ -136,9 +136,7 @@ function revalidateDocument(documentId: string): void {
   revalidatePath('/documentos/vencimentos');
 }
 
-async function execute(
-  work: () => Promise<DocumentSaveState | void>,
-): Promise<DocumentSaveState> {
+async function execute(work: () => Promise<DocumentSaveState | void>): Promise<DocumentSaveState> {
   try {
     return (await work()) ?? { status: 'idle' };
   } catch (error) {
@@ -198,9 +196,9 @@ function jsonObject(value: FormDataEntryValue | null, label: string): Record<str
 function isRedirectError(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      'digest' in error &&
-      typeof (error as { digest?: unknown }).digest === 'string' &&
-      (error as { digest: string }).digest.startsWith('NEXT_REDIRECT'),
+    typeof error === 'object' &&
+    'digest' in error &&
+    typeof (error as { digest?: unknown }).digest === 'string' &&
+    (error as { digest: string }).digest.startsWith('NEXT_REDIRECT'),
   );
 }
