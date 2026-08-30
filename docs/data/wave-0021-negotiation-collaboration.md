@@ -68,11 +68,11 @@ Uma reply fora do tenant/thread é rejeitada com integridade no PostgreSQL, mesm
 
 Todas as três tabelas têm RLS baseada em `app.tenant_id`.
 
-| Tabela | SELECT | INSERT | UPDATE | DELETE |
-| --- | --- | --- | --- | --- |
-| `negotiation_threads` | sim | sim | sim | não |
-| `negotiation_participants` | sim | sim | sim | não |
-| `negotiation_messages` | sim | sim | não | não |
+| Tabela                     | SELECT | INSERT | UPDATE | DELETE |
+| -------------------------- | ------ | ------ | ------ | ------ |
+| `negotiation_threads`      | sim    | sim    | sim    | não    |
+| `negotiation_participants` | sim    | sim    | sim    | não    |
+| `negotiation_messages`     | sim    | sim    | não    | não    |
 
 ## API
 
