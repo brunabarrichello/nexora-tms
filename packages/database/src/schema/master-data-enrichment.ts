@@ -224,7 +224,9 @@ export const locations = pgTable(
     operationalReference: varchar('operational_reference', { length: 500 }),
     isActive: boolean('is_active').default(true).notNull(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    deletedByUserId: uuid('deleted_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    deletedByUserId: uuid('deleted_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
   },
   (table) => [
     unique('locations_tenant_id_id_unique').on(table.tenantId, table.id),
@@ -378,7 +380,10 @@ export const businessPartyRequirements = pgTable(
       foreignColumns: [businessParties.tenantId, businessParties.id],
       name: 'business_party_requirements_party_fk',
     }).onDelete('restrict'),
-    check('business_party_requirements_type_check', sql`length(trim(${table.requirementType})) > 0`),
+    check(
+      'business_party_requirements_type_check',
+      sql`length(trim(${table.requirementType})) > 0`,
+    ),
     check(
       'business_party_requirements_value_check',
       sql`num_nonnulls(${table.valueText}, ${table.valueJson}) <= 1 AND (NOT ${table.isMandatory} OR num_nonnulls(${table.valueText}, ${table.valueJson}) = 1)`,
@@ -431,7 +436,10 @@ export const businessPartyDocumentRequirements = pgTable(
       foreignColumns: [documentTypes.tenantId, documentTypes.id],
       name: 'business_party_document_requirements_document_type_fk',
     }).onDelete('restrict'),
-    check('business_party_document_requirements_scope_check', sql`length(trim(${table.subjectScope})) > 0`),
+    check(
+      'business_party_document_requirements_scope_check',
+      sql`length(trim(${table.subjectScope})) > 0`,
+    ),
     check('business_party_document_requirements_lead_days_check', sql`${table.leadDays} >= 0`),
     index('business_party_document_requirements_tenant_party_idx').on(
       table.tenantId,
@@ -467,7 +475,7 @@ export const businessPartyServiceAreas = pgTable(
     }).onDelete('restrict'),
     check(
       'business_party_service_areas_geo_check',
-      sql`${table.stateId} IS NOT NULL OR ${table.cityId} IS NOT NULL`,
+      sql`num_nonnulls(${table.stateId}, ${table.cityId}) = 1`,
     ),
     check(
       'business_party_service_areas_radius_check',
@@ -611,10 +619,14 @@ export const businessPartyTags = pgTable(
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
+    isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.tenantId, table.partyId, table.tagId], name: 'business_party_tags_pk' }),
+    primaryKey({
+      columns: [table.tenantId, table.partyId, table.tagId],
+      name: 'business_party_tags_pk',
+    }),
     foreignKey({
       columns: [table.tenantId, table.partyId],
       foreignColumns: [businessParties.tenantId, businessParties.id],
@@ -644,6 +656,7 @@ export const driverTags = pgTable(
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
+    isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -677,10 +690,14 @@ export const capacityAssetTags = pgTable(
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
+    isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
-    primaryKey({ columns: [table.tenantId, table.assetId, table.tagId], name: 'capacity_asset_tags_pk' }),
+    primaryKey({
+      columns: [table.tenantId, table.assetId, table.tagId],
+      name: 'capacity_asset_tags_pk',
+    }),
     foreignKey({
       columns: [table.tenantId, table.assetId],
       foreignColumns: [capacityAssets.tenantId, capacityAssets.id],
@@ -710,6 +727,7 @@ export const transportRequestTags = pgTable(
     createdByUserId: uuid('created_by_user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'restrict' }),
+    isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
