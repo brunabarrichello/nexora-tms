@@ -219,6 +219,15 @@ jobs:
           set -euo pipefail
           node apps/api/dist/matching/capacity-matching.integration.js
 
+      - name: Run Freight Proposal integration against Neon
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          DATABASE_POOL_MAX: "2"
+        run: |
+          set -euo pipefail
+          node apps/api/dist/negotiation/freight-proposal.integration.js
+
       - name: Gate summary
         shell: bash
         run: |
@@ -239,6 +248,9 @@ jobs:
             echo "- Matching capability mismatch reasons: verified"
             echo "- Matching blocked driver exclusion: verified"
             echo "- Matching cross-tenant capacity leakage: 0"
+            echo "- Freight proposal append-only history: verified"
+            echo "- Freight counterproposal version preservation: verified"
+            echo "- Freight proposal terminal status immutability: verified"
             echo "- IdP integration: intentionally not part of this gate"
           } >> "$GITHUB_STEP_SUMMARY"
 
