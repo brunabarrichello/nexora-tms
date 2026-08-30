@@ -1,0 +1,73 @@
+name: NEX-40 Fix Status Cast
+
+on:
+  push:
+    branches:
+      - feature/NEX-40-transport-contract
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-40-transport-contract
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply consistent enum casts
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('apps/api/src/negotiation/transport-contract.service.ts')
+          text = path.read_text()
+          replacements = {
+              "$8::uuid,$9,": "$8::uuid,$9::transport_contract_status,",
+              "CASE WHEN $9='confirmed' THEN $16::uuid ELSE NULL END": "CASE WHEN $9::transport_contract_status='confirmed'::transport_contract_status THEN $16::uuid ELSE NULL END",
+              "CASE WHEN $9='confirmed' THEN now() ELSE NULL END": "CASE WHEN $9::transport_contract_status='confirmed'::transport_contract_status THEN now() ELSE NULL END",
+              "CASE WHEN $9='refused' THEN $16::uuid ELSE NULL END": "CASE WHEN $9::transport_contract_status='refused'::transport_contract_status THEN $16::uuid ELSE NULL END",
+              "CASE WHEN $9='refused' THEN now() ELSE NULL END": "CASE WHEN $9::transport_contract_status='refused'::transport_contract_status THEN now() ELSE NULL END",
+              "CASE WHEN $9='refused' THEN $17 ELSE NULL END": "CASE WHEN $9::transport_contract_status='refused'::transport_contract_status THEN $17 ELSE NULL END",
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f'Expected exactly one marker: {old!r}; found {text.count(old)}')
+              text = text.replace(old, new)
+          path.write_text(text)
+
+      - name: Format and validate
+        run: |
+          pnpm exec prettier --write apps/api/src/negotiation/transport-contract.service.ts
+          pnpm --filter @nexora/api typecheck
+          pnpm --filter @nexora/api test
+          pnpm --filter @nexora/database db:check
+
+      - name: Commit fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add apps/api/src/negotiation/transport-contract.service.ts
+          git diff --cached --quiet && { echo 'No change to commit.'; exit 1; }
+          git commit --no-verify -m 'NEX-40 cast contract status parameter consistently'
+          git push --no-verify origin HEAD:feature/NEX-40-transport-contract
