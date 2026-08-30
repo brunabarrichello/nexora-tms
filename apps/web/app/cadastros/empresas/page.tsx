@@ -1,0 +1,29 @@
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Empresas e unidades' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Cadastros • Fundação"
+      title="Empresas e unidades"
+      description="Gestão de empresas, filiais, unidades operacionais, dados fiscais e lifecycle multi-tenant."
+      actions={[{ href: '/cadastros/empresas/nova', label: 'Nova empresa' }]}
+      metrics={[
+        { label: 'Empresas ativas', helper: 'API de organizations/tenants' },
+        { label: 'Unidades', helper: 'API de operational units' },
+        { label: 'Pendências cadastrais', helper: 'Regras de completude' },
+      ]}
+      filters={[
+        { label: 'Status', name: 'status', options: ['Ativa', 'Inativa', 'Em implantação'] },
+        { label: 'UF', name: 'uf', placeholder: 'Ex.: SP' },
+      ]}
+      columns={[
+        { key: 'legalName', label: 'Razão social' },
+        { key: 'document', label: 'CNPJ' },
+        { key: 'unit', label: 'Unidade principal' },
+        { key: 'status', label: 'Status' },
+        { key: 'updatedAt', label: 'Atualizado em' },
+      ]}
+      integrationNotes={['RLS e escopo por tenant serão obrigatórios em todas as consultas.']}
+    />
+  );
+}

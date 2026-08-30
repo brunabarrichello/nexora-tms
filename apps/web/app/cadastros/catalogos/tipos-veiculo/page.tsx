@@ -1,0 +1,19 @@
+import { OperationalPage } from '../../../_components/operational-page';
+export const metadata = { title: 'Tipos de veículo' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Catálogos • vehicle_types"
+      title="Tipos de veículo"
+      description="Catálogo tenant-scoped de categorias de veículo com peso máximo padrão."
+      filters={[{ label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] }]}
+      columns={[
+        { key: 'code', label: 'Código' },
+        { key: 'name', label: 'Nome' },
+        { key: 'maxWeight', label: 'Peso máximo padrão' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={['Persistência já prevista em vehicle_types com RLS por tenant.']}
+    />
+  );
+}

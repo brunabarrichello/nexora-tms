@@ -1,0 +1,23 @@
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Combustível' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Viagens • Wave 0023"
+      title="Combustível"
+      description="Abastecimentos, litros, valor, fornecedor e consumo por viagem/veículo."
+      filters={[
+        { label: 'Viagem', name: 'trip' },
+        { label: 'Veículo', name: 'vehicle' },
+        { label: 'Fornecedor', name: 'provider' },
+      ]}
+      columns={[
+        { key: 'occurredAt', label: 'Data/hora' },
+        { key: 'trip', label: 'Viagem' },
+        { key: 'vehicle', label: 'Veículo' },
+        { key: 'liters', label: 'Litros' },
+        { key: 'amount', label: 'Valor', align: 'right' },
+      ]}
+    />
+  );
+}

@@ -1,0 +1,26 @@
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Pedágios' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Viagens • Wave 0023"
+      title="Pedágios"
+      description="Previsão, passagens e conciliação de pedágios por viagem e praça."
+      filters={[
+        {
+          label: 'Status',
+          name: 'status',
+          options: ['Previsto', 'Passado', 'Conciliado', 'Divergente'],
+        },
+        { label: 'Viagem', name: 'trip' },
+      ]}
+      columns={[
+        { key: 'trip', label: 'Viagem' },
+        { key: 'plaza', label: 'Praça' },
+        { key: 'occurredAt', label: 'Data/hora' },
+        { key: 'amount', label: 'Valor', align: 'right' },
+        { key: 'status', label: 'Status' },
+      ]}
+    />
+  );
+}

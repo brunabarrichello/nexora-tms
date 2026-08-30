@@ -1,0 +1,22 @@
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Tracking de viagens' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Viagens • Wave 0023"
+      title="Tracking"
+      description="Estado de rastreamento das viagens com última posição, atualização e qualidade do sinal."
+      filters={[
+        { label: 'Estado', name: 'state', options: ['Online', 'Sem atualização', 'Indisponível'] },
+        { label: 'Viagem', name: 'trip' },
+      ]}
+      columns={[
+        { key: 'trip', label: 'Viagem' },
+        { key: 'position', label: 'Última posição' },
+        { key: 'updatedAt', label: 'Atualizado em' },
+        { key: 'source', label: 'Fonte' },
+        { key: 'status', label: 'Estado' },
+      ]}
+    />
+  );
+}

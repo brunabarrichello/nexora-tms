@@ -1,0 +1,32 @@
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Faturamento' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Financeiro • Faturamento"
+      title="Faturamento"
+      description="Preparação e acompanhamento de lotes de faturamento por cliente, carga, viagem e período."
+      metrics={[
+        { label: 'Elegíveis', helper: 'Operações prontas para faturar' },
+        { label: 'Em preparação', helper: 'Lotes abertos' },
+        { label: 'Faturados', helper: 'Período selecionado' },
+      ]}
+      filters={[
+        {
+          label: 'Status',
+          name: 'status',
+          options: ['Elegível', 'Em preparação', 'Faturado', 'Cancelado'],
+        },
+        { label: 'Cliente', name: 'customer' },
+        { label: 'Competência', name: 'period' },
+      ]}
+      columns={[
+        { key: 'batch', label: 'Lote' },
+        { key: 'customer', label: 'Cliente' },
+        { key: 'period', label: 'Competência' },
+        { key: 'amount', label: 'Valor', align: 'right' },
+        { key: 'status', label: 'Status' },
+      ]}
+    />
+  );
+}

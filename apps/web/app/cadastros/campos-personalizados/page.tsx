@@ -1,0 +1,29 @@
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Campos personalizados' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Cadastros • Wave 0016"
+      title="Campos personalizados"
+      description="Custom fields tenant-scoped por entidade, com tipo, validação e lifecycle governados."
+      filters={[
+        {
+          label: 'Entidade',
+          name: 'entity',
+          options: ['Cliente', 'Motorista', 'Veículo', 'Carga', 'Viagem', 'Documento'],
+        },
+        { label: 'Tipo', name: 'type', options: ['Texto', 'Número', 'Data', 'Booleano', 'Lista'] },
+      ]}
+      columns={[
+        { key: 'name', label: 'Campo' },
+        { key: 'entity', label: 'Entidade' },
+        { key: 'type', label: 'Tipo' },
+        { key: 'required', label: 'Obrigatório' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={[
+        'Valores customizados devem ser validados por definição e sempre isolados por tenant.',
+      ]}
+    />
+  );
+}

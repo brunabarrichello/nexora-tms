@@ -1,0 +1,64 @@
+import { FormPage } from '../../_components/form-page';
+export const metadata = { title: 'Nova ocorrência' };
+export default function Page() {
+  return (
+    <FormPage
+      eyebrow="Execução • Ocorrências"
+      title="Nova ocorrência"
+      description="Registro inicial de exceção com severidade, vínculo e responsabilidade definidos."
+      backHref="/ocorrencias"
+      groups={[
+        {
+          title: 'Classificação',
+          description: 'Tipo, severidade e entidade afetada.',
+          fields: [
+            {
+              name: 'type',
+              label: 'Tipo',
+              options: [
+                'Atraso',
+                'Avaria',
+                'Sinistro',
+                'Documental',
+                'Comunicação',
+                'Operacional',
+                'Outro',
+              ],
+              required: true,
+            },
+            {
+              name: 'severity',
+              label: 'Severidade',
+              options: ['Baixa', 'Média', 'Alta', 'Crítica'],
+              required: true,
+            },
+            {
+              name: 'entityType',
+              label: 'Relacionado a',
+              options: ['Carga', 'Viagem', 'Motorista', 'Veículo', 'Documento'],
+              required: true,
+            },
+            { name: 'entity', label: 'Registro relacionado', required: true },
+          ],
+        },
+        {
+          title: 'Descrição e tratativa',
+          description: 'Contexto necessário para investigação e resolução.',
+          fields: [
+            { name: 'title', label: 'Título', required: true, wide: true },
+            { name: 'description', label: 'Descrição', required: true, wide: true },
+            { name: 'owner', label: 'Responsável' },
+            { name: 'dueDate', label: 'Prazo de tratativa', type: 'date' },
+          ],
+        },
+      ]}
+      checklist={[
+        'Timeline imutável',
+        'Responsável e SLA',
+        'Anexos versionados',
+        'Notificações por severidade',
+        'Encerramento com causa e solução',
+      ]}
+    />
+  );
+}

@@ -1,0 +1,22 @@
+import { OperationalPage } from '../../../_components/operational-page';
+export const metadata = { title: 'Estados' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Geografia • states"
+      title="Estados"
+      description="Estados/províncias vinculados ao catálogo global de países."
+      filters={[
+        { label: 'País', name: 'country' },
+        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
+      ]}
+      columns={[
+        { key: 'country', label: 'País' },
+        { key: 'code', label: 'Código' },
+        { key: 'name', label: 'Estado' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={['Chave natural única por country_id + code.']}
+    />
+  );
+}

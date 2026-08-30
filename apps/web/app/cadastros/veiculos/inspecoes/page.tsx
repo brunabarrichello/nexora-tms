@@ -1,0 +1,22 @@
+import { OperationalPage } from '../../../_components/operational-page';
+export const metadata = { title: 'Inspeções' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Ativos • Wave 0017"
+      title="Inspeções"
+      description="Checklists, inspeções periódicas, não conformidades e liberação de ativos."
+      filters={[
+        { label: 'Resultado', name: 'result', options: ['Aprovado', 'Com ressalva', 'Reprovado'] },
+        { label: 'Status', name: 'status', options: ['Pendente', 'Concluída'] },
+      ]}
+      columns={[
+        { key: 'vehicle', label: 'Veículo' },
+        { key: 'inspection', label: 'Inspeção' },
+        { key: 'performedAt', label: 'Realizada em' },
+        { key: 'result', label: 'Resultado' },
+        { key: 'status', label: 'Status' },
+      ]}
+    />
+  );
+}

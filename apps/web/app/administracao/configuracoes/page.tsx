@@ -1,0 +1,41 @@
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Configurações' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Administração • Tenant"
+      title="Configurações"
+      description="Parâmetros do tenant, preferências operacionais, catálogos e feature flags com governança."
+      metrics={[
+        { label: 'Parâmetros ativos', helper: 'Configuração do tenant' },
+        { label: 'Catálogos customizados', helper: 'Custom fields e referências' },
+        { label: 'Integrações', helper: 'Adapters habilitados' },
+      ]}
+      filters={[
+        {
+          label: 'Categoria',
+          name: 'category',
+          options: [
+            'Operação',
+            'Financeiro',
+            'Documentos',
+            'Notificações',
+            'Integrações',
+            'Personalização',
+          ],
+        },
+        { label: 'Escopo', name: 'scope', options: ['Tenant', 'Unidade', 'Usuário'] },
+      ]}
+      columns={[
+        { key: 'key', label: 'Configuração' },
+        { key: 'category', label: 'Categoria' },
+        { key: 'scope', label: 'Escopo' },
+        { key: 'value', label: 'Valor atual' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={[
+        'Segredos nunca serão exibidos nesta tabela; somente referências e estado de configuração.',
+      ]}
+    />
+  );
+}
