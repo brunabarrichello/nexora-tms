@@ -160,7 +160,8 @@ function addKindSpecificCreate(
       break;
     case 'documentTypes':
       data.subjectScope = requiredEnum(body.subjectScope, 'subjectScope', subjectScopes);
-      data.hasExpiry = body.hasExpiry === undefined ? false : booleanBody(body.hasExpiry, 'hasExpiry');
+      data.hasExpiry =
+        body.hasExpiry === undefined ? false : booleanBody(body.hasExpiry, 'hasExpiry');
       data.requiresValidation =
         body.requiresValidation === undefined
           ? false
@@ -303,11 +304,7 @@ function optionalUuid(value: unknown, field: string): string | null {
   return raw;
 }
 
-function optionalEnum(
-  value: unknown,
-  field: string,
-  values: ReadonlySet<string>,
-): string | null {
+function optionalEnum(value: unknown, field: string, values: ReadonlySet<string>): string | null {
   if (value === undefined || value === null || value === '') return null;
   const raw = Array.isArray(value) ? value[0] : value;
   if (typeof raw !== 'string' || !values.has(raw)) {
@@ -324,7 +321,5 @@ function requiredEnum(value: unknown, field: string, values: ReadonlySet<string>
 }
 
 function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }

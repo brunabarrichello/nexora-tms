@@ -12,11 +12,7 @@ import { ReferenceDataService } from './reference-data.service.js';
 
 @Module({
   imports: [AuthenticationModule, TenancyModule],
-  controllers: [
-    BusinessPartyController,
-    BusinessPartyDirectoryController,
-    ReferenceDataController,
-  ],
+  controllers: [BusinessPartyController, BusinessPartyDirectoryController, ReferenceDataController],
   providers: [
     BusinessPartyService,
     BusinessPartyDirectoryService,

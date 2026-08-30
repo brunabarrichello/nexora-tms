@@ -248,7 +248,11 @@ export function OperationalPage({
         </div>
 
         <footer className="table-footer">
-          <span>{pagination ? 'Paginação conectada à API.' : 'Paginação preparada para cursor/offset da API.'}</span>
+          <span>
+            {pagination
+              ? 'Paginação conectada à API.'
+              : 'Paginação preparada para cursor/offset da API.'}
+          </span>
           <div className="pager" aria-label="Paginação">
             {pagination?.previousHref ? (
               <Link className="pager-control" href={pagination.previousHref}>

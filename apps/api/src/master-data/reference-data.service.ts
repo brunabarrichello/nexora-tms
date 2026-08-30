@@ -1,4 +1,9 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantDatabaseService } from '../tenancy/tenant-database.service.js';
@@ -286,11 +291,7 @@ export class ReferenceDataService {
     }
   }
 
-  async update(
-    kind: ReferenceCatalogKind,
-    id: string,
-    input: unknown,
-  ): Promise<ReferenceDataItem> {
+  async update(kind: ReferenceCatalogKind, id: string, input: unknown): Promise<ReferenceDataItem> {
     if (!isTenantCatalog(kind)) throw new BadRequestException('Reference catalog is read-only');
     const resourceId = requireUuid(id);
     const patch = parseTenantCatalogUpdate(kind, input);
@@ -300,10 +301,12 @@ export class ReferenceDataService {
     try {
       return await this.database.withTenantContext(context, async (client) => {
         const entries = this.writeEntries(definition, patch);
-        const values: unknown[] = [resourceId, context.tenantId, ...entries.map((entry) => entry.value)];
-        const assignments = entries.map(
-          (entry, index) => `${entry.column} = $${index + 3}`,
-        );
+        const values: unknown[] = [
+          resourceId,
+          context.tenantId,
+          ...entries.map((entry) => entry.value),
+        ];
+        const assignments = entries.map((entry, index) => `${entry.column} = $${index + 3}`);
         assignments.push('updated_at = now()');
         const result = await client.query<RawRow>(
           `UPDATE ${definition.table}

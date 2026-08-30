@@ -29,12 +29,13 @@ export default function Page({ searchParams }: Readonly<{ searchParams: CatalogS
         code: displayValue(item.code),
         name: item.name,
         closed: displayBoolean(item.isClosed),
-        loading: [
-          item.supportsSideLoading === true ? 'Lateral' : null,
-          item.supportsRearLoading === true ? 'Traseiro' : null,
-        ]
-          .filter(Boolean)
-          .join(' + ') || '—',
+        loading:
+          [
+            item.supportsSideLoading === true ? 'Lateral' : null,
+            item.supportsRearLoading === true ? 'Traseiro' : null,
+          ]
+            .filter(Boolean)
+            .join(' + ') || '—',
         status: displayStatus(item),
       })}
     />
