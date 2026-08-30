@@ -33,6 +33,11 @@ export default function Page() {
         { key: 'lastCheck', label: 'Última verificação' },
         { key: 'status', label: 'Estado' },
       ]}
+      tabs={[
+        { href: '/administracao/integracoes', label: 'Adapters' },
+        { href: '/administracao/integracoes/webhooks', label: 'Webhooks' },
+        { href: '/administracao/integracoes/entregas', label: 'Entregas' },
+      ]}
       integrationNotes={[
         'Secrets permanecerão exclusivamente em secret stores; a interface mostrará apenas metadados seguros.',
       ]}

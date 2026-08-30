@@ -28,6 +28,12 @@ export default function Page() {
           title: 'Faturamento',
           description: 'Preparação de faturamento por cliente, carga e período.',
         },
+        {
+          href: '/financeiro/conciliacao',
+          title: 'Conciliação',
+          description: 'Liquidação e conciliação de obrigações, recebíveis e ajustes.',
+          badge: 'Settlements',
+        },
       ]}
     />
   );

@@ -11,6 +11,7 @@ const primaryNavigation = [
   { href: '/documentos', label: 'Documentos', short: 'DC' },
   { href: '/ocorrencias', label: 'Ocorrências', short: 'OC' },
   { href: '/financeiro', label: 'Financeiro', short: 'FN' },
+  { href: '/notificacoes', label: 'Notificações', short: 'NT' },
   { href: '/relatorios', label: 'Relatórios', short: 'RL' },
 ];
 

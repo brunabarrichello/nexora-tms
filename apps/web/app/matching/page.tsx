@@ -30,6 +30,7 @@ export default function Page() {
       ]}
       tabs={[
         { href: '/matching', label: 'Resultados' },
+        { href: '/matching/propostas', label: 'Propostas' },
         { href: '/cargas', label: 'Cargas abertas' },
         { href: '/negociacoes', label: 'Negociações' },
       ]}

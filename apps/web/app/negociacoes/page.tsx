@@ -28,6 +28,11 @@ export default function Page() {
         { key: 'offer', label: 'Última proposta' },
         { key: 'status', label: 'Status' },
       ]}
+      tabs={[
+        { href: '/negociacoes', label: 'Negociações' },
+        { href: '/negociacoes/reservas', label: 'Reservas' },
+        { href: '/negociacoes/contratos', label: 'Contratos' },
+      ]}
       integrationNotes={[
         'Histórico de propostas será imutável; decisão final gerará vínculo formal para viagem.',
       ]}

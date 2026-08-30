@@ -28,6 +28,12 @@ export default function CadastrosPage() {
           description: 'Contratantes, contatos, endereços e preferências comerciais.',
         },
         {
+          href: '/cadastros/contatos',
+          title: 'Contatos',
+          description: 'Contatos reutilizáveis vinculados a clientes, parceiros e unidades.',
+          badge: 'Master Data',
+        },
+        {
           href: '/cadastros/fornecedores',
           title: 'Fornecedores',
           description: 'Prestadores, parceiros e fornecedores operacionais.',
@@ -48,6 +54,18 @@ export default function CadastrosPage() {
           title: 'Veículos e ativos',
           description: 'Frota, tipos, carrocerias, capacidade, manutenção e disponibilidade.',
           badge: 'Wave 0017',
+        },
+        {
+          href: '/cadastros/equipamentos',
+          title: 'Equipamentos',
+          description: 'Equipamentos e acessórios que compõem a capacidade operacional.',
+          badge: 'Capacity',
+        },
+        {
+          href: '/cadastros/atribuicoes',
+          title: 'Atribuições',
+          description: 'Vínculos temporais entre motoristas, veículos, equipamentos e parceiros.',
+          badge: 'Capacity',
         },
         {
           href: '/cadastros/locais',

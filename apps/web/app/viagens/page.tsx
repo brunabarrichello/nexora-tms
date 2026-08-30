@@ -32,6 +32,8 @@ export default function Page() {
       ]}
       tabs={[
         { href: '/viagens', label: 'Todas' },
+        { href: '/viagens/paradas', label: 'Paradas' },
+        { href: '/viagens/marcos', label: 'Marcos' },
         { href: '/viagens/tracking', label: 'Tracking' },
         { href: '/viagens/despesas', label: 'Despesas' },
         { href: '/viagens/pedagios', label: 'Pedágios' },
@@ -40,7 +42,7 @@ export default function Page() {
         { href: '/ocorrencias', label: 'Ocorrências' },
       ]}
       integrationNotes={[
-        'Tracking, despesas, pedágios, combustível, POD e eventos serão sub-recursos da execução.',
+        'Tracking, paradas, marcos, despesas, pedágios, combustível, POD e eventos serão sub-recursos da execução.',
       ]}
     />
   );
