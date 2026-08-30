@@ -212,6 +212,8 @@ async function run(): Promise<void> {
         client.query(`UPDATE trip_events SET title='tampered' WHERE trip_id=$1::uuid`, [TRIP_A]),
         /permission denied/i,
       );
+    });
+    await database.withTenantContext(contextA.require(), async (client) => {
       await assert.rejects(
         client.query(`DELETE FROM trip_expenses WHERE trip_id=$1::uuid`, [TRIP_A]),
         /permission denied/i,
