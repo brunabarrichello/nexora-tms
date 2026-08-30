@@ -9,6 +9,8 @@ import { BusinessPartyController } from './business-party.controller.js';
 import { BusinessPartyService } from './business-party.service.js';
 import { MasterDataEnrichmentController } from './master-data-enrichment.controller.js';
 import { MasterDataEnrichmentService } from './master-data-enrichment.service.js';
+import { ReferenceDataController } from './reference-data.controller.js';
+import { ReferenceDataService } from './reference-data.service.js';
 
 @Module({
   imports: [AuthenticationModule, TenancyModule],
@@ -16,11 +18,13 @@ import { MasterDataEnrichmentService } from './master-data-enrichment.service.js
     BusinessPartyController,
     BusinessPartyDirectoryController,
     MasterDataEnrichmentController,
+    ReferenceDataController,
   ],
   providers: [
     BusinessPartyService,
     BusinessPartyDirectoryService,
     MasterDataEnrichmentService,
+    ReferenceDataService,
     TenantRuntimeGateGuard,
   ],
 })

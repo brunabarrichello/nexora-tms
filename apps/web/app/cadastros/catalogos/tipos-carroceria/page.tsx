@@ -1,22 +1,43 @@
-import { OperationalPage } from '../../../_components/operational-page';
+import {
+  displayBoolean,
+  displayStatus,
+  displayValue,
+  ReferenceCatalogPage,
+  type CatalogSearchParams,
+} from '../_components/reference-catalog-page';
+
 export const metadata = { title: 'Tipos de carroceria' };
-export default function Page() {
+
+export default function Page({ searchParams }: Readonly<{ searchParams: CatalogSearchParams }>) {
   return (
-    <OperationalPage
+    <ReferenceCatalogPage
+      searchParams={searchParams}
+      slug="body-types"
+      basePath="/cadastros/catalogos/tipos-carroceria"
       eyebrow="Catálogos • body_types"
       title="Tipos de carroceria"
-      description="Catálogo tenant-scoped com fechamento e suporte a carregamento lateral/traseiro."
-      filters={[
-        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
-        { label: 'Fechada', name: 'closed', options: ['Sim', 'Não'] },
-      ]}
+      description="Características de carrocerias e possibilidades de carregamento."
       columns={[
         { key: 'code', label: 'Código' },
         { key: 'name', label: 'Nome' },
+        { key: 'closed', label: 'Fechada' },
         { key: 'loading', label: 'Carregamento' },
         { key: 'status', label: 'Status' },
       ]}
-      integrationNotes={['Persistência já prevista em body_types com RLS por tenant.']}
+      mapRow={(item) => ({
+        id: item.id,
+        code: displayValue(item.code),
+        name: item.name,
+        closed: displayBoolean(item.isClosed),
+        loading:
+          [
+            item.supportsSideLoading === true ? 'Lateral' : null,
+            item.supportsRearLoading === true ? 'Traseiro' : null,
+          ]
+            .filter(Boolean)
+            .join(' + ') || '—',
+        status: displayStatus(item),
+      })}
     />
   );
 }

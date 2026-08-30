@@ -1,20 +1,37 @@
-import { OperationalPage } from '../../../_components/operational-page';
+import {
+  displayStatus,
+  displayValue,
+  ReferenceCatalogPage,
+  type CatalogSearchParams,
+} from '../_components/reference-catalog-page';
+
 export const metadata = { title: 'Países' };
-export default function Page() {
+
+export default function Page({ searchParams }: Readonly<{ searchParams: CatalogSearchParams }>) {
   return (
-    <OperationalPage
-      eyebrow="Geografia • countries"
+    <ReferenceCatalogPage
+      searchParams={searchParams}
+      slug="countries"
+      basePath="/cadastros/catalogos/paises"
+      eyebrow="Geografia global • countries"
       title="Países"
-      description="Catálogo geográfico global com códigos ISO2, ISO3 e numérico."
-      filters={[{ label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] }]}
+      description="Referência geográfica global com códigos ISO e lifecycle administrativo."
       columns={[
-        { key: 'code', label: 'ISO2' },
-        { key: 'iso3', label: 'ISO3' },
-        { key: 'numeric', label: 'Numérico' },
-        { key: 'name', label: 'País' },
+        { key: 'code', label: 'ISO-2' },
+        { key: 'iso3', label: 'ISO-3' },
+        { key: 'name', label: 'Nome' },
+        { key: 'numericCode', label: 'Código numérico' },
         { key: 'status', label: 'Status' },
       ]}
-      integrationNotes={['Catálogo global compartilhado entre tenants.']}
+      mapRow={(item) => ({
+        id: item.id,
+        code: displayValue(item.code),
+        iso3: displayValue(item.iso3),
+        name: item.name,
+        numericCode: displayValue(item.numericCode),
+        status: displayStatus(item),
+      })}
+      readOnly
     />
   );
 }

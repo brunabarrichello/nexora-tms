@@ -1,27 +1,44 @@
-import { OperationalPage } from '../../../_components/operational-page';
+import {
+  displayBoolean,
+  displayStatus,
+  displayValue,
+  ReferenceCatalogPage,
+  type CatalogSearchParams,
+} from '../_components/reference-catalog-page';
+
 export const metadata = { title: 'Tipos de documento' };
-export default function Page() {
+
+export default function Page({ searchParams }: Readonly<{ searchParams: CatalogSearchParams }>) {
   return (
-    <OperationalPage
+    <ReferenceCatalogPage
+      searchParams={searchParams}
+      slug="document-types"
+      basePath="/cadastros/catalogos/tipos-documento"
       eyebrow="Catálogos • document_types"
       title="Tipos de documento"
-      description="Tipos documentais por escopo, validade e necessidade de validação."
+      description="Catálogo de documentos por escopo, validade e necessidade de validação."
       filters={[
         {
           label: 'Escopo',
-          name: 'scope',
+          name: 'subjectScope',
           options: ['party', 'driver', 'asset', 'request', 'trip', 'financial', 'other'],
         },
-        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
       ]}
       columns={[
         { key: 'code', label: 'Código' },
         { key: 'name', label: 'Nome' },
         { key: 'scope', label: 'Escopo' },
-        { key: 'rules', label: 'Validade / validação' },
+        { key: 'controls', label: 'Controles' },
         { key: 'status', label: 'Status' },
       ]}
-      integrationNotes={['Persistência já prevista em document_types com RLS por tenant.']}
+      mapRow={(item) => ({
+        id: item.id,
+        code: displayValue(item.code),
+        name: item.name,
+        scope: displayValue(item.subjectScope),
+        controls: `Validade: ${displayBoolean(item.hasExpiry)} • Validação: ${displayBoolean(item.requiresValidation)}`,
+        status: displayStatus(item),
+      })}
     />
   );
 }
