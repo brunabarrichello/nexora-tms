@@ -353,13 +353,13 @@ export class TransportContractService {
            additional_amount,payment_terms,commercial_notes,
            confirmed_by_user_id,confirmed_at,refused_by_user_id,refused_at,refusal_reason
          ) VALUES (
-           $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::uuid,$9,
+           $1::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,$7::uuid,$8::uuid,$9::transport_contract_status,
            $10,$11::numeric,$12::numeric,$13::numeric,$14,$15,
-           CASE WHEN $9='confirmed' THEN $16::uuid ELSE NULL END,
-           CASE WHEN $9='confirmed' THEN now() ELSE NULL END,
-           CASE WHEN $9='refused' THEN $16::uuid ELSE NULL END,
-           CASE WHEN $9='refused' THEN now() ELSE NULL END,
-           CASE WHEN $9='refused' THEN $17 ELSE NULL END
+           CASE WHEN $9::transport_contract_status='confirmed'::transport_contract_status THEN $16::uuid ELSE NULL END,
+           CASE WHEN $9::transport_contract_status='confirmed'::transport_contract_status THEN now() ELSE NULL END,
+           CASE WHEN $9::transport_contract_status='refused'::transport_contract_status THEN $16::uuid ELSE NULL END,
+           CASE WHEN $9::transport_contract_status='refused'::transport_contract_status THEN now() ELSE NULL END,
+           CASE WHEN $9::transport_contract_status='refused'::transport_contract_status THEN $17 ELSE NULL END
          ) RETURNING id::text AS id`,
         [
           tenantId,
