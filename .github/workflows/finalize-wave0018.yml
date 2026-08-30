@@ -1,0 +1,61 @@
+name: Finalize Wave 0018
+
+on:
+  push:
+    branches:
+      - feat/documents-wave-0018
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/documents-wave-0018
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+      - run: pnpm install --frozen-lockfile
+      - name: Harden document runtime privileges
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          migration = Path('packages/database/migrations/0018_thin_the_liberteens.sql')
+          text = migration.read_text()
+          marker = '-- Wave 0018 runtime document privileges'
+          if marker not in text:
+              text += '''\n--> statement-breakpoint\n-- Wave 0018 runtime document privileges\nREVOKE ALL PRIVILEGES ON TABLE documents, document_versions, document_validations, document_links FROM nexora_app;--> statement-breakpoint\nGRANT SELECT, INSERT, UPDATE ON TABLE documents TO nexora_app;--> statement-breakpoint\nGRANT SELECT, INSERT ON TABLE document_versions TO nexora_app;--> statement-breakpoint\nGRANT SELECT, INSERT ON TABLE document_validations TO nexora_app;--> statement-breakpoint\nGRANT SELECT, INSERT, UPDATE ON TABLE document_links TO nexora_app;\n'''
+              migration.write_text(text)
+          PY
+      - name: Format Wave 0018 web and docs
+        run: >-
+          pnpm exec prettier --write
+          apps/web/app/_actions/document-actions.ts
+          apps/web/app/_components/document-forms.tsx
+          apps/web/app/_lib/document-ui.ts
+          apps/web/app/documentos
+          docs/architecture/documents-wave-0018.md
+      - name: Validate monorepo
+        run: pnpm validate
+      - name: Check Drizzle schema
+        run: pnpm --filter @nexora/database db:check
+      - name: Remove temporary workflow and commit finalization
+        shell: bash
+        run: |
+          rm .github/workflows/finalize-wave0018.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'chore(documents): finalize Wave 0018 runtime and web'
+          git push --no-verify origin HEAD:feat/documents-wave-0018
