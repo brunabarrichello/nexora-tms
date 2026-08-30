@@ -1,0 +1,100 @@
+name: NEX-40 Prepare
+
+on:
+  push:
+    branches:
+      - feature/NEX-40-transport-contract
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-40-transport-contract
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format NEX-40 files
+        run: >-
+          pnpm exec prettier --write
+          packages/database/src/schema/transport-contract.ts
+          packages/database/src/schema/index.ts
+          apps/api/src/negotiation/transport-contract.validation.ts
+          apps/api/src/negotiation/transport-contract.validation.spec.ts
+          apps/api/src/negotiation/transport-contract.service.ts
+          apps/api/src/negotiation/transport-contract.controller.ts
+          apps/api/src/negotiation/negotiation.module.ts
+          apps/api/package.json
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Generate Drizzle migration
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Add runtime grants
+        shell: bash
+        run: |
+          MIGRATION="$(ls packages/database/migrations/[0-9][0-9][0-9][0-9]_*.sql | sort | tail -1)"
+          test "$(basename "$MIGRATION")" != "0013_gifted_klaw.sql"
+          if ! grep -q 'GRANT SELECT, INSERT ON TABLE transport_contracts TO nexora_app' "$MIGRATION"; then
+            cat >> "$MIGRATION" <<'SQL'
+          --> statement-breakpoint
+          GRANT SELECT, INSERT ON TABLE transport_contracts TO nexora_app;
+          --> statement-breakpoint
+          GRANT UPDATE (status, cancelled_by_user_id, cancelled_at, cancel_reason, updated_at) ON TABLE transport_contracts TO nexora_app;
+          --> statement-breakpoint
+          GRANT SELECT, INSERT ON TABLE transport_contract_events TO nexora_app;
+          SQL
+          fi
+
+      - name: Check Drizzle migrations
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Commit generated artifacts
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            packages/database/src/schema/transport-contract.ts \
+            packages/database/src/schema/index.ts \
+            apps/api/src/negotiation/transport-contract.validation.ts \
+            apps/api/src/negotiation/transport-contract.validation.spec.ts \
+            apps/api/src/negotiation/transport-contract.service.ts \
+            apps/api/src/negotiation/transport-contract.controller.ts \
+            apps/api/src/negotiation/negotiation.module.ts \
+            apps/api/package.json \
+            packages/database/migrations
+          if git diff --cached --quiet; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git commit --no-verify -m 'NEX-40 format and generate contract migration'
+          git push --no-verify origin HEAD:feature/NEX-40-transport-contract
