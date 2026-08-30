@@ -86,11 +86,12 @@ jobs:
           step_anchor = "      - name: Validate NEX-39 capacity reservation runtime and isolation\n"
           if text.count(step_anchor) != 1:
               raise SystemExit('NEX-39 step anchor not found exactly once')
+          app_expression = '$' + '{{ steps.app-connection.outputs.db_url }}'
           wave_step = (
               "      - name: Validate Wave 0016 master-data RLS and lifecycle\n"
               "        shell: bash\n"
               "        env:\n"
-              "          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}\n"
+              f"          APP_DATABASE_URL: {app_expression}\n"
               "        run: |\n"
               "          set -euo pipefail\n"
               "          echo \"::add-mask::$APP_DATABASE_URL\"\n"
