@@ -8,44 +8,44 @@ services:
       POSTGRES_USER: nexora
       POSTGRES_PASSWORD: local-only-nexora
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql
       - ./ops/docker/postgres/init.sql:/docker-entrypoint-initdb.d/001-nexora-runtime-role.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U nexora -d nexora"]
+      test: ['CMD-SHELL', 'pg_isready -U nexora -d nexora']
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:8-alpine
-    command: ["redis-server", "--appendonly", "yes"]
+    command: ['redis-server', '--appendonly', 'yes']
     ports:
-      - "6379:6379"
+      - '6379:6379'
     volumes:
       - redis-data:/data
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ['CMD', 'redis-cli', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
 
   migrate:
-    profiles: ["application"]
+    profiles: ['application']
     build:
       context: .
       dockerfile: apps/api/Dockerfile
     environment:
       DATABASE_URL: postgresql://nexora:local-only-nexora@postgres:5432/nexora
-    command: ["pnpm", "--filter", "@nexora/database", "db:migrate"]
+    command: ['pnpm', '--filter', '@nexora/database', 'db:migrate']
     depends_on:
       postgres:
         condition: service_healthy
-    restart: "no"
+    restart: 'no'
 
   api:
-    profiles: ["application"]
+    profiles: ['application']
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -64,10 +64,10 @@ services:
       migrate:
         condition: service_completed_successfully
     ports:
-      - "3001:3001"
+      - '3001:3001'
 
   web:
-    profiles: ["application"]
+    profiles: ['application']
     build:
       context: .
       dockerfile: apps/web/Dockerfile
@@ -78,10 +78,10 @@ services:
       api:
         condition: service_healthy
     ports:
-      - "3000:3000"
+      - '3000:3000'
 
   worker:
-    profiles: ["application"]
+    profiles: ['application']
     build:
       context: .
       dockerfile: apps/worker/Dockerfile
