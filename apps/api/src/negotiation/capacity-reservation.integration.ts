@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
-import { CapacityMatchingService } from '../matching/capacity-matching.service.js';
+import {
+  CapacityMatchingService,
+} from '../matching/capacity-matching.service.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantDatabaseService } from '../tenancy/tenant-database.service.js';
 import { CapacityReservationService } from './capacity-reservation.service.js';
@@ -21,12 +23,22 @@ async function run(): Promise<void> {
   });
 
   const matching = new CapacityMatchingService(tenantContext, database);
-  const proposals = new FreightProposalService(tenantContext, database, matching);
-  const reservations = new CapacityReservationService(tenantContext, database, matching);
+  const proposals = new FreightProposalService(
+    tenantContext,
+    database,
+    matching,
+  );
+  const reservations = new CapacityReservationService(
+    tenantContext,
+    database,
+    matching,
+  );
 
   try {
     const proposalHistory = await proposals.list(REQUEST_A);
-    const accepted = proposalHistory.find((proposal) => proposal.status === 'accepted');
+    const accepted = proposalHistory.find(
+      (proposal) => proposal.status === 'accepted',
+    );
     assert.ok(accepted, 'NEX-38 integration must leave one accepted proposal');
     assert.equal(accepted.capacityAssignmentId, ASSIGNMENT_A);
 
@@ -67,15 +79,15 @@ async function run(): Promise<void> {
     assert.equal(replacement.proposalId, accepted.id);
 
     const finalHistory = await reservations.list(REQUEST_A);
+    const activeReservations = finalHistory.filter(
+      (reservation) => reservation.status === 'active',
+    );
+    const cancelledReservations = finalHistory.filter(
+      (reservation) => reservation.status === 'cancelled',
+    );
     assert.equal(finalHistory.length, 2);
-    assert.equal(
-      finalHistory.filter((reservation) => reservation.status === 'active').length,
-      1,
-    );
-    assert.equal(
-      finalHistory.filter((reservation) => reservation.status === 'cancelled').length,
-      1,
-    );
+    assert.equal(activeReservations.length, 1);
+    assert.equal(cancelledReservations.length, 1);
   } finally {
     await database.onModuleDestroy();
   }
