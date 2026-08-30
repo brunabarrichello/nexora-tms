@@ -139,7 +139,6 @@ ALTER TABLE "trip_stops" ADD CONSTRAINT "trip_stops_source_stop_fk" FOREIGN KEY 
 ALTER TABLE "trip_transport_requests" ADD CONSTRAINT "trip_transport_requests_removed_by_user_id_users_id_fk" FOREIGN KEY ("removed_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "trip_transport_requests" ADD CONSTRAINT "trip_transport_requests_trip_fk" FOREIGN KEY ("tenant_id","trip_id") REFERENCES "public"."trips"("tenant_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "trip_transport_requests" ADD CONSTRAINT "trip_transport_requests_request_fk" FOREIGN KEY ("tenant_id","transport_request_id") REFERENCES "public"."transport_requests"("tenant_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "transport_contracts" ADD CONSTRAINT "transport_contracts_tenant_request_id_unique" UNIQUE("tenant_id","transport_request_id","id");--> statement-breakpoint
 ALTER TABLE "trip_transport_requests" ADD CONSTRAINT "trip_transport_requests_contract_fk" FOREIGN KEY ("tenant_id","transport_request_id","transport_contract_id") REFERENCES "public"."transport_contracts"("tenant_id","transport_request_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "trips" ADD CONSTRAINT "trips_created_by_user_id_users_id_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "trips" ADD CONSTRAINT "trips_updated_by_user_id_users_id_fk" FOREIGN KEY ("updated_by_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
@@ -154,18 +153,20 @@ CREATE INDEX "trip_status_history_tenant_trip_created_idx" ON "trip_status_histo
 CREATE INDEX "trip_stops_tenant_trip_status_idx" ON "trip_stops" USING btree ("tenant_id","trip_id","status","sequence");--> statement-breakpoint
 CREATE INDEX "trip_stops_tenant_location_idx" ON "trip_stops" USING btree ("tenant_id","location_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "trip_transport_requests_active_sequence_unique" ON "trip_transport_requests" USING btree ("tenant_id","trip_id","sequence") WHERE "trip_transport_requests"."removed_at" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "trip_transport_requests_active_request_unique" ON "trip_transport_requests" USING btree ("tenant_id","transport_request_id") WHERE "trip_transport_requests"."removed_at" IS NULL;--> statement-breakpoint
+CREATE UNIQUE INDEX "trip_transport_requests_active_contract_unique" ON "trip_transport_requests" USING btree ("tenant_id","transport_contract_id") WHERE "trip_transport_requests"."removed_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "trip_transport_requests_request_idx" ON "trip_transport_requests" USING btree ("tenant_id","transport_request_id","created_at");--> statement-breakpoint
 CREATE INDEX "trip_transport_requests_contract_idx" ON "trip_transport_requests" USING btree ("tenant_id","transport_contract_id");--> statement-breakpoint
 CREATE INDEX "trips_tenant_status_start_idx" ON "trips" USING btree ("tenant_id","status","planned_start_at");--> statement-breakpoint
 CREATE INDEX "trips_tenant_origin_idx" ON "trips" USING btree ("tenant_id","origin_location_id");--> statement-breakpoint
 CREATE INDEX "trips_tenant_destination_idx" ON "trips" USING btree ("tenant_id","destination_location_id");--> statement-breakpoint
+ALTER TABLE "transport_contracts" ADD CONSTRAINT "transport_contracts_tenant_request_id_unique" UNIQUE("tenant_id","transport_request_id","id");--> statement-breakpoint
 CREATE POLICY "trip_assets_tenant_isolation" ON "trip_assets" AS PERMISSIVE FOR ALL TO public USING ("trip_assets"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_assets"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "trip_drivers_tenant_isolation" ON "trip_drivers" AS PERMISSIVE FOR ALL TO public USING ("trip_drivers"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_drivers"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "trip_status_history_tenant_isolation" ON "trip_status_history" AS PERMISSIVE FOR ALL TO public USING ("trip_status_history"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_status_history"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "trip_stops_tenant_isolation" ON "trip_stops" AS PERMISSIVE FOR ALL TO public USING ("trip_stops"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_stops"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "trip_transport_requests_tenant_isolation" ON "trip_transport_requests" AS PERMISSIVE FOR ALL TO public USING ("trip_transport_requests"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_transport_requests"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
-CREATE POLICY "trips_tenant_isolation" ON "trips" AS PERMISSIVE FOR ALL TO public USING ("trips"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trips"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
-GRANT SELECT, INSERT, UPDATE ON trips TO nexora_app;
+CREATE POLICY "trips_tenant_isolation" ON "trips" AS PERMISSIVE FOR ALL TO public USING ("trips"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trips"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);GRANT SELECT, INSERT, UPDATE ON trips TO nexora_app;
 GRANT SELECT, INSERT, UPDATE ON trip_transport_requests TO nexora_app;
 GRANT SELECT, INSERT, UPDATE ON trip_stops TO nexora_app;
 GRANT SELECT, INSERT, UPDATE ON trip_drivers TO nexora_app;

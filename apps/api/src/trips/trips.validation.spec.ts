@@ -83,10 +83,7 @@ test('parses typed trip request link', () => {
 });
 
 test('requires a location or a source request stop for a trip stop', () => {
-  assert.throws(
-    () => parseTripStopCreate({ sequence: 1, type: 'pickup' }),
-    BadRequestException,
-  );
+  assert.throws(() => parseTripStopCreate({ sequence: 1, type: 'pickup' }), BadRequestException);
   assert.deepEqual(
     parseTripStopCreate({
       sequence: 1,

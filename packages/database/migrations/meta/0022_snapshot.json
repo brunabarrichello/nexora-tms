@@ -1,5 +1,5 @@
 {
-  "id": "530a21e9-e78f-43c0-b43f-959ba158296b",
+  "id": "9627ecef-bbda-4605-ac3d-dc7ca156966a",
   "prevId": "5ae026d0-0d51-4064-8e93-b1eb51b92f1b",
   "version": "7",
   "dialect": "postgresql",
@@ -22727,6 +22727,50 @@
             },
             {
               "expression": "sequence",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"trip_transport_requests\".\"removed_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trip_transport_requests_active_request_unique": {
+          "name": "trip_transport_requests_active_request_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "transport_request_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"trip_transport_requests\".\"removed_at\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "trip_transport_requests_active_contract_unique": {
+          "name": "trip_transport_requests_active_contract_unique",
+          "columns": [
+            {
+              "expression": "tenant_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "transport_contract_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

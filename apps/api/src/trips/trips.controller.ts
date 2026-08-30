@@ -82,9 +82,7 @@ export class TripsController {
   }
 
   @Get(':tripId/status-history')
-  listStatusHistory(
-    @Param('tripId') tripId: string,
-  ): Promise<readonly Record<string, unknown>[]> {
+  listStatusHistory(@Param('tripId') tripId: string): Promise<readonly Record<string, unknown>[]> {
     return this.trips.listStatusHistory(tripId);
   }
 }

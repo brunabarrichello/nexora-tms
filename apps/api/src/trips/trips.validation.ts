@@ -191,11 +191,7 @@ function requireTrimmedString(value: unknown, field: string, maxLength: number):
   return normalized;
 }
 
-function optionalTrimmedString(
-  value: unknown,
-  field: string,
-  maxLength: number,
-): string | null {
+function optionalTrimmedString(value: unknown, field: string, maxLength: number): string | null {
   if (value === undefined || value === null || value === '') return null;
   return requireTrimmedString(value, field, maxLength);
 }

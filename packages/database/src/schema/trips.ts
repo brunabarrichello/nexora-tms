@@ -155,6 +155,12 @@ export const tripTransportRequests = pgTable(
     uniqueIndex('trip_transport_requests_active_sequence_unique')
       .on(table.tenantId, table.tripId, table.sequence)
       .where(sql`${table.removedAt} IS NULL`),
+    uniqueIndex('trip_transport_requests_active_request_unique')
+      .on(table.tenantId, table.transportRequestId)
+      .where(sql`${table.removedAt} IS NULL`),
+    uniqueIndex('trip_transport_requests_active_contract_unique')
+      .on(table.tenantId, table.transportContractId)
+      .where(sql`${table.removedAt} IS NULL`),
     index('trip_transport_requests_request_idx').on(
       table.tenantId,
       table.transportRequestId,

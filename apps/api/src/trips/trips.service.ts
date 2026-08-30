@@ -1,5 +1,6 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 
+import { requireUuid } from '../freight/transport-request.validation.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import {
   TenantDatabaseService,
@@ -328,13 +329,14 @@ export class TripsService {
     tripId: string,
     forUpdate: boolean,
   ): Promise<TripRow> {
+    const id = requireUuid(tripId, 'tripId');
     const result = await client.query<TripRow>(
       `SELECT id::text AS id,code,status::text AS status,planned_start_at,planned_end_at,
               actual_start_at,actual_end_at,origin_location_id::text,destination_location_id::text,
               notes,created_at,updated_at
          FROM trips
         WHERE id=$1::uuid${forUpdate ? ' FOR UPDATE' : ''}`,
-      [tripId],
+      [id],
     );
     const trip = result.rows[0];
     if (!trip) throw new NotFoundException('Trip not found in current tenant');
@@ -363,7 +365,9 @@ export class TripsService {
       [contractIds],
     );
     if (result.rows.length !== contractIds.length) {
-      throw new NotFoundException('One or more transport contracts were not found in current tenant');
+      throw new NotFoundException(
+        'One or more transport contracts were not found in current tenant',
+      );
     }
     if (result.rows.some((contract) => contract.status !== 'confirmed')) {
       throw new ConflictException('Only confirmed transport contracts can create or join a trip');
@@ -512,6 +516,9 @@ function mapTrip(row: TripRow): Trip {
 
 function hasPgCode(error: unknown, code: string): boolean {
   return Boolean(
-    error && typeof error === 'object' && 'code' in error && (error as { code?: unknown }).code === code,
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code,
   );
 }
