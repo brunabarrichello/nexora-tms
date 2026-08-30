@@ -292,4 +292,19 @@ CREATE POLICY "trip_expenses_tenant_isolation" ON "trip_expenses" AS PERMISSIVE 
 CREATE POLICY "trip_fuel_tenant_isolation" ON "trip_fuel" AS PERMISSIVE FOR ALL TO public USING ("trip_fuel"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_fuel"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "trip_locations_tenant_isolation" ON "trip_locations" AS PERMISSIVE FOR ALL TO public USING ("trip_locations"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_locations"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "trip_proofs_tenant_isolation" ON "trip_proofs" AS PERMISSIVE FOR ALL TO public USING ("trip_proofs"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_proofs"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
-CREATE POLICY "trip_tolls_tenant_isolation" ON "trip_tolls" AS PERMISSIVE FOR ALL TO public USING ("trip_tolls"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_tolls"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY "trip_tolls_tenant_isolation" ON "trip_tolls" AS PERMISSIVE FOR ALL TO public USING ("trip_tolls"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("trip_tolls"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
+GRANT SELECT, INSERT ON TABLE
+  trip_events,
+  trip_checkins,
+  trip_locations,
+  trip_documents,
+  trip_tolls,
+  trip_fuel,
+  trip_proofs,
+  trip_delivery_proofs
+TO nexora_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE
+  trip_checklists,
+  trip_expenses
+TO nexora_app;
