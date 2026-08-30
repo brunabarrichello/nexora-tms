@@ -161,9 +161,9 @@ export class TripsService {
 
       await client.query(
         `UPDATE trips
-            SET status=$1,
-                actual_start_at=CASE WHEN $1='in_transit' AND actual_start_at IS NULL THEN now() ELSE actual_start_at END,
-                actual_end_at=CASE WHEN $1='completed' AND actual_end_at IS NULL THEN now() ELSE actual_end_at END,
+            SET status=$1::trip_status,
+                actual_start_at=CASE WHEN $1::trip_status='in_transit' THEN coalesce(actual_start_at,now()) ELSE actual_start_at END,
+                actual_end_at=CASE WHEN $1::trip_status='completed' THEN coalesce(actual_end_at,now()) ELSE actual_end_at END,
                 updated_by_user_id=$2::uuid,
                 updated_at=now()
           WHERE id=$3::uuid`,
