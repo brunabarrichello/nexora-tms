@@ -120,6 +120,13 @@
       "when": 1788056516771,
       "tag": "0016_wooden_thunderball",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788058085531,
+      "tag": "0017_supreme_scalphunter",
+      "breakpoints": true
     }
   ]
 }
