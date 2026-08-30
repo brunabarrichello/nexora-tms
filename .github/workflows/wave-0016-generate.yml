@@ -1,0 +1,74 @@
+name: Wave 0016 generate
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0016-master-data-enrichment
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format Wave 0016 schema
+        run: pnpm exec prettier --write packages/database/src/schema/currency.ts packages/database/src/schema/master-data-enrichment.ts packages/database/src/schema/index.ts
+
+      - name: Typecheck database package
+        run: pnpm --filter @nexora/database typecheck
+
+      - name: Generate Drizzle migration
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Check Drizzle migrations
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Verify generated Wave
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f packages/database/migrations/meta/0016_snapshot.json
+          migration_file="$(find packages/database/migrations -maxdepth 1 -type f -name '0016_*.sql' -print -quit)"
+          test -n "$migration_file"
+          echo "MIGRATION_FILE=$migration_file"
+          create_count="$(grep -c '^CREATE TABLE' "$migration_file" || true)"
+          echo "CREATE_TABLE_COUNT=$create_count"
+          test "$create_count" -eq 21
+          if grep -Eiq '^[[:space:]]*(DROP|TRUNCATE)[[:space:]]|RENAME[[:space:]]' "$migration_file"; then
+            echo "Destructive DDL detected" >&2
+            exit 1
+          fi
+
+      - name: Upload reviewed generation inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave-0016-generated
+          path: |
+            packages/database/src/schema/currency.ts
+            packages/database/src/schema/master-data-enrichment.ts
+            packages/database/src/schema/index.ts
+            packages/database/migrations/0016_*.sql
+            packages/database/migrations/meta/0016_snapshot.json
+            packages/database/migrations/meta/_journal.json
+          if-no-files-found: error
+          retention-days: 1
