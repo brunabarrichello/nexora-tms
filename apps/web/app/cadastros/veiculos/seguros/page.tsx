@@ -1,22 +1,6 @@
-import { OperationalPage } from '../../../_components/operational-page';
-export const metadata = { title: 'Seguros de veículos' };
-export default function Page() {
-  return (
-    <OperationalPage
-      eyebrow="Ativos • Wave 0017"
-      title="Seguros"
-      description="Apólices, coberturas, vigência e evidências vinculadas a veículos e ativos."
-      filters={[
-        { label: 'Validade', name: 'validity', options: ['Válido', 'A vencer', 'Vencido'] },
-        { label: 'Seguradora', name: 'insurer' },
-      ]}
-      columns={[
-        { key: 'vehicle', label: 'Veículo' },
-        { key: 'policy', label: 'Apólice' },
-        { key: 'insurer', label: 'Seguradora' },
-        { key: 'expiresAt', label: 'Validade' },
-        { key: 'status', label: 'Status' },
-      ]}
-    />
-  );
+import { QualificationResourcePage, type QualificationSearchParams } from '../../../_components/qualification-resource-page';
+import { qualificationConfigs } from '../../../_lib/qualification-config';
+export const metadata = { title: 'Seguros de ativos' };
+export default function Page({ searchParams }: Readonly<{ searchParams: QualificationSearchParams }>) {
+  return <QualificationResourcePage config={qualificationConfigs['asset-insurance']} searchParams={searchParams} />;
 }

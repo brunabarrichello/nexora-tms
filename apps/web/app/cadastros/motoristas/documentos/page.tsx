@@ -1,6 +1,6 @@
 import { QualificationResourcePage, type QualificationSearchParams } from '../../../_components/qualification-resource-page';
 import { qualificationConfigs } from '../../../_lib/qualification-config';
-export const metadata = { title: 'Disponibilidade de motoristas' };
+export const metadata = { title: 'Documentos de motoristas' };
 export default function Page({ searchParams }: Readonly<{ searchParams: QualificationSearchParams }>) {
-  return <QualificationResourcePage config={qualificationConfigs['driver-availability']} searchParams={searchParams} />;
+  return <QualificationResourcePage config={qualificationConfigs['driver-document']} searchParams={searchParams} />;
 }
