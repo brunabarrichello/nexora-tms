@@ -16,7 +16,11 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
       title="Grupos de parceiros"
       description="Agrupamentos econômicos, comerciais, operacionais e de risco para business parties."
       filters={[
-        { label: 'Tipo', name: 'type', options: ['economic', 'commercial', 'operational', 'risk', 'other'] },
+        {
+          label: 'Tipo',
+          name: 'type',
+          options: ['economic', 'commercial', 'operational', 'risk', 'other'],
+        },
         {
           label: 'Status',
           name: 'active',

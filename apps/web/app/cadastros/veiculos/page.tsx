@@ -51,7 +51,9 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
         tracking: collectionBoolean(item.trackingAvailable),
         status: collectionText(item.status),
       })}
-      integrationNotes={['A PR #56 adiciona vehicle_type_id/body_type_id tenant-aware e qualificação operacional de ativos.']}
+      integrationNotes={[
+        'A PR #56 adiciona vehicle_type_id/body_type_id tenant-aware e qualificação operacional de ativos.',
+      ]}
     />
   );
 }

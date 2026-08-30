@@ -48,7 +48,10 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
         id: item.id,
         legalName: collectionText(item.legalName),
         taxId: collectionText(item.taxId),
-        contact: [item.email, item.phone].filter((value) => typeof value === 'string' && value).join(' • ') || '—',
+        contact:
+          [item.email, item.phone]
+            .filter((value) => typeof value === 'string' && value)
+            .join(' • ') || '—',
         homologation: collectionText(item.homologationStatus),
         status: collectionText(item.status),
       })}

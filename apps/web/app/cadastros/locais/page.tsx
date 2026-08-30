@@ -19,7 +19,19 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
         {
           label: 'Tipo',
           name: 'type',
-          options: ['customer', 'shipper', 'consignee', 'terminal', 'warehouse', 'yard', 'port', 'airport', 'border', 'support', 'other'],
+          options: [
+            'customer',
+            'shipper',
+            'consignee',
+            'terminal',
+            'warehouse',
+            'yard',
+            'port',
+            'airport',
+            'border',
+            'support',
+            'other',
+          ],
         },
         {
           label: 'Status',
@@ -48,9 +60,10 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
         code: collectionText(item.code),
         name: collectionText(item.name),
         type: collectionText(item.type),
-        address: [item.street, item.number, item.district, item.postalCode]
-          .filter((value) => typeof value === 'string' && value)
-          .join(', ') || '—',
+        address:
+          [item.street, item.number, item.district, item.postalCode]
+            .filter((value) => typeof value === 'string' && value)
+            .join(', ') || '—',
         reference: collectionText(item.operationalReference),
         status: item.isActive === true ? 'Ativo' : 'Inativo',
       })}

@@ -54,10 +54,15 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
         legalName: collectionText(item.legalName),
         taxId: collectionText(item.taxId),
         roles: collectionRoles(item.roles),
-        contact: [item.email, item.phone].filter((value) => typeof value === 'string' && value).join(' • ') || '—',
+        contact:
+          [item.email, item.phone]
+            .filter((value) => typeof value === 'string' && value)
+            .join(' • ') || '—',
         status: collectionText(item.status),
       })}
-      integrationNotes={['Roles customer/shipper/consignee filtrados sobre o mesmo business party canônico.']}
+      integrationNotes={[
+        'Roles customer/shipper/consignee filtrados sobre o mesmo business party canônico.',
+      ]}
     />
   );
 }

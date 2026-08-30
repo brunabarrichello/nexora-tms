@@ -1,12 +1,6 @@
 export type RecordMode = 'create' | 'edit';
 export type RecordFieldType =
-  | 'text'
-  | 'email'
-  | 'tel'
-  | 'number'
-  | 'date'
-  | 'select'
-  | 'checkbox-group';
+  'text' | 'email' | 'tel' | 'number' | 'date' | 'select' | 'checkbox-group';
 
 export type RecordField = {
   readonly name: string;
@@ -105,7 +99,13 @@ export const recordConfigs = {
           { label: 'Consignatário', value: 'consignee' },
         ],
       },
-      { name: 'status', label: 'Status', type: 'select', defaultValue: 'active', options: activeOptions },
+      {
+        name: 'status',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'active',
+        options: activeOptions,
+      },
     ],
   },
   'party-supplier': {
@@ -130,7 +130,13 @@ export const recordConfigs = {
         ],
       },
       ...partnerHomologation,
-      { name: 'status', label: 'Status', type: 'select', defaultValue: 'active', options: activeOptions },
+      {
+        name: 'status',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'active',
+        options: activeOptions,
+      },
     ],
   },
   'party-carrier': {
@@ -155,7 +161,13 @@ export const recordConfigs = {
         ],
       },
       ...partnerHomologation,
-      { name: 'status', label: 'Status', type: 'select', defaultValue: 'active', options: activeOptions },
+      {
+        name: 'status',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'active',
+        options: activeOptions,
+      },
     ],
   },
   driver: {
@@ -180,7 +192,10 @@ export const recordConfigs = {
         type: 'select',
         required: true,
         defaultValue: 'D',
-        options: ['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE'].map((value) => ({ label: value, value })),
+        options: ['A', 'B', 'C', 'D', 'E', 'AB', 'AC', 'AD', 'AE'].map((value) => ({
+          label: value,
+          value,
+        })),
       },
       { name: 'cnhExpiresOn', label: 'Validade CNH', type: 'date', required: true },
       {
@@ -188,7 +203,10 @@ export const recordConfigs = {
         label: 'Situação cadastral',
         type: 'select',
         defaultValue: 'pending',
-        options: ['pending', 'qualified', 'blocked', 'inactive'].map((value) => ({ label: value, value })),
+        options: ['pending', 'qualified', 'blocked', 'inactive'].map((value) => ({
+          label: value,
+          value,
+        })),
       },
       {
         name: 'operationalStatus',
@@ -219,7 +237,19 @@ export const recordConfigs = {
         type: 'select',
         required: true,
         defaultValue: 'other',
-        options: ['customer', 'shipper', 'consignee', 'terminal', 'warehouse', 'yard', 'port', 'airport', 'border', 'support', 'other'].map((value) => ({ label: value, value })),
+        options: [
+          'customer',
+          'shipper',
+          'consignee',
+          'terminal',
+          'warehouse',
+          'yard',
+          'port',
+          'airport',
+          'border',
+          'support',
+          'other',
+        ].map((value) => ({ label: value, value })),
       },
       { name: 'cityId', label: 'Cidade (UUID)', required: true },
       { name: 'postalCode', label: 'CEP' },
@@ -230,11 +260,27 @@ export const recordConfigs = {
       { name: 'latitude', label: 'Latitude', type: 'number', step: '0.000001' },
       { name: 'longitude', label: 'Longitude', type: 'number', step: '0.000001' },
       { name: 'operationalReference', label: 'Referência operacional', wide: true },
-      { name: 'isActive', label: 'Status', type: 'select', defaultValue: 'true', options: catalogActiveOptions },
+      {
+        name: 'isActive',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'true',
+        options: catalogActiveOptions,
+      },
     ],
   },
-  department: dimensionConfig('department', 'Departamentos', 'departamento', '/cadastros/departamentos'),
-  'cost-center': dimensionConfig('cost-center', 'Centros de custo', 'centro de custo', '/cadastros/centros-custo'),
+  department: dimensionConfig(
+    'department',
+    'Departamentos',
+    'departamento',
+    '/cadastros/departamentos',
+  ),
+  'cost-center': dimensionConfig(
+    'cost-center',
+    'Centros de custo',
+    'centro de custo',
+    '/cadastros/centros-custo',
+  ),
   commodity: {
     resource: 'commodity',
     title: 'Mercadorias',
@@ -248,9 +294,27 @@ export const recordConfigs = {
       { name: 'name', label: 'Nome', required: true, wide: true },
       { name: 'description', label: 'Descrição', wide: true },
       { name: 'defaultCargoTypeId', label: 'Tipo de carga padrão (UUID)' },
-      { name: 'isHazardous', label: 'Mercadoria perigosa', type: 'select', defaultValue: 'false', options: booleanOptions },
-      { name: 'requiresTemperatureControl', label: 'Controle de temperatura', type: 'select', defaultValue: 'false', options: booleanOptions },
-      { name: 'isActive', label: 'Status', type: 'select', defaultValue: 'true', options: catalogActiveOptions },
+      {
+        name: 'isHazardous',
+        label: 'Mercadoria perigosa',
+        type: 'select',
+        defaultValue: 'false',
+        options: booleanOptions,
+      },
+      {
+        name: 'requiresTemperatureControl',
+        label: 'Controle de temperatura',
+        type: 'select',
+        defaultValue: 'false',
+        options: booleanOptions,
+      },
+      {
+        name: 'isActive',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'true',
+        options: catalogActiveOptions,
+      },
     ],
   },
   'party-group': {
@@ -270,9 +334,18 @@ export const recordConfigs = {
         type: 'select',
         required: true,
         defaultValue: 'operational',
-        options: ['economic', 'commercial', 'operational', 'risk', 'other'].map((value) => ({ label: value, value })),
+        options: ['economic', 'commercial', 'operational', 'risk', 'other'].map((value) => ({
+          label: value,
+          value,
+        })),
       },
-      { name: 'isActive', label: 'Status', type: 'select', defaultValue: 'true', options: catalogActiveOptions },
+      {
+        name: 'isActive',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'true',
+        options: catalogActiveOptions,
+      },
     ],
   },
   'custom-field': {
@@ -290,7 +363,13 @@ export const recordConfigs = {
         type: 'select',
         required: true,
         defaultValue: 'business_party',
-        options: ['business_party', 'driver', 'capacity_asset', 'transport_request', 'location'].map((value) => ({ label: value, value })),
+        options: [
+          'business_party',
+          'driver',
+          'capacity_asset',
+          'transport_request',
+          'location',
+        ].map((value) => ({ label: value, value })),
       },
       { name: 'key', label: 'Chave', required: true },
       { name: 'label', label: 'Rótulo', required: true },
@@ -300,28 +379,56 @@ export const recordConfigs = {
         type: 'select',
         required: true,
         defaultValue: 'string',
-        options: ['string', 'number', 'boolean', 'date', 'datetime', 'json'].map((value) => ({ label: value, value })),
+        options: ['string', 'number', 'boolean', 'date', 'datetime', 'json'].map((value) => ({
+          label: value,
+          value,
+        })),
       },
-      { name: 'isRequired', label: 'Obrigatório', type: 'select', defaultValue: 'false', options: booleanOptions },
+      {
+        name: 'isRequired',
+        label: 'Obrigatório',
+        type: 'select',
+        defaultValue: 'false',
+        options: booleanOptions,
+      },
       { name: 'validation', label: 'Validação JSON', placeholder: 'Ex.: {"min": 1}', wide: true },
-      { name: 'isActive', label: 'Status', type: 'select', defaultValue: 'true', options: catalogActiveOptions },
+      {
+        name: 'isActive',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'true',
+        options: catalogActiveOptions,
+      },
     ],
   },
   'party-requirement': {
     resource: 'party-requirement',
     title: 'Requisitos de parceiro',
     singular: 'requisito',
-    description: 'Requisito operacional/comercial/documental associado a um business party específico.',
+    description:
+      'Requisito operacional/comercial/documental associado a um business party específico.',
     returnPath: '/cadastros/requisitos',
     endpoint: '/api/v1/master-data/business-parties',
     supportsEdit: false,
     fields: [
       { name: 'requirementType', label: 'Tipo do requisito', required: true },
       { name: 'value', label: 'Valor', required: true, wide: true },
-      { name: 'isMandatory', label: 'Obrigatório', type: 'select', defaultValue: 'true', options: booleanOptions },
+      {
+        name: 'isMandatory',
+        label: 'Obrigatório',
+        type: 'select',
+        defaultValue: 'true',
+        options: booleanOptions,
+      },
       { name: 'validFrom', label: 'Válido desde', type: 'date' },
       { name: 'validUntil', label: 'Válido até', type: 'date' },
-      { name: 'isActive', label: 'Status', type: 'select', defaultValue: 'true', options: catalogActiveOptions },
+      {
+        name: 'isActive',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'true',
+        options: catalogActiveOptions,
+      },
     ],
   },
 } as const satisfies Readonly<Record<RecordResource, RecordConfig>>;
@@ -341,7 +448,8 @@ function assetConfig(
     resource,
     title,
     singular,
-    description: 'Capacity asset canônico com propriedade, classificação, capacidade e status operacional.',
+    description:
+      'Capacity asset canônico com propriedade, classificação, capacidade e status operacional.',
     returnPath,
     endpoint: '/api/v1/capacity/assets',
     supportsEdit: true,
@@ -353,12 +461,24 @@ function assetConfig(
       { name: 'ownerName', label: 'Nome do proprietário', required: true, wide: true },
       { name: 'vehicleType', label: 'Tipo de veículo', required: true },
       { name: 'bodyType', label: 'Tipo de carroceria', required: true },
-      { name: 'capacityWeightKg', label: 'Capacidade (kg)', type: 'number', step: '0.001', required: true },
+      {
+        name: 'capacityWeightKg',
+        label: 'Capacidade (kg)',
+        type: 'number',
+        step: '0.001',
+        required: true,
+      },
       { name: 'capacityVolumeM3', label: 'Capacidade (m³)', type: 'number', step: '0.001' },
       { name: 'maxLengthM', label: 'Comprimento máximo (m)', type: 'number', step: '0.001' },
       { name: 'maxWidthM', label: 'Largura máxima (m)', type: 'number', step: '0.001' },
       { name: 'maxHeightM', label: 'Altura máxima (m)', type: 'number', step: '0.001' },
-      { name: 'trackingAvailable', label: 'Rastreamento', type: 'select', defaultValue: 'false', options: booleanOptions },
+      {
+        name: 'trackingAvailable',
+        label: 'Rastreamento',
+        type: 'select',
+        defaultValue: 'false',
+        options: booleanOptions,
+      },
       {
         name: 'status',
         label: 'Status',
@@ -381,7 +501,8 @@ function dimensionConfig(
     resource,
     title,
     singular,
-    description: 'Dimensão tenant-scoped vinculada à organização e opcionalmente a uma unidade de negócio.',
+    description:
+      'Dimensão tenant-scoped vinculada à organização e opcionalmente a uma unidade de negócio.',
     returnPath,
     endpoint: `/api/v1/master-data/dimensions/${resource === 'department' ? 'departments' : 'cost-centers'}`,
     supportsEdit: false,
@@ -390,7 +511,13 @@ function dimensionConfig(
       { name: 'businessUnitId', label: 'Unidade de negócio (UUID)' },
       { name: 'code', label: 'Código', required: true },
       { name: 'name', label: 'Nome', required: true, wide: true },
-      { name: 'isActive', label: 'Status', type: 'select', defaultValue: 'true', options: catalogActiveOptions },
+      {
+        name: 'isActive',
+        label: 'Status',
+        type: 'select',
+        defaultValue: 'true',
+        options: catalogActiveOptions,
+      },
     ],
   };
 }

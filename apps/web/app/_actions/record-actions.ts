@@ -23,7 +23,8 @@ export async function saveOperationalRecord(
   const modeInput = formString(formData, 'mode');
   if (modeInput !== 'create' && modeInput !== 'edit') return errorState('Modo de edição inválido.');
   const mode = modeInput as RecordMode;
-  if (mode === 'edit' && !config.supportsEdit) return errorState('Este recurso não suporta edição neste contrato.');
+  if (mode === 'edit' && !config.supportsEdit)
+    return errorState('Este recurso não suporta edição neste contrato.');
 
   const id = mode === 'edit' ? formString(formData, 'id') : '';
   if (mode === 'edit' && !isUuid(id)) return errorState('Identificador do registro inválido.');
@@ -33,7 +34,9 @@ export async function saveOperationalRecord(
   try {
     payload = buildPayload(resource, mode, formData);
   } catch (cause) {
-    return errorState(cause instanceof FormInputError ? cause.message : 'Dados do formulário inválidos.');
+    return errorState(
+      cause instanceof FormInputError ? cause.message : 'Dados do formulário inválidos.',
+    );
   }
 
   const endpoint = endpointFor(resource, mode, config.endpoint, id, subjectId);
@@ -46,7 +49,8 @@ export async function saveOperationalRecord(
   if (result.kind !== 'ready') return errorState(result.message);
 
   revalidatePath(config.returnPath);
-  const suffix = resource === 'party-requirement' && subjectId ? `?partyId=${subjectId}&saved=1` : '?saved=1';
+  const suffix =
+    resource === 'party-requirement' && subjectId ? `?partyId=${subjectId}&saved=1` : '?saved=1';
   redirect(`${config.returnPath}${suffix}`);
 }
 

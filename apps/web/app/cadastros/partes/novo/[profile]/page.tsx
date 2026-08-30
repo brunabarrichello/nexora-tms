@@ -2,7 +2,11 @@ import { notFound } from 'next/navigation';
 
 import { RecordEditorPage } from '../../../../_components/record-editor-page';
 
-const profiles = { client: 'party-client', supplier: 'party-supplier', carrier: 'party-carrier' } as const;
+const profiles = {
+  client: 'party-client',
+  supplier: 'party-supplier',
+  carrier: 'party-carrier',
+} as const;
 
 export default async function Page({ params }: Readonly<{ params: Promise<{ profile: string }> }>) {
   const { profile } = await params;

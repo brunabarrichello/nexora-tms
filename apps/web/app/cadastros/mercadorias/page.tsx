@@ -44,7 +44,8 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
       ]}
       filterItem={(item, values) => {
         if (values.hazardous && String(item.isHazardous) !== values.hazardous) return false;
-        if (values.temperature && String(item.requiresTemperatureControl) !== values.temperature) return false;
+        if (values.temperature && String(item.requiresTemperatureControl) !== values.temperature)
+          return false;
         return true;
       }}
       mapRow={(item) => ({

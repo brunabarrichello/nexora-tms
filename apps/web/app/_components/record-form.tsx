@@ -34,7 +34,10 @@ export function RecordForm({
           <h1>{isEdit ? `Editar ${config.singular}` : `Novo ${config.singular}`}</h1>
           <p>{config.description}</p>
         </div>
-        <Link href={returnHref(config.returnPath, config.resource, subjectId)} className="button button-secondary">
+        <Link
+          href={returnHref(config.returnPath, config.resource, subjectId)}
+          className="button button-secondary"
+        >
           Voltar para lista
         </Link>
       </section>
@@ -51,13 +54,19 @@ export function RecordForm({
               <div>
                 <span className="eyebrow">Contrato protegido</span>
                 <h2>Dados do cadastro</h2>
-                <p>O formulário envia somente campos whitelisted para a Server Action e para a API tenant-aware.</p>
+                <p>
+                  O formulário envia somente campos whitelisted para a Server Action e para a API
+                  tenant-aware.
+                </p>
               </div>
             </div>
             <div className="field-grid">
               {config.fields.map((field) => (
                 <label className={`form-field ${field.wide ? 'field-wide' : ''}`} key={field.name}>
-                  <span>{field.label}{field.required ? ' *' : ''}</span>
+                  <span>
+                    {field.label}
+                    {field.required ? ' *' : ''}
+                  </span>
                   {field.type === 'select' && field.options ? (
                     <select
                       name={field.name}
@@ -65,7 +74,9 @@ export function RecordForm({
                       required={field.required}
                     >
                       {field.options.map((option) => (
-                        <option key={`${field.name}-${option.value}`} value={option.value}>{option.label}</option>
+                        <option key={`${field.name}-${option.value}`} value={option.value}>
+                          {option.label}
+                        </option>
                       ))}
                     </select>
                   ) : field.type === 'checkbox-group' && field.options ? (
@@ -76,15 +87,28 @@ export function RecordForm({
                             type="checkbox"
                             name={field.name}
                             value={option.value}
-                            defaultChecked={arrayInitial(initialValues[field.name]).includes(option.value)}
-                          />{' '}{option.label}
+                            defaultChecked={arrayInitial(initialValues[field.name]).includes(
+                              option.value,
+                            )}
+                          />{' '}
+                          {option.label}
                         </label>
                       ))}
                     </div>
                   ) : (
                     <input
                       name={field.name}
-                      type={field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : field.type === 'email' ? 'email' : field.type === 'tel' ? 'tel' : 'text'}
+                      type={
+                        field.type === 'number'
+                          ? 'number'
+                          : field.type === 'date'
+                            ? 'date'
+                            : field.type === 'email'
+                              ? 'email'
+                              : field.type === 'tel'
+                                ? 'tel'
+                                : 'text'
+                      }
                       step={field.step}
                       placeholder={field.placeholder}
                       required={field.required}
@@ -109,7 +133,10 @@ export function RecordForm({
           <section className="form-summary-card">
             <span className="eyebrow">Governança</span>
             <h2>Persistência tenant-aware</h2>
-            <p>Tenant e usuário não são controlados pelo formulário. A API resolve o contexto autenticado antes do PostgreSQL.</p>
+            <p>
+              Tenant e usuário não são controlados pelo formulário. A API resolve o contexto
+              autenticado antes do PostgreSQL.
+            </p>
             <ul className="check-list">
               <li>Payload explicitamente whitelisted</li>
               <li>TenantRuntimeGateGuard na API</li>
@@ -119,7 +146,12 @@ export function RecordForm({
             </ul>
           </section>
           <div className="sticky-actions">
-            <Link href={returnHref(config.returnPath, config.resource, subjectId)} className="button button-secondary">Cancelar</Link>
+            <Link
+              href={returnHref(config.returnPath, config.resource, subjectId)}
+              className="button button-secondary"
+            >
+              Cancelar
+            </Link>
             <button type="submit" className="button button-primary" disabled={pending}>
               {pending ? 'Salvando…' : isEdit ? 'Salvar alterações' : 'Criar cadastro'}
             </button>

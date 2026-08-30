@@ -51,7 +51,9 @@ export default function Page({ searchParams }: Readonly<{ searchParams: Collecti
         operational: collectionText(item.operationalStatus),
         matching: collectionBoolean(item.eligibleForMatching, 'Elegível', 'Não elegível'),
       })}
-      integrationNotes={['A Wave 0017 da PR #56 ampliará esta área com documentos, cursos, disponibilidade, bloqueios e ratings.']}
+      integrationNotes={[
+        'A Wave 0017 da PR #56 ampliará esta área com documentos, cursos, disponibilidade, bloqueios e ratings.',
+      ]}
     />
   );
 }

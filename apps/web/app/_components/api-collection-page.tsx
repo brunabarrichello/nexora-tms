@@ -53,10 +53,7 @@ export async function ApiCollectionPage({
   columns: readonly CollectionColumn[];
   mapRow: (item: ApiCollectionRecord) => Record<string, string>;
   filters?: readonly CollectionFilter[];
-  filterItem?: (
-    item: ApiCollectionRecord,
-    values: Readonly<Record<string, string>>,
-  ) => boolean;
+  filterItem?: (item: ApiCollectionRecord, values: Readonly<Record<string, string>>) => boolean;
   actions?: readonly CollectionAction[];
   integrationNotes?: readonly string[];
 }>) {
@@ -119,7 +116,8 @@ function toViewState(result: ApiResult<readonly ApiCollectionRecord[]>): {
       return {
         status: 'API conectada',
         emptyTitle: 'Nenhum registro encontrado',
-        message: 'A consulta foi executada com sucesso, mas não retornou registros para os filtros atuais.',
+        message:
+          'A consulta foi executada com sucesso, mas não retornou registros para os filtros atuais.',
       };
     case 'unconfigured':
       return {
@@ -143,7 +141,10 @@ function toViewState(result: ApiResult<readonly ApiCollectionRecord[]>): {
 }
 
 function normalize(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 export function collectionText(value: unknown, fallback = '—'): string {
