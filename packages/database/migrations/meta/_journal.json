@@ -148,6 +148,13 @@
       "when": 1788070396691,
       "tag": "0020_dapper_zuras",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788073182857,
+      "tag": "0021_dizzy_longshot",
+      "breakpoints": true
     }
   ]
 }

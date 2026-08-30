@@ -180,10 +180,10 @@ jobs:
                  'transport_request_stops','transport_request_cargo_profiles',
                  'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                  'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags','currencies','departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values',
-                 'driver_documents','driver_qualifications','driver_courses','driver_availability','driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings','capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans','capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances','capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods','capacity_asset_locations','capacity_asset_blocks','documents','document_versions','document_validations','business_party_documents','transport_request_documents'
+                 'driver_documents','driver_qualifications','driver_courses','driver_availability','driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings','capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans','capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances','capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods','capacity_asset_locations','capacity_asset_blocks','documents','document_versions','document_validations','business_party_documents','transport_request_documents','negotiation_threads','negotiation_participants','negotiation_messages'
                );
-            IF table_count <> 89 THEN
-              RAISE EXCEPTION 'Expected 89 application tables, found %', table_count;
+            IF table_count <> 92 THEN
+              RAISE EXCEPTION 'Expected 92 application tables, found %', table_count;
             END IF;
 
             SELECT count(*) INTO rls_count
@@ -200,16 +200,16 @@ jobs:
                  'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                  'vehicle_types','body_types','cargo_types','package_types','document_types','tags',
                  'departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values',
-                 'driver_documents','driver_qualifications','driver_courses','driver_availability','driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings','capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans','capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances','capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods','capacity_asset_locations','capacity_asset_blocks','documents','document_versions','document_validations','business_party_documents','transport_request_documents'
+                 'driver_documents','driver_qualifications','driver_courses','driver_availability','driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings','capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans','capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances','capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods','capacity_asset_locations','capacity_asset_blocks','documents','document_versions','document_validations','business_party_documents','transport_request_documents','negotiation_threads','negotiation_participants','negotiation_messages'
                )
                AND c.relrowsecurity;
-            IF rls_count <> 81 THEN
-              RAISE EXCEPTION 'Expected RLS on 81 tenant-scoped tables, found %', rls_count;
+            IF rls_count <> 84 THEN
+              RAISE EXCEPTION 'Expected RLS on 84 tenant-scoped tables, found %', rls_count;
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 21 THEN
-              RAISE EXCEPTION 'Expected 21 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 22 THEN
+              RAISE EXCEPTION 'Expected 22 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
@@ -344,7 +344,7 @@ jobs:
                    'transport_request_stops','transport_request_cargo_profiles',
                    'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                    'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags','currencies','departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values',
-                 'driver_documents','driver_qualifications','driver_courses','driver_availability','driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings','capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans','capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances','capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods','capacity_asset_locations','capacity_asset_blocks','documents','document_versions','document_validations','business_party_documents','transport_request_documents'
+                 'driver_documents','driver_qualifications','driver_courses','driver_availability','driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings','capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans','capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances','capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods','capacity_asset_locations','capacity_asset_blocks','documents','document_versions','document_validations','business_party_documents','transport_request_documents','negotiation_threads','negotiation_participants','negotiation_messages'
                  )
                  AND r.rolname='nexora_app'
             ) THEN

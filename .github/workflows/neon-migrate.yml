@@ -134,7 +134,7 @@ jobs:
           }
           echo "EXPECTED_MIGRATIONS=$expected" >> "$GITHUB_ENV"
 
-      - name: Verify Wave 0018 through 0020 baselines
+      - name: Verify Wave 0018 through 0021 baselines
         shell: bash
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
@@ -256,6 +256,56 @@ jobs:
             ) THEN
               RAISE EXCEPTION 'Wave 0020 historical matching privileges are incorrect';
             END IF;
+
+
+            SELECT count(*) INTO tables_count
+              FROM information_schema.tables
+             WHERE table_schema='public'
+               AND table_name IN ('negotiation_threads','negotiation_participants','negotiation_messages');
+            IF tables_count <> 3 THEN
+              RAISE EXCEPTION 'Wave 0021 negotiation tables incomplete: %', tables_count;
+            END IF;
+
+            SELECT count(*) INTO rls_count
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public'
+               AND c.relname IN ('negotiation_threads','negotiation_participants','negotiation_messages')
+               AND c.relrowsecurity;
+            IF rls_count <> 3 THEN
+              RAISE EXCEPTION 'Wave 0021 negotiation RLS incomplete: %', rls_count;
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+                FROM unnest(ARRAY['negotiation_threads','negotiation_participants']) AS t(table_name)
+               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
+                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
+                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
+                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
+            ) THEN
+              RAISE EXCEPTION 'Wave 0021 mutable negotiation privileges are incorrect';
+            END IF;
+
+            IF NOT has_table_privilege('nexora_app','public.negotiation_messages','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.negotiation_messages','INSERT')
+               OR has_table_privilege('nexora_app','public.negotiation_messages','UPDATE')
+               OR has_table_privilege('nexora_app','public.negotiation_messages','DELETE') THEN
+              RAISE EXCEPTION 'Wave 0021 negotiation_messages must remain append-only';
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1
+                FROM pg_trigger t
+                JOIN pg_class c ON c.oid=t.tgrelid
+                JOIN pg_namespace n ON n.oid=c.relnamespace
+               WHERE n.nspname='public'
+                 AND c.relname='negotiation_messages'
+                 AND t.tgname='negotiation_messages_reply_scope_trigger'
+                 AND NOT t.tgisinternal
+            ) THEN
+              RAISE EXCEPTION 'Wave 0021 reply scope trigger is missing';
+            END IF;
           END
           $block$;
           SQL
@@ -270,5 +320,6 @@ jobs:
             echo "- Wave 0018 document baseline: verified"
             echo "- Wave 0019 freight normalization baseline: verified"
             echo "- Wave 0020 matching persistence baseline: verified"
+            echo "- Wave 0021 negotiation collaboration baseline: verified"
             echo "- Production: not addressable by this workflow"
           } >> "$GITHUB_STEP_SUMMARY"

@@ -38,6 +38,7 @@ ADRs 0001–0010 form the accepted NEX-17 / NEX-64 Wave 0 baseline. ADR-0011 con
 15. [`0015-canonical-document-core-versioning-storage-boundary.md`](./0015-canonical-document-core-versioning-storage-boundary.md) — Wave 0018 canonical document metadata, immutable versions/validations, typed links and provider-neutral object-storage boundary.
 16. [`0016-rbac-contextual-authorization.md`](./0016-rbac-contextual-authorization.md) — contextual authorization and RBAC boundaries for tenant-scoped runtime actions.
 17. [`0017-persistent-explainable-matching.md`](./0017-persistent-explainable-matching.md) — Wave 0020 persistent, reproducible and explainable matching with immutable historical results.
+18. [`0018-negotiation-collaboration-boundary.md`](./0018-negotiation-collaboration-boundary.md) — Wave 0021 collaboration threads, tenant-aware participants and append-only messages without duplicating commercial aggregates.
 
 ## Process
 
