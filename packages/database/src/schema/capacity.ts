@@ -18,6 +18,7 @@ import {
 
 import { users } from './identity.js';
 import { businessParties } from './master-data.js';
+import { bodyTypes, vehicleTypes } from './reference-data.js';
 import { tenantMatchesSession } from './rls.js';
 
 export const driverRegistrationStatusEnum = pgEnum('driver_registration_status', [
@@ -149,6 +150,8 @@ export const capacityAssets = pgTable(
     assetKind: capacityAssetKindEnum('asset_kind').notNull(),
     identifier: varchar('identifier', { length: 64 }).notNull(),
     plate: varchar('plate', { length: 7 }),
+    vehicleTypeId: uuid('vehicle_type_id'),
+    bodyTypeId: uuid('body_type_id'),
     vehicleType: varchar('vehicle_type', { length: 80 }).notNull(),
     bodyType: varchar('body_type', { length: 80 }).notNull(),
     capacityWeightKg: numeric('capacity_weight_kg', { precision: 12, scale: 3 }).notNull(),
@@ -181,6 +184,16 @@ export const capacityAssets = pgTable(
       columns: [table.tenantId, table.ownerPartyId],
       foreignColumns: [businessParties.tenantId, businessParties.id],
       name: 'capacity_assets_owner_party_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.vehicleTypeId],
+      foreignColumns: [vehicleTypes.tenantId, vehicleTypes.id],
+      name: 'capacity_assets_vehicle_type_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.bodyTypeId],
+      foreignColumns: [bodyTypes.tenantId, bodyTypes.id],
+      name: 'capacity_assets_body_type_fk',
     }).onDelete('restrict'),
     check('capacity_assets_identifier_check', sql`length(trim(${table.identifier})) >= 2`),
     check(
@@ -216,6 +229,11 @@ export const capacityAssets = pgTable(
       table.tenantId,
       table.vehicleType,
       table.bodyType,
+    ),
+    index('capacity_assets_tenant_vehicle_body_catalog_idx').on(
+      table.tenantId,
+      table.vehicleTypeId,
+      table.bodyTypeId,
     ),
     index('capacity_assets_tenant_tracking_idx').on(table.tenantId, table.trackingAvailable),
     pgPolicy('capacity_assets_tenant_isolation', {

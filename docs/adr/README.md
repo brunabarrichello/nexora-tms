@@ -34,6 +34,7 @@ ADRs 0001–0010 form the accepted NEX-17 / NEX-64 Wave 0 baseline. ADR-0011 con
 
 12. [`0012-master-data-catalog-and-schema-evolution.md`](./0012-master-data-catalog-and-schema-evolution.md) — canonical aggregate roots, data catalog and Wave-based schema evolution.
 13. [`0013-master-data-enrichment-controlled-extensibility.md`](./0013-master-data-enrichment-controlled-extensibility.md) — Wave 0016 locations, dimensions, typed tags, controlled custom fields, currency and lifecycle rules.
+14. [`0014-driver-asset-qualification-document-boundary.md`](./0014-driver-asset-qualification-document-boundary.md) — Wave 0017 qualification extensions, append-only facts, catalog normalization and document-core boundary.
 
 ## Process
 

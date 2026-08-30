@@ -7,18 +7,31 @@ import { CapacityAssignmentController } from './capacity-assignment.controller.j
 import { CapacityAssignmentService } from './capacity-assignment.service.js';
 import { CapacityAssetController } from './capacity-asset.controller.js';
 import { CapacityAssetService } from './capacity-asset.service.js';
+import { CapacityQualificationController } from './capacity-qualification.controller.js';
+import { CapacityQualificationService } from './capacity-qualification.service.js';
 import { DriverController } from './driver.controller.js';
 import { DriverService } from './driver.service.js';
 
 @Module({
   imports: [AuthenticationModule, TenancyModule],
-  controllers: [DriverController, CapacityAssetController, CapacityAssignmentController],
+  controllers: [
+    DriverController,
+    CapacityAssetController,
+    CapacityAssignmentController,
+    CapacityQualificationController,
+  ],
   providers: [
     DriverService,
     CapacityAssetService,
     CapacityAssignmentService,
+    CapacityQualificationService,
     TenantRuntimeGateGuard,
   ],
-  exports: [DriverService, CapacityAssetService, CapacityAssignmentService],
+  exports: [
+    DriverService,
+    CapacityAssetService,
+    CapacityAssignmentService,
+    CapacityQualificationService,
+  ],
 })
 export class CapacityModule {}
