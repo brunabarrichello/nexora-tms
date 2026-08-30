@@ -11,9 +11,9 @@ permissions:
   contents: write
 
 jobs:
-  generate:
+  fix-migration-order:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -34,73 +34,46 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Complete Wave 0022 schema wiring
+      - name: Move referenced unique before dependent FK
         shell: bash
         run: |
           set -euo pipefail
           python - <<'PY'
           from pathlib import Path
 
-          contract = Path('packages/database/src/schema/transport-contract.ts')
-          text = contract.read_text()
-          old = "    unique('transport_contracts_tenant_id_unique').on(table.tenantId, table.id),\n"
-          new = old + "    unique('transport_contracts_tenant_request_id_unique').on(\n      table.tenantId,\n      table.transportRequestId,\n      table.id,\n    ),\n"
-          if 'transport_contracts_tenant_request_id_unique' not in text:
-              if old not in text:
-                  raise SystemExit('transport contract anchor not found')
-              text = text.replace(old, new, 1)
-              contract.write_text(text)
+          migration = Path('packages/database/migrations/0022_minor_tyrannus.sql')
+          text = migration.read_text()
+          unique_stmt = 'ALTER TABLE "transport_contracts" ADD CONSTRAINT "transport_contracts_tenant_request_id_unique" UNIQUE("tenant_id","transport_request_id","id");--> statement-breakpoint\n'
+          fk_stmt = 'ALTER TABLE "trip_transport_requests" ADD CONSTRAINT "trip_transport_requests_contract_fk" FOREIGN KEY ("tenant_id","transport_request_id","transport_contract_id") REFERENCES "public"."transport_contracts"("tenant_id","transport_request_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint\n'
 
-          index = Path('packages/database/src/schema/index.ts')
-          text = index.read_text()
-          export = "export * from './trips.js';\n"
-          if export not in text:
-              text += export
-              index.write_text(text)
+          if unique_stmt not in text or fk_stmt not in text:
+              raise SystemExit('Expected migration statements not found')
+          if text.index(unique_stmt) > text.index(fk_stmt):
+              text = text.replace(unique_stmt, '', 1)
+              text = text.replace(fk_stmt, unique_stmt + fk_stmt, 1)
+              migration.write_text(text)
+
+          if migration.read_text().index(unique_stmt) > migration.read_text().index(fk_stmt):
+              raise SystemExit('Referenced unique still appears after dependent FK')
           PY
 
-      - name: Format schema
-        run: pnpm exec prettier --write packages/database/src/schema/trips.ts packages/database/src/schema/transport-contract.ts packages/database/src/schema/index.ts
-
-      - name: Generate Drizzle migration
-        run: pnpm --filter @nexora/database db:generate
-
-      - name: Add runtime grants to generated migration
-        shell: bash
+      - name: Validate schema ledger
         run: |
-          set -euo pipefail
-          migration="$(git status --short packages/database/migrations | awk '/\.sql$/ {print $2}' | tail -n1)"
-          test -n "$migration" || { echo 'Generated migration SQL not found' >&2; exit 1; }
-          cat >> "$migration" <<'SQL'
-
-          GRANT SELECT, INSERT, UPDATE ON trips TO nexora_app;
-          GRANT SELECT, INSERT, UPDATE ON trip_transport_requests TO nexora_app;
-          GRANT SELECT, INSERT, UPDATE ON trip_stops TO nexora_app;
-          GRANT SELECT, INSERT, UPDATE ON trip_drivers TO nexora_app;
-          GRANT SELECT, INSERT, UPDATE ON trip_assets TO nexora_app;
-          GRANT SELECT, INSERT ON trip_status_history TO nexora_app;
-          SQL
-          echo "Generated migration: $migration"
-
-      - name: Validate schema and migration
-        run: |
-          pnpm exec prettier --write packages/database/src/schema/trips.ts packages/database/src/schema/transport-contract.ts packages/database/src/schema/index.ts
-          pnpm lint
           pnpm --filter @nexora/database typecheck
           pnpm --filter @nexora/database db:check
           git diff --check
 
-      - name: Commit generated artifacts
+      - name: Commit migration order correction
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add packages/database/src/schema/trips.ts packages/database/src/schema/transport-contract.ts packages/database/src/schema/index.ts packages/database/migrations
+          git add packages/database/migrations/0022_minor_tyrannus.sql
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo 'No schema changes to commit.'
-            exit 1
+            echo 'No migration order change required.'
+            exit 0
           fi
-          git commit -m 'feat(database): generate Wave 0022 trips core migration'
+          git commit -m 'fix(database): order Wave 0022 contract key before FK'
           git push --no-verify origin HEAD:feat/database-wave-0022-trips-core
