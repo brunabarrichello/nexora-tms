@@ -25,10 +25,7 @@ export class CapacityMatchingController {
   }
 
   @Post('requests/:requestId/runs')
-  execute(
-    @Param('requestId') requestId: string,
-    @Body() body: ExecuteMatchingBody = {},
-  ) {
+  execute(@Param('requestId') requestId: string, @Body() body: ExecuteMatchingBody = {}) {
     return this.persistence.execute(requestId, body.preferenceId);
   }
 

@@ -222,10 +222,7 @@ export class MatchingPersistenceService {
     const context = this.tenantContext.require();
 
     return this.database.withTenantContext(context, async (client) => {
-      const evaluation = await this.capacityMatching.evaluateForRequest(
-        transportRequestId,
-        client,
-      );
+      const evaluation = await this.capacityMatching.evaluateForRequest(transportRequestId, client);
       const rules = await this.ensureBuiltInRules(client, context.tenantId);
       const preference = await this.resolvePreference(client, normalizedPreferenceId);
 
@@ -585,7 +582,8 @@ export class MatchingPersistenceService {
         const applicable = isRuleApplicable(rule.code, evaluation.requirements, candidate);
         const resultState = reason ? 'failed' : applicable ? 'passed' : 'not_applicable';
         const impact = reason ? 'blocker' : 'neutral';
-        const message = reason?.message ??
+        const message =
+          reason?.message ??
           (applicable ? 'Critério atendido.' : 'Critério não aplicável à carga/candidato.');
 
         const ruleResult = await client.query<{ id: string }>(
@@ -624,7 +622,10 @@ export class MatchingPersistenceService {
               ruleResultId,
               reason.code,
               reason.message,
-              JSON.stringify({ required: reason.required ?? null, available: reason.available ?? null }),
+              JSON.stringify({
+                required: reason.required ?? null,
+                available: reason.available ?? null,
+              }),
             ],
           );
         }
@@ -732,7 +733,9 @@ function candidateSnapshot(candidate: CapacityMatchCandidate) {
   };
 }
 
-function jsonScalar(value: CapacityMismatchReason['required'] | CapacityMismatchReason['available']) {
+function jsonScalar(
+  value: CapacityMismatchReason['required'] | CapacityMismatchReason['available'],
+) {
   return value === undefined ? null : JSON.stringify(value);
 }
 

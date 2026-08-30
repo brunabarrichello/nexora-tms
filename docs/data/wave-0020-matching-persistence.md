@@ -58,10 +58,10 @@ Todas as sete tabelas têm RLS baseada em `app.tenant_id`.
 
 `nexora_app`:
 
-| Tabelas | SELECT | INSERT | UPDATE | DELETE |
-| --- | --- | --- | --- | --- |
-| `matching_rules`, `matching_preferences`, `matching_runs` | sim | sim | sim | não |
-| `matching_candidates`, `matching_candidate_scores`, `matching_rule_results`, `matching_rejections` | sim | sim | não | não |
+| Tabelas                                                                                            | SELECT | INSERT | UPDATE | DELETE |
+| -------------------------------------------------------------------------------------------------- | ------ | ------ | ------ | ------ |
+| `matching_rules`, `matching_preferences`, `matching_runs`                                          | sim    | sim    | sim    | não    |
+| `matching_candidates`, `matching_candidate_scores`, `matching_rule_results`, `matching_rejections` | sim    | sim    | não    | não    |
 
 A separação permite configuração/lifecycle controlado sem permitir reescrita dos fatos produzidos por uma execução.
 
