@@ -1,5 +1,6 @@
 name: Wave 0021 SQL Diagnostic
 
+# Temporary diagnostic: remove after the full 0000-0021 SQL chain passes.
 on:
   push:
     branches:
