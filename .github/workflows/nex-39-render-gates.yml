@@ -43,3 +43,5 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m 'NEX-39 strengthen permanent reservation gates'
           git push --no-verify
+
+# activation: render NEX-39 permanent gates
