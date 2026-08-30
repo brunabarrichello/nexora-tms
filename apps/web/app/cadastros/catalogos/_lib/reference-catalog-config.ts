@@ -137,10 +137,7 @@ export const editableReferenceCatalogs = {
         label: 'Empilhável por padrão',
         type: 'select',
         defaultValue: '',
-        options: [
-          { label: 'Não definido', value: '' },
-          ...booleanOptions,
-        ],
+        options: [{ label: 'Não definido', value: '' }, ...booleanOptions],
       },
       activeField,
     ],
@@ -198,9 +195,7 @@ export const editableReferenceCatalogs = {
 
 export type EditableReferenceCatalogSlug = keyof typeof editableReferenceCatalogs;
 
-export function getEditableReferenceCatalog(
-  slug: string,
-): EditableReferenceCatalogConfig | null {
+export function getEditableReferenceCatalog(slug: string): EditableReferenceCatalogConfig | null {
   if (!Object.prototype.hasOwnProperty.call(editableReferenceCatalogs, slug)) return null;
   return editableReferenceCatalogs[slug as EditableReferenceCatalogSlug];
 }

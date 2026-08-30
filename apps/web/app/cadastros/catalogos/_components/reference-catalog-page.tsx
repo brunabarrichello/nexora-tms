@@ -75,7 +75,10 @@ export async function ReferenceCatalogPage({
   const values = singleValueParams(rawParams);
   const limit = 25;
   const offset = positiveInteger(values.offset) ?? 0;
-  const query = pickQuery(values, filters.map((filter) => filter.name));
+  const query = pickQuery(
+    values,
+    filters.map((filter) => filter.name),
+  );
   const result = await apiGet<ReferencePage>(`/api/v1/reference-data/${slug}`, {
     ...query,
     limit: String(limit),
@@ -106,9 +109,7 @@ export async function ReferenceCatalogPage({
       columns={tableColumns}
       rows={rows}
       actions={
-        readOnly
-          ? []
-          : [{ href: `/cadastros/catalogos/novo/${slug}`, label: 'Novo cadastro' }]
+        readOnly ? [] : [{ href: `/cadastros/catalogos/novo/${slug}`, label: 'Novo cadastro' }]
       }
       filterAction={basePath}
       filterValues={values}
@@ -166,14 +167,27 @@ function toViewState(result: ApiResult<ReferencePage>): {
       return {
         status: 'API conectada',
         emptyTitle: 'Nenhum registro encontrado',
-        message: 'A consulta foi executada com sucesso, mas não retornou registros para os filtros atuais.',
+        message:
+          'A consulta foi executada com sucesso, mas não retornou registros para os filtros atuais.',
       };
     case 'unconfigured':
-      return { status: 'API não configurada', emptyTitle: 'Integração aguardando ambiente', message: result.message };
+      return {
+        status: 'API não configurada',
+        emptyTitle: 'Integração aguardando ambiente',
+        message: result.message,
+      };
     case 'unauthorized':
-      return { status: 'Autorização pendente', emptyTitle: 'Sessão sem acesso à API', message: result.message };
+      return {
+        status: 'Autorização pendente',
+        emptyTitle: 'Sessão sem acesso à API',
+        message: result.message,
+      };
     case 'error':
-      return { status: 'API indisponível', emptyTitle: 'Falha ao consultar dados', message: result.message };
+      return {
+        status: 'API indisponível',
+        emptyTitle: 'Falha ao consultar dados',
+        message: result.message,
+      };
   }
 }
 

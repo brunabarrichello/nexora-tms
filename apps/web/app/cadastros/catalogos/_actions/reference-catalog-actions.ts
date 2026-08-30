@@ -34,7 +34,9 @@ export async function saveReferenceCatalog(
   try {
     body = catalogPayload(catalog as EditableReferenceCatalogSlug, formData);
   } catch (cause) {
-    return errorState(cause instanceof FormInputError ? cause.message : 'Dados do formulário inválidos.');
+    return errorState(
+      cause instanceof FormInputError ? cause.message : 'Dados do formulário inválidos.',
+    );
   }
 
   const endpoint =
@@ -162,9 +164,7 @@ function enumValue(formData: FormData, field: string, allowed: readonly string[]
 }
 
 function isUuid(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-    value,
-  );
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function errorState(message: string): ReferenceCatalogSaveState {

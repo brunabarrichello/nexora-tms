@@ -60,10 +60,7 @@ export function ReferenceCatalogForm({
             </div>
             <div className="field-grid">
               {config.fields.map((field) => (
-                <label
-                  className={`form-field ${field.wide ? 'field-wide' : ''}`}
-                  key={field.name}
-                >
+                <label className={`form-field ${field.wide ? 'field-wide' : ''}`} key={field.name}>
                   <span>
                     {field.label}
                     {field.required ? ' *' : ''}

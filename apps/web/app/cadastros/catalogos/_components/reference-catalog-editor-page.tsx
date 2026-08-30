@@ -18,7 +18,9 @@ export async function ReferenceCatalogEditorPage({
 }>) {
   const config = getEditableReferenceCatalog(catalog);
   if (!config) {
-    return <EditorState title="Catálogo inválido" message="O catálogo solicitado não é editável." />;
+    return (
+      <EditorState title="Catálogo inválido" message="O catálogo solicitado não é editável." />
+    );
   }
 
   if (mode === 'create') {
@@ -26,13 +28,19 @@ export async function ReferenceCatalogEditorPage({
   }
 
   if (!id) {
-    return <EditorState title="Registro inválido" message="O identificador do registro é obrigatório." />;
+    return (
+      <EditorState title="Registro inválido" message="O identificador do registro é obrigatório." />
+    );
   }
 
   const result = await apiGet<Record<string, unknown>>(`/api/v1/reference-data/${catalog}/${id}`);
   if (result.kind !== 'ready') {
     return (
-      <EditorState title="Não foi possível carregar o cadastro" message={result.message} backHref={config.basePath} />
+      <EditorState
+        title="Não foi possível carregar o cadastro"
+        message={result.message}
+        backHref={config.basePath}
+      />
     );
   }
 
@@ -41,7 +49,10 @@ export async function ReferenceCatalogEditorPage({
       config={config}
       mode="edit"
       id={id}
-      initialValues={initialValues(config.fields.map((field) => field.name), result.data)}
+      initialValues={initialValues(
+        config.fields.map((field) => field.name),
+        result.data,
+      )}
     />
   );
 }
