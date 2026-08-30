@@ -26,7 +26,8 @@ export async function QualificationResourcePage({
   const rawParams = await searchParams;
   const values = singleValues(rawParams);
   const subjectKey = config.scope === 'driver' ? 'driverId' : 'assetId';
-  const subjectEndpoint = config.scope === 'driver' ? '/api/v1/capacity/drivers' : '/api/v1/capacity/assets';
+  const subjectEndpoint =
+    config.scope === 'driver' ? '/api/v1/capacity/drivers' : '/api/v1/capacity/assets';
   const subjectsResult = await apiGet<readonly SubjectRecord[]>(subjectEndpoint);
   const subjects = subjectsResult.kind === 'ready' ? subjectsResult.data : [];
   const subjectId = values[subjectKey];
@@ -65,7 +66,13 @@ export async function QualificationResourcePage({
     ? records.filter((record) => searchable(record).includes(normalize(values.q)))
     : records;
   const rows = filtered.map((record) => mapRow(config, record, subjectId, maintenanceId));
-  const state = viewState(subjectsResult, result, Boolean(subjectId), Boolean(maintenanceId), config);
+  const state = viewState(
+    subjectsResult,
+    result,
+    Boolean(subjectId),
+    Boolean(maintenanceId),
+    config,
+  );
   const saved = values.saved === '1' && result?.kind === 'ready';
   const filters: Array<{
     label: string;
@@ -75,7 +82,10 @@ export async function QualificationResourcePage({
     {
       label: config.scope === 'driver' ? 'Motorista' : 'Ativo',
       name: subjectKey,
-      options: subjects.map((subject) => ({ value: subject.id, label: subjectLabel(config, subject) })),
+      options: subjects.map((subject) => ({
+        value: subject.id,
+        label: subjectLabel(config, subject),
+      })),
     },
   ];
   if (config.requiresMaintenance) {
@@ -131,14 +141,16 @@ function mapRow(
       const released = Boolean(record.released_at);
       row[column.key] = released ? 'Liberado' : 'Liberar';
       if (!released && subjectId) {
-        row[`${column.key}Href`] = `/cadastros/qualificacao/${config.scope}/${subjectId}/${config.resource}/${record.id}/release`;
+        row[`${column.key}Href`] =
+          `/cadastros/qualificacao/${config.scope}/${subjectId}/${config.resource}/${record.id}/release`;
       }
       continue;
     }
     if (column.kind === 'maintenance-items') {
       row[column.key] = 'Abrir itens';
       if (subjectId) {
-        row[`${column.key}Href`] = `/cadastros/veiculos/manutencoes/itens?assetId=${encodeURIComponent(subjectId)}&maintenanceId=${encodeURIComponent(record.id)}`;
+        row[`${column.key}Href`] =
+          `/cadastros/veiculos/manutencoes/itens?assetId=${encodeURIComponent(subjectId)}&maintenanceId=${encodeURIComponent(record.id)}`;
       }
       continue;
     }
@@ -214,7 +226,12 @@ function viewState(
       message: 'Escolha uma execução de manutenção para consultar ou adicionar seus itens.',
     };
   }
-  if (!result) return { status: 'Aguardando consulta', emptyTitle: 'Sem consulta', message: 'Selecione os filtros obrigatórios.' };
+  if (!result)
+    return {
+      status: 'Aguardando consulta',
+      emptyTitle: 'Sem consulta',
+      message: 'Selecione os filtros obrigatórios.',
+    };
   if (result.kind === 'ready') {
     return {
       status: 'API conectada',
@@ -224,7 +241,11 @@ function viewState(
         : 'A API respondeu com sucesso e ainda não há registros neste histórico.',
     };
   }
-  if (config.singleton && result.kind === 'error' && result.message.toLowerCase().includes('not found')) {
+  if (
+    config.singleton &&
+    result.kind === 'error' &&
+    result.message.toLowerCase().includes('not found')
+  ) {
     return {
       status: 'Ainda não configurado',
       emptyTitle: 'Configuração ausente',
@@ -234,16 +255,34 @@ function viewState(
   return resultState(result);
 }
 
-function resultState(result: Exclude<ApiResult<unknown>, { kind: 'ready'; data: unknown }> | ApiResult<unknown>) {
+function resultState(
+  result: Exclude<ApiResult<unknown>, { kind: 'ready'; data: unknown }> | ApiResult<unknown>,
+) {
   switch (result.kind) {
     case 'ready':
-      return { status: 'API conectada', emptyTitle: 'Sem registros', message: 'A consulta não retornou dados.' };
+      return {
+        status: 'API conectada',
+        emptyTitle: 'Sem registros',
+        message: 'A consulta não retornou dados.',
+      };
     case 'unconfigured':
-      return { status: 'API não configurada', emptyTitle: 'Integração aguardando ambiente', message: result.message };
+      return {
+        status: 'API não configurada',
+        emptyTitle: 'Integração aguardando ambiente',
+        message: result.message,
+      };
     case 'unauthorized':
-      return { status: 'Autorização pendente', emptyTitle: 'Sessão sem acesso à API', message: result.message };
+      return {
+        status: 'Autorização pendente',
+        emptyTitle: 'Sessão sem acesso à API',
+        message: result.message,
+      };
     case 'error':
-      return { status: 'API indisponível', emptyTitle: 'Falha ao consultar dados', message: result.message };
+      return {
+        status: 'API indisponível',
+        emptyTitle: 'Falha ao consultar dados',
+        message: result.message,
+      };
   }
 }
 
@@ -265,19 +304,24 @@ function formatValue(value: unknown, kind: QualificationColumn['kind']): string 
     const date = new Date(String(value));
     return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR');
   }
-  if (kind === 'json' || (typeof value === 'object' && value !== null)) return JSON.stringify(value);
+  if (kind === 'json' || (typeof value === 'object' && value !== null))
+    return JSON.stringify(value);
   return String(value);
 }
 
 function searchable(record: QualificationRecord): string {
   return normalize(
     Object.values(record)
-      .map((value) => (typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? '')))
+      .map((value) =>
+        typeof value === 'object' && value !== null ? JSON.stringify(value) : String(value ?? ''),
+      )
       .join(' '),
   );
 }
 
-function singleValues(input: Record<string, string | string[] | undefined>): Record<string, string> {
+function singleValues(
+  input: Record<string, string | string[] | undefined>,
+): Record<string, string> {
   const output: Record<string, string> = {};
   for (const [key, value] of Object.entries(input)) {
     const first = Array.isArray(value) ? value[0] : value;
@@ -287,7 +331,10 @@ function singleValues(input: Record<string, string | string[] | undefined>): Rec
 }
 
 function normalize(value: string): string {
-  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 function text(value: unknown, fallback = '—'): string {

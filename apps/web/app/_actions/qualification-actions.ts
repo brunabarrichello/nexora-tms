@@ -14,8 +14,7 @@ import {
 } from '../_lib/qualification-config';
 
 export type QualificationSaveState =
-  | { readonly status: 'idle' }
-  | { readonly status: 'error'; readonly message: string };
+  { readonly status: 'idle' } | { readonly status: 'error'; readonly message: string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -28,7 +27,10 @@ export async function saveQualificationRecord(
     const config = qualificationConfigs[resource];
     const scope = requireScope(formData.get('scope'));
     if (scope !== config.scope) throw new Error('Escopo de qualificação inválido.');
-    const subjectId = requireUuidValue(formData.get('subjectId'), scope === 'driver' ? 'driverId' : 'assetId');
+    const subjectId = requireUuidValue(
+      formData.get('subjectId'),
+      scope === 'driver' ? 'driverId' : 'assetId',
+    );
     const maintenanceId = config.requiresMaintenance
       ? requireUuidValue(formData.get('maintenanceId'), 'maintenanceId')
       : undefined;
@@ -86,10 +88,7 @@ export async function releaseQualificationBlock(
   }
 }
 
-function payloadFromForm(
-  config: QualificationConfig,
-  formData: FormData,
-): Record<string, unknown> {
+function payloadFromForm(config: QualificationConfig, formData: FormData): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   for (const field of config.fields) {
     const raw = formData.get(field.name);
@@ -114,7 +113,8 @@ function normalizeField(field: QualificationField, value: FormDataEntryValue | n
       return parsed;
     }
     case 'boolean':
-      if (text !== 'true' && text !== 'false') throw new Error(`${field.label} deve ser Sim ou Não.`);
+      if (text !== 'true' && text !== 'false')
+        throw new Error(`${field.label} deve ser Sim ou Não.`);
       return text === 'true';
     case 'json':
       try {
@@ -128,7 +128,8 @@ function normalizeField(field: QualificationField, value: FormDataEntryValue | n
       }
     case 'datetime': {
       const parsed = new Date(text);
-      if (Number.isNaN(parsed.getTime())) throw new Error(`${field.label} deve conter data/hora válida.`);
+      if (Number.isNaN(parsed.getTime()))
+        throw new Error(`${field.label} deve conter data/hora válida.`);
       return parsed.toISOString();
     }
     case 'date':
@@ -154,7 +155,8 @@ function returnHref(
 
 function requireResource(value: FormDataEntryValue | null): QualificationResource {
   const resource = textValue(value) as QualificationResource;
-  if (!(resource in qualificationConfigs)) throw new Error('Recurso de qualificação não suportado.');
+  if (!(resource in qualificationConfigs))
+    throw new Error('Recurso de qualificação não suportado.');
   return resource;
 }
 
@@ -177,9 +179,9 @@ function textValue(value: FormDataEntryValue | null): string {
 function isRedirectError(error: unknown): boolean {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      'digest' in error &&
-      typeof (error as { digest?: unknown }).digest === 'string' &&
-      (error as { digest: string }).digest.startsWith('NEXT_REDIRECT'),
+    typeof error === 'object' &&
+    'digest' in error &&
+    typeof (error as { digest?: unknown }).digest === 'string' &&
+    (error as { digest: string }).digest.startsWith('NEXT_REDIRECT'),
   );
 }

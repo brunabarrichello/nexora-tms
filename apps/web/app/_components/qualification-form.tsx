@@ -3,7 +3,10 @@
 import Link from 'next/link';
 import { useActionState } from 'react';
 
-import { saveQualificationRecord, type QualificationSaveState } from '../_actions/qualification-actions';
+import {
+  saveQualificationRecord,
+  type QualificationSaveState,
+} from '../_actions/qualification-actions';
 import type { QualificationConfig } from '../_lib/qualification-config';
 
 const initialState: QualificationSaveState = { status: 'idle' };
@@ -27,7 +30,9 @@ export function QualificationForm({
       <section className="page-hero operational-hero">
         <div>
           <span className="eyebrow">Capacity • Wave 0017</span>
-          <h1>{config.method === 'PUT' ? `Configurar ${config.singular}` : `Novo ${config.singular}`}</h1>
+          <h1>
+            {config.method === 'PUT' ? `Configurar ${config.singular}` : `Novo ${config.singular}`}
+          </h1>
           <p>{config.description}</p>
         </div>
         <Link href={returnHref} className="button button-secondary">
@@ -140,7 +145,11 @@ export function QualificationForm({
               Cancelar
             </Link>
             <button type="submit" className="button button-primary" disabled={pending}>
-              {pending ? 'Salvando…' : config.method === 'PUT' ? 'Salvar configuração' : 'Adicionar registro'}
+              {pending
+                ? 'Salvando…'
+                : config.method === 'PUT'
+                  ? 'Salvar configuração'
+                  : 'Adicionar registro'}
             </button>
           </div>
         </aside>
@@ -149,7 +158,11 @@ export function QualificationForm({
   );
 }
 
-function buildReturnHref(config: QualificationConfig, subjectId: string, maintenanceId?: string): string {
+function buildReturnHref(
+  config: QualificationConfig,
+  subjectId: string,
+  maintenanceId?: string,
+): string {
   const params = new URLSearchParams();
   params.set(config.scope === 'driver' ? 'driverId' : 'assetId', subjectId);
   if (maintenanceId) params.set('maintenanceId', maintenanceId);

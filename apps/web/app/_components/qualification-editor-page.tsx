@@ -39,17 +39,17 @@ export async function QualificationEditorPage({
         accumulator[field.name] = fieldValue(value, field.type);
         return accumulator;
       }, {});
-    } else if (
-      result.kind !== 'error' ||
-      !result.message.toLowerCase().includes('not found')
-    ) {
+    } else if (result.kind !== 'error' || !result.message.toLowerCase().includes('not found')) {
       return (
         <div className="page-stack">
           <section className="system-state">
             <span className="eyebrow">Capacity • Wave 0017</span>
             <h1>Não foi possível carregar a configuração</h1>
             <p>{result.message}</p>
-            <Link href={returnHref(config.returnPath, scope, subjectId, maintenanceId)} className="button button-secondary">
+            <Link
+              href={returnHref(config.returnPath, scope, subjectId, maintenanceId)}
+              className="button button-secondary"
+            >
               Voltar
             </Link>
           </section>
