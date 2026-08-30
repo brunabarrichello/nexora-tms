@@ -55,7 +55,7 @@ async function run(): Promise<void> {
       tripStopId: PICKUP_STOP,
       checkinType: 'arrival',
       source: 'mobile',
-      occurredAt: '2026-09-10T07:45:00Z',
+      occurredAt: '2026-08-20T07:45:00Z',
       latitude: -23.55052,
       longitude: -46.633308,
       notes: 'Arrived at pickup',
@@ -71,7 +71,7 @@ async function run(): Promise<void> {
       tripStopId: PICKUP_STOP,
       checkinType: 'pickup',
       source: 'mobile',
-      occurredAt: '2026-09-10T08:10:00Z',
+      occurredAt: '2026-08-20T08:10:00Z',
       notes: 'Cargo collected',
     });
 
@@ -94,7 +94,7 @@ async function run(): Promise<void> {
       accuracyM: 15,
       speedKmh: 62.5,
       headingDegrees: 90,
-      recordedAt: '2026-08-30T20:00:00Z',
+      recordedAt: '2026-08-20T09:00:00Z',
       metadata: { satelliteCount: 12 },
     });
     assert.equal(position.provider, 'wave-0023-gps');
@@ -106,7 +106,7 @@ async function run(): Promise<void> {
         providerEventId: 'position-001',
         latitude: -23.4,
         longitude: -46.2,
-        recordedAt: '2026-08-30T20:00:00Z',
+        recordedAt: '2026-08-20T09:00:00Z',
       }),
       /already ingested/,
     );
@@ -116,7 +116,7 @@ async function run(): Promise<void> {
       source: 'manual',
       title: 'Traffic delay',
       description: 'Heavy traffic on route',
-      occurredAt: '2026-09-10T10:00:00Z',
+      occurredAt: '2026-08-20T10:00:00Z',
       metadata: { estimatedMinutes: 20 },
     });
 
@@ -142,7 +142,7 @@ async function run(): Promise<void> {
       tripStopId: DELIVERY_STOP,
       tripDocumentId: String(deliveryDocument.id),
       proofType: 'delivery',
-      capturedAt: '2026-09-11T16:00:00Z',
+      capturedAt: '2026-08-21T16:00:00Z',
       source: 'mobile',
       notes: 'Signed delivery receipt',
     });
@@ -151,7 +151,7 @@ async function run(): Promise<void> {
       tripStopId: DELIVERY_STOP,
       checkinType: 'delivery',
       source: 'mobile',
-      occurredAt: '2026-09-11T16:05:00Z',
+      occurredAt: '2026-08-21T16:05:00Z',
       notes: 'Delivery completed',
     });
 
@@ -160,7 +160,7 @@ async function run(): Promise<void> {
       tripProofId: String(deliveryProof.id),
       receivedByName: 'Gate Receiver',
       receivedByRole: 'Warehouse supervisor',
-      deliveredAt: '2026-09-11T16:05:00Z',
+      deliveredAt: '2026-08-21T16:05:00Z',
       status: 'accepted',
     });
     assert.equal(pod.status, 'accepted');
@@ -170,7 +170,7 @@ async function run(): Promise<void> {
       category: 'parking',
       amount: 45.5,
       currencyId: CURRENCY_BRL,
-      incurredAt: '2026-09-10T11:00:00Z',
+      incurredAt: '2026-08-20T11:00:00Z',
       merchant: 'Gate Parking',
     });
     const approvedExpense = await executionA.setExpenseStatus(TRIP_A, String(expense.id), {
@@ -184,7 +184,7 @@ async function run(): Promise<void> {
       road: 'SP-001',
       amount: 28.4,
       currencyId: CURRENCY_BRL,
-      occurredAt: '2026-09-10T12:00:00Z',
+      occurredAt: '2026-08-20T12:00:00Z',
       paymentMethod: 'tag',
       tagReference: 'TAG-GATE-001',
     });
@@ -199,7 +199,7 @@ async function run(): Promise<void> {
       currencyId: CURRENCY_BRL,
       odometerKm: 123456.7,
       station: 'Gate Fuel',
-      fueledAt: '2026-09-10T13:00:00Z',
+      fueledAt: '2026-08-20T13:00:00Z',
     });
     assert.equal(Number(fuel.total_amount), 625);
 
@@ -229,7 +229,7 @@ async function run(): Promise<void> {
       executionA.createEvent(TRIP_A, {
         eventType: 'note',
         title: 'Late mutation',
-        occurredAt: '2026-09-11T17:00:00Z',
+        occurredAt: '2026-08-21T17:00:00Z',
       }),
       /not allowed while status is completed/,
     );
