@@ -19,6 +19,7 @@ import {
 
 import { capacityAssets, drivers } from './capacity.js';
 import { currencies } from './currency.js';
+import { documents } from './documents.js';
 import { transportRequests } from './freight.js';
 import { users } from './identity.js';
 import { businessParties } from './master-data.js';
@@ -48,6 +49,7 @@ export const driverDocuments = pgTable(
   {
     ...tenantMutableColumns(),
     driverId: uuid('driver_id').notNull(),
+    documentId: uuid('document_id'),
     documentTypeId: uuid('document_type_id').notNull(),
     documentNumber: varchar('document_number', { length: 120 }),
     issuer: varchar('issuer', { length: 180 }),
@@ -63,6 +65,11 @@ export const driverDocuments = pgTable(
       columns: [table.tenantId, table.driverId],
       foreignColumns: [drivers.tenantId, drivers.id],
       name: 'driver_documents_driver_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.documentId],
+      foreignColumns: [documents.tenantId, documents.id],
+      name: 'driver_documents_document_fk',
     }).onDelete('restrict'),
     foreignKey({
       columns: [table.tenantId, table.documentTypeId],
@@ -81,6 +88,9 @@ export const driverDocuments = pgTable(
       'driver_documents_validation_status_check',
       sql`${table.validationStatus} in ('pending','validated','rejected','not_required')`,
     ),
+    uniqueIndex('driver_documents_tenant_document_unique')
+      .on(table.tenantId, table.documentId)
+      .where(sql`${table.documentId} IS NOT NULL`),
     index('driver_documents_tenant_driver_status_idx').on(
       table.tenantId,
       table.driverId,
@@ -476,6 +486,7 @@ export const capacityAssetDocuments = pgTable(
   {
     ...tenantMutableColumns(),
     assetId: uuid('asset_id').notNull(),
+    documentId: uuid('document_id'),
     documentTypeId: uuid('document_type_id').notNull(),
     documentNumber: varchar('document_number', { length: 120 }),
     issuer: varchar('issuer', { length: 180 }),
@@ -491,6 +502,11 @@ export const capacityAssetDocuments = pgTable(
       columns: [table.tenantId, table.assetId],
       foreignColumns: [capacityAssets.tenantId, capacityAssets.id],
       name: 'capacity_asset_documents_asset_fk',
+    }).onDelete('restrict'),
+    foreignKey({
+      columns: [table.tenantId, table.documentId],
+      foreignColumns: [documents.tenantId, documents.id],
+      name: 'capacity_asset_documents_document_fk',
     }).onDelete('restrict'),
     foreignKey({
       columns: [table.tenantId, table.documentTypeId],
@@ -509,6 +525,9 @@ export const capacityAssetDocuments = pgTable(
       'capacity_asset_documents_validation_status_check',
       sql`${table.validationStatus} in ('pending','validated','rejected','not_required')`,
     ),
+    uniqueIndex('capacity_asset_documents_tenant_document_unique')
+      .on(table.tenantId, table.documentId)
+      .where(sql`${table.documentId} IS NOT NULL`),
     index('capacity_asset_documents_tenant_asset_status_idx').on(
       table.tenantId,
       table.assetId,

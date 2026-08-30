@@ -1,0 +1,170 @@
+name: Neon Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Shared Neon environment to migrate
+        required: true
+        default: development
+        type: choice
+        options:
+          - development
+          - staging
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-migrate-${{ inputs.environment }}
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  migrate:
+    name: Migrate ${{ inputs.environment }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate target
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.environment }}" in
+            development|staging) ;;
+            *) echo "Only development and staging are allowed." >&2; exit 1 ;;
+          esac
+
+      - name: Resolve admin connection
+        id: admin
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ inputs.environment }}
+          database: neondb
+          role: neondb_owner
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Bootstrap migration capability
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator connection
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ inputs.environment }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply versioned Drizzle migrations
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          pnpm --filter @nexora/database db:check
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          expected="$(jq '.entries | length' packages/database/migrations/meta/_journal.json)"
+          actual="$(psql "$OWNER_DATABASE_URL" -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
+          [[ "$actual" == "$expected" ]] || {
+            echo "Migration ledger mismatch: expected $expected, found $actual" >&2
+            exit 1
+          }
+          echo "EXPECTED_MIGRATIONS=$expected" >> "$GITHUB_ENV"
+
+      - name: Verify Wave 0018 document baseline
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            tables_count integer;
+            rls_count integer;
+          BEGIN
+            SELECT count(*) INTO tables_count
+              FROM information_schema.tables
+             WHERE table_schema='public'
+               AND table_name IN ('documents','document_versions','document_validations','business_party_documents','transport_request_documents');
+            IF tables_count <> 5 THEN
+              RAISE EXCEPTION 'Wave 0018 document tables incomplete: %', tables_count;
+            END IF;
+
+            SELECT count(*) INTO rls_count
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public'
+               AND c.relname IN ('documents','document_versions','document_validations','business_party_documents','transport_request_documents')
+               AND c.relrowsecurity;
+            IF rls_count <> 5 THEN
+              RAISE EXCEPTION 'Wave 0018 document RLS incomplete: %', rls_count;
+            END IF;
+          END $$;
+          SQL
+
+      - name: Migration summary
+        run: |
+          {
+            echo "## Neon migration passed"
+            echo ""
+            echo "- Environment: ${{ inputs.environment }}"
+            echo "- Versioned migrations: ${EXPECTED_MIGRATIONS}"
+            echo "- Wave 0018 document baseline: verified"
+            echo "- Production: not addressable by this workflow"
+          } >> "$GITHUB_STEP_SUMMARY"
