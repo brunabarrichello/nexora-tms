@@ -23,119 +23,73 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path('.github/workflows/neon-pr-gate.yml')
           text = path.read_text()
 
-          def once(old, new, label):
+          def sub_once(pattern, replacement, label, flags=0):
               global text
-              count = text.count(old)
+              text, count = re.subn(pattern, replacement, text, count=1, flags=flags)
               if count != 1:
                   raise SystemExit(f'{label}: expected one match, found {count}')
-              text = text.replace(old, new, 1)
 
-          old = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
-               );
-            IF table_count <> 34 THEN
-              RAISE EXCEPTION 'Expected 34 application tables, found %', table_count;
-          """
-          new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
-                 'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
-               );
-            IF table_count <> 44 THEN
-              RAISE EXCEPTION 'Expected 44 application tables, found %', table_count;
-          """
-          once(old, new, 'table inventory')
+          sub_once(
+              r"'transport_contract_events'(\s*\n\s*\);\s*\n\s*IF table_count <> 34 THEN)",
+              "'transport_contract_events',\n                 'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'\\1",
+              'table inventory list',
+          )
+          sub_once(r'IF table_count <> 34 THEN', 'IF table_count <> 44 THEN', 'table count')
+          sub_once(r'Expected 34 application tables', 'Expected 44 application tables', 'table count message')
 
-          old = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
-               )
-               AND c.relrowsecurity;
-            IF rls_count <> 31 THEN
-              RAISE EXCEPTION 'Expected RLS on 31 tenant-scoped tables, found %', rls_count;
-          """
-          new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
-                 'vehicle_types','body_types','cargo_types','package_types','document_types','tags'
-               )
-               AND c.relrowsecurity;
-            IF rls_count <> 37 THEN
-              RAISE EXCEPTION 'Expected RLS on 37 tenant-scoped tables, found %', rls_count;
-          """
-          once(old, new, 'RLS inventory')
+          sub_once(
+              r"'transport_contract_events'(\s*\n\s*\)\s*\n\s*AND c\.relrowsecurity;\s*\n\s*IF rls_count <> 31 THEN)",
+              "'transport_contract_events',\n                 'vehicle_types','body_types','cargo_types','package_types','document_types','tags'\\1",
+              'RLS inventory list',
+          )
+          sub_once(r'IF rls_count <> 31 THEN', 'IF rls_count <> 37 THEN', 'RLS count')
+          sub_once(r'Expected RLS on 31 tenant-scoped tables', 'Expected RLS on 37 tenant-scoped tables', 'RLS count message')
 
-          once(
-              """            IF migration_count <> 15 THEN
-              RAISE EXCEPTION 'Expected 15 Drizzle migration records, found %', migration_count;
-              """,
-              """            IF migration_count <> 16 THEN
-              RAISE EXCEPTION 'Expected 16 Drizzle migration records, found %', migration_count;
-              """,
-              'migration ledger',
+          sub_once(r'IF migration_count <> 15 THEN', 'IF migration_count <> 16 THEN', 'migration count')
+          sub_once(r'Expected 15 Drizzle migration records', 'Expected 16 Drizzle migration records', 'migration count message')
+
+          sub_once(
+              r"'transport_contract_events'(\s*\n\s*\)\s*\n\s*AND r\.rolname='nexora_app')",
+              "'transport_contract_events',\n                   'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'\\1",
+              'ownership inventory',
           )
 
-          old = """                   'transport_request_stops','transport_request_cargo_profiles',
-                   'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
-                 )
-                 AND r.rolname='nexora_app'
-          """
-          new = """                   'transport_request_stops','transport_request_cargo_profiles',
-                   'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
-                   'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
-                 )
-                 AND r.rolname='nexora_app'
-          """
-          once(old, new, 'ownership inventory')
-
-          old = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','INSERT')
-               OR has_table_privilege('nexora_app','public.transport_contract_events','UPDATE')
-               OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE') THEN
-          """
-          new = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','INSERT')
-               OR has_table_privilege('nexora_app','public.transport_contract_events','UPDATE')
-               OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.countries','SELECT')
-               OR has_table_privilege('nexora_app','public.countries','INSERT')
-               OR has_table_privilege('nexora_app','public.countries','UPDATE')
-               OR has_table_privilege('nexora_app','public.countries','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.states','SELECT')
-               OR has_table_privilege('nexora_app','public.states','INSERT')
-               OR has_table_privilege('nexora_app','public.states','UPDATE')
-               OR has_table_privilege('nexora_app','public.states','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.cities','SELECT')
-               OR has_table_privilege('nexora_app','public.cities','INSERT')
-               OR has_table_privilege('nexora_app','public.cities','UPDATE')
-               OR has_table_privilege('nexora_app','public.cities','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.units_of_measure','SELECT')
-               OR has_table_privilege('nexora_app','public.units_of_measure','INSERT')
-               OR has_table_privilege('nexora_app','public.units_of_measure','UPDATE')
-               OR has_table_privilege('nexora_app','public.units_of_measure','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.vehicle_types','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.vehicle_types','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.vehicle_types','UPDATE')
-               OR has_table_privilege('nexora_app','public.vehicle_types','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.body_types','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.body_types','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.body_types','UPDATE')
-               OR has_table_privilege('nexora_app','public.body_types','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.cargo_types','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.cargo_types','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.cargo_types','UPDATE')
-               OR has_table_privilege('nexora_app','public.cargo_types','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.package_types','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.package_types','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.package_types','UPDATE')
-               OR has_table_privilege('nexora_app','public.package_types','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.document_types','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.document_types','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.document_types','UPDATE')
-               OR has_table_privilege('nexora_app','public.document_types','DELETE')
-               OR NOT has_table_privilege('nexora_app','public.tags','SELECT')
-               OR NOT has_table_privilege('nexora_app','public.tags','INSERT')
-               OR NOT has_table_privilege('nexora_app','public.tags','UPDATE')
-               OR has_table_privilege('nexora_app','public.tags','DELETE') THEN
-          """
-          once(old, new, 'privilege matrix')
+          privilege_anchor = "OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE') THEN"
+          privilege_lines = [
+              "OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE')",
+              "OR NOT has_table_privilege('nexora_app','public.countries','SELECT')",
+              "OR has_table_privilege('nexora_app','public.countries','INSERT')",
+              "OR has_table_privilege('nexora_app','public.countries','UPDATE')",
+              "OR has_table_privilege('nexora_app','public.countries','DELETE')",
+              "OR NOT has_table_privilege('nexora_app','public.states','SELECT')",
+              "OR has_table_privilege('nexora_app','public.states','INSERT')",
+              "OR has_table_privilege('nexora_app','public.states','UPDATE')",
+              "OR has_table_privilege('nexora_app','public.states','DELETE')",
+              "OR NOT has_table_privilege('nexora_app','public.cities','SELECT')",
+              "OR has_table_privilege('nexora_app','public.cities','INSERT')",
+              "OR has_table_privilege('nexora_app','public.cities','UPDATE')",
+              "OR has_table_privilege('nexora_app','public.cities','DELETE')",
+              "OR NOT has_table_privilege('nexora_app','public.units_of_measure','SELECT')",
+              "OR has_table_privilege('nexora_app','public.units_of_measure','INSERT')",
+              "OR has_table_privilege('nexora_app','public.units_of_measure','UPDATE')",
+              "OR has_table_privilege('nexora_app','public.units_of_measure','DELETE')",
+          ]
+          for table in ['vehicle_types','body_types','cargo_types','package_types','document_types','tags']:
+              privilege_lines.extend([
+                  f"OR NOT has_table_privilege('nexora_app','public.{table}','SELECT')",
+                  f"OR NOT has_table_privilege('nexora_app','public.{table}','INSERT')",
+                  f"OR NOT has_table_privilege('nexora_app','public.{table}','UPDATE')",
+                  f"OR has_table_privilege('nexora_app','public.{table}','DELETE')",
+              ])
+          privilege_replacement = ('\n               '.join(privilege_lines)) + ' THEN'
+          if text.count(privilege_anchor) != 1:
+              raise SystemExit(f'privilege matrix anchor: expected one match, found {text.count(privilege_anchor)}')
+          text = text.replace(privilege_anchor, privilege_replacement, 1)
 
           path.write_text(text)
           PY
@@ -146,6 +100,7 @@ jobs:
           grep -q "Expected RLS on 37 tenant-scoped tables" .github/workflows/neon-pr-gate.yml
           grep -q "Expected 16 Drizzle migration records" .github/workflows/neon-pr-gate.yml
           grep -q "public.vehicle_types" .github/workflows/neon-pr-gate.yml
+          grep -q "public.countries" .github/workflows/neon-pr-gate.yml
 
       - name: Commit gate evolution
         run: |
