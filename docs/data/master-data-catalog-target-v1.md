@@ -66,18 +66,18 @@ UNIQUE (tenant_id,code)
 
 These tables remove uncontrolled free-text classifications and establish stable keys for later modules.
 
-| Table | Scope / fields beyond profile | PK/FK and cardinality | Indexes / constraints / lifecycle |
-| --- | --- | --- | --- |
-| `countries` | `GLOBAL_LOOKUP`; `code varchar(2)`, `iso3 varchar(3)`, `numeric_code varchar(3) NULL` | PK id; 1:N states | unique code/iso3; uppercase ISO checks; deactivate, never user-delete |
-| `states` | `GLOBAL_LOOKUP`; `country_id uuid`, `code varchar(8)`, `name varchar(120)` | FK country; country 1:N states | unique `(country_id,code)`; index country/name |
-| `cities` | `GLOBAL_LOOKUP`; `state_id uuid`, `ibge_code varchar(10) NULL`, `name varchar(160)`, `latitude numeric(9,6) NULL`, `longitude numeric(10,6) NULL` | FK state; state 1:N cities | unique IBGE when non-null; index state/name; lat/lon range checks |
-| `units_of_measure` | `GLOBAL_LOOKUP`; `code varchar(16)`, `name varchar(80)`, `dimension varchar(32)` | no tenant FK | unique code; dimension check (`mass`,`volume`,`length`,`count`,`time`,`other`) |
-| `vehicle_types` | `TENANT_LOOKUP`; `description varchar(300) NULL`, `default_max_weight_kg numeric(14,3) NULL` | tenant 1:N types; target FK from capacity/cargo | positive optional weight; partial/live unique if soft-delete later; deactivate rather than delete |
-| `body_types` | `TENANT_LOOKUP`; `description varchar(300) NULL`, `is_closed boolean`, `supports_side_loading boolean`, `supports_rear_loading boolean` | tenant 1:N body types | tenant/code unique |
-| `cargo_types` | `TENANT_LOOKUP`; `description varchar(300) NULL`, `requires_special_handling boolean` | tenant 1:N cargo types | tenant/code unique |
-| `package_types` | `TENANT_LOOKUP`; `description varchar(300) NULL`, `stackable_default boolean NULL` | tenant 1:N package types | tenant/code unique |
-| `document_types` | `TENANT_LOOKUP`; `subject_scope varchar(32)`, `has_expiry boolean`, `requires_validation boolean` | tenant 1:N doc types | scope check (`party`,`driver`,`asset`,`request`,`trip`,`financial`,`other`) |
-| `tags` | `TENANT_LOOKUP`; `description varchar(300) NULL` | tenant 1:N tags; typed join tables below | code unique inside tenant; deactivate, no deletion if referenced |
+| Table              | Scope / fields beyond profile                                                                                                                     | PK/FK and cardinality                           | Indexes / constraints / lifecycle                                                                 |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `countries`        | `GLOBAL_LOOKUP`; `code varchar(2)`, `iso3 varchar(3)`, `numeric_code varchar(3) NULL`                                                             | PK id; 1:N states                               | unique code/iso3; uppercase ISO checks; deactivate, never user-delete                             |
+| `states`           | `GLOBAL_LOOKUP`; `country_id uuid`, `code varchar(8)`, `name varchar(120)`                                                                        | FK country; country 1:N states                  | unique `(country_id,code)`; index country/name                                                    |
+| `cities`           | `GLOBAL_LOOKUP`; `state_id uuid`, `ibge_code varchar(10) NULL`, `name varchar(160)`, `latitude numeric(9,6) NULL`, `longitude numeric(10,6) NULL` | FK state; state 1:N cities                      | unique IBGE when non-null; index state/name; lat/lon range checks                                 |
+| `units_of_measure` | `GLOBAL_LOOKUP`; `code varchar(16)`, `name varchar(80)`, `dimension varchar(32)`                                                                  | no tenant FK                                    | unique code; dimension check (`mass`,`volume`,`length`,`count`,`time`,`other`)                    |
+| `vehicle_types`    | `TENANT_LOOKUP`; `description varchar(300) NULL`, `default_max_weight_kg numeric(14,3) NULL`                                                      | tenant 1:N types; target FK from capacity/cargo | positive optional weight; partial/live unique if soft-delete later; deactivate rather than delete |
+| `body_types`       | `TENANT_LOOKUP`; `description varchar(300) NULL`, `is_closed boolean`, `supports_side_loading boolean`, `supports_rear_loading boolean`           | tenant 1:N body types                           | tenant/code unique                                                                                |
+| `cargo_types`      | `TENANT_LOOKUP`; `description varchar(300) NULL`, `requires_special_handling boolean`                                                             | tenant 1:N cargo types                          | tenant/code unique                                                                                |
+| `package_types`    | `TENANT_LOOKUP`; `description varchar(300) NULL`, `stackable_default boolean NULL`                                                                | tenant 1:N package types                        | tenant/code unique                                                                                |
+| `document_types`   | `TENANT_LOOKUP`; `subject_scope varchar(32)`, `has_expiry boolean`, `requires_validation boolean`                                                 | tenant 1:N doc types                            | scope check (`party`,`driver`,`asset`,`request`,`trip`,`financial`,`other`)                       |
+| `tags`             | `TENANT_LOOKUP`; `description varchar(300) NULL`                                                                                                  | tenant 1:N tags; typed join tables below        | code unique inside tenant; deactivate, no deletion if referenced                                  |
 
 ### `0015` compatibility migrations
 
@@ -89,13 +89,13 @@ Also in `0015`: validate existing `business_party_audit.actor_user_id`, then add
 
 ### 3.1 Organization and management dimensions
 
-| Table | Specific fields | PK/FK / cardinality | Indexes / constraints / lifecycle |
-| --- | --- | --- | --- |
-| `departments` | `TENANT_MUTABLE`; `organization_id uuid`; `business_unit_id uuid NULL`; `code varchar(80)`; `name varchar(160)`; `is_active boolean` | tenant-aware FK org; optional tenant-aware unit; org 1:N departments | unique `(tenant_id,organization_id,code)`; index tenant/unit; soft-delete optional only after UI removal exists |
-| `cost_centers` | `TENANT_MUTABLE`; org/unit IDs; `code varchar(80)`; `name varchar(160)`; `is_active boolean` | org 1:N cost centers; optional unit | unique tenant/org/code; tenant/unit index |
-| `number_sequences` | `TENANT_MUTABLE`; `scope varchar(64)`; `prefix varchar(32) NULL`; `next_value bigint`; `padding smallint` | tenant 1:N sequences | unique tenant/scope; next_value > 0; padding 0..20; update under row lock |
-| `module_settings` | `TENANT_MUTABLE`; `module varchar(64)`; `settings jsonb` | tenant 1:N module settings | unique tenant/module; GIN only if real JSON-path queries appear |
-| `feature_flags` | `TENANT_MUTABLE`; `key varchar(120)`; `enabled boolean`; `configuration jsonb` | tenant 1:N flags | unique tenant/key |
+| Table              | Specific fields                                                                                                                      | PK/FK / cardinality                                                  | Indexes / constraints / lifecycle                                                                               |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `departments`      | `TENANT_MUTABLE`; `organization_id uuid`; `business_unit_id uuid NULL`; `code varchar(80)`; `name varchar(160)`; `is_active boolean` | tenant-aware FK org; optional tenant-aware unit; org 1:N departments | unique `(tenant_id,organization_id,code)`; index tenant/unit; soft-delete optional only after UI removal exists |
+| `cost_centers`     | `TENANT_MUTABLE`; org/unit IDs; `code varchar(80)`; `name varchar(160)`; `is_active boolean`                                         | org 1:N cost centers; optional unit                                  | unique tenant/org/code; tenant/unit index                                                                       |
+| `number_sequences` | `TENANT_MUTABLE`; `scope varchar(64)`; `prefix varchar(32) NULL`; `next_value bigint`; `padding smallint`                            | tenant 1:N sequences                                                 | unique tenant/scope; next_value > 0; padding 0..20; update under row lock                                       |
+| `module_settings`  | `TENANT_MUTABLE`; `module varchar(64)`; `settings jsonb`                                                                             | tenant 1:N module settings                                           | unique tenant/module; GIN only if real JSON-path queries appear                                                 |
+| `feature_flags`    | `TENANT_MUTABLE`; `key varchar(120)`; `enabled boolean`; `configuration jsonb`                                                       | tenant 1:N flags                                                     | unique tenant/key                                                                                               |
 
 ### 3.2 First-class operational locations
 
@@ -130,15 +130,15 @@ is_active              boolean NOT NULL default true
 
 ### 3.3 Party grouping, requirements and service model
 
-| Table | Specific fields | Relationships | Constraints / indexes |
-| --- | --- | --- | --- |
-| `business_party_groups` | tenant mutable; `code varchar(80)`, `name varchar(200)`, `group_type varchar(32)`, `is_active boolean` | tenant 1:N groups | unique tenant/code; type e.g. economic/commercial/operational |
-| `business_party_group_members` | `tenant_id`, `group_id`, `party_id`, `starts_on date NULL`, `ends_on date NULL`, `created_at` | group N:M party | composite PK `(tenant_id,group_id,party_id)` or temporal surrogate if multiple periods required; end >= start |
-| `business_party_requirements` | tenant mutable; `party_id`; `requirement_type varchar(64)`; `value_text varchar(1000) NULL`; `value_json jsonb NULL`; `is_mandatory boolean`; `valid_from date NULL`; `valid_until date NULL` | party 1:N requirements | index tenant/party/type; valid range; exactly one value representation when required |
-| `business_party_document_requirements` | tenant mutable; `party_id`; `document_type_id`; `subject_scope`; `is_mandatory`; `lead_days integer default 30` | party N:M document types | unique tenant/party/doc/scope; lead_days >= 0 |
-| `business_party_service_areas` | tenant mutable; `party_id`; `state_id uuid NULL`; `city_id uuid NULL`; `radius_km numeric(10,2) NULL`; `direction varchar(16)` | party 1:N service areas | at least state or city; radius > 0 if present; direction inbound/outbound/both |
-| `business_party_billing_rules` | tenant mutable; `party_id`; `rule_type varchar(64)`; `configuration jsonb`; `valid_from date`; `valid_until date NULL` | party 1:N rules | valid date range; index party/type/live |
-| `business_party_credit_limits` | tenant mutable; `party_id`; `currency_code varchar(3)`; `limit_amount numeric(18,2)`; `valid_from date`; `valid_until date NULL` | party 1:N historical limits | amount >= 0; currency check; no overlapping active range per currency where practical |
+| Table                                  | Specific fields                                                                                                                                                                               | Relationships               | Constraints / indexes                                                                                         |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `business_party_groups`                | tenant mutable; `code varchar(80)`, `name varchar(200)`, `group_type varchar(32)`, `is_active boolean`                                                                                        | tenant 1:N groups           | unique tenant/code; type e.g. economic/commercial/operational                                                 |
+| `business_party_group_members`         | `tenant_id`, `group_id`, `party_id`, `starts_on date NULL`, `ends_on date NULL`, `created_at`                                                                                                 | group N:M party             | composite PK `(tenant_id,group_id,party_id)` or temporal surrogate if multiple periods required; end >= start |
+| `business_party_requirements`          | tenant mutable; `party_id`; `requirement_type varchar(64)`; `value_text varchar(1000) NULL`; `value_json jsonb NULL`; `is_mandatory boolean`; `valid_from date NULL`; `valid_until date NULL` | party 1:N requirements      | index tenant/party/type; valid range; exactly one value representation when required                          |
+| `business_party_document_requirements` | tenant mutable; `party_id`; `document_type_id`; `subject_scope`; `is_mandatory`; `lead_days integer default 30`                                                                               | party N:M document types    | unique tenant/party/doc/scope; lead_days >= 0                                                                 |
+| `business_party_service_areas`         | tenant mutable; `party_id`; `state_id uuid NULL`; `city_id uuid NULL`; `radius_km numeric(10,2) NULL`; `direction varchar(16)`                                                                | party 1:N service areas     | at least state or city; radius > 0 if present; direction inbound/outbound/both                                |
+| `business_party_billing_rules`         | tenant mutable; `party_id`; `rule_type varchar(64)`; `configuration jsonb`; `valid_from date`; `valid_until date NULL`                                                                        | party 1:N rules             | valid date range; index party/type/live                                                                       |
+| `business_party_credit_limits`         | tenant mutable; `party_id`; `currency_code varchar(3)`; `limit_amount numeric(18,2)`; `valid_from date`; `valid_until date NULL`                                                              | party 1:N historical limits | amount >= 0; currency check; no overlapping active range per currency where practical                         |
 
 ### 3.4 Tenant-owned commodity catalog
 
@@ -190,33 +190,33 @@ The definition FK is tenant-aware. `subject_id` is a deliberate controlled-polym
 
 ### 4.1 Driver extensions
 
-| Table | Specific fields | Relationships / cardinality | Constraints / indexes / lifecycle |
-| --- | --- | --- | --- |
-| `driver_documents` | tenant mutable; `driver_id`, `document_type_id`, `document_id` | driver 1:N document links | unique live driver/doc-type/doc as appropriate; typed FKs; no duplicate file bytes |
-| `driver_courses` | tenant mutable; `driver_id`; `course_type varchar(80)`; `certificate_number varchar(120) NULL`; `issued_on date`; `expires_on date NULL`; `document_id uuid NULL` | driver 1:N courses | expiry >= issue; index expiry; soft delete only for erroneous record, not expiry |
-| `driver_availability` | tenant mutable/current-state; `driver_id`; `status varchar(32)`; `available_from timestamptz`; `current_city_id uuid NULL`; `destination_city_id uuid NULL`; `max_distance_km numeric(10,2) NULL`; `notes varchar(500) NULL` | driver 1:0/1 current availability | unique tenant/driver; status check; distance >= 0; indexes city/status/available_from |
-| `driver_bank_accounts` | tenant mutable; driver; bank code/branch/account fields; `account_type`; `holder_tax_id`; `is_default` | driver 1:N accounts | only one default live account per driver via partial unique; sensitive-field access restricted |
-| `driver_pix_keys` | tenant mutable; driver; `key_type`; encrypted/tokenized `key_value`; `is_default` | driver 1:N keys | unique normalized key hash; one default; never expose raw secrets in audit |
-| `driver_emergency_contacts` | tenant mutable; driver; name/relation/phone | driver 1:N | phone non-empty; soft-delete capable |
-| `driver_blocks` | tenant mutable; driver; `reason_code`; `reason`; `starts_at`; `ends_at NULL`; `created_by_user_id` | driver 1:N blocks | period valid; partial unique can prevent duplicate active block by reason; history retained |
-| `driver_ratings` | tenant event-like; driver; optional request/trip; `score numeric(3,2)`; `dimension varchar(64)`; note | driver 1:N ratings | score range; indexes tenant/driver/dimension/time; immutable after acceptance |
+| Table                       | Specific fields                                                                                                                                                                                                              | Relationships / cardinality       | Constraints / indexes / lifecycle                                                              |
+| --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `driver_documents`          | tenant mutable; `driver_id`, `document_type_id`, `document_id`                                                                                                                                                               | driver 1:N document links         | unique live driver/doc-type/doc as appropriate; typed FKs; no duplicate file bytes             |
+| `driver_courses`            | tenant mutable; `driver_id`; `course_type varchar(80)`; `certificate_number varchar(120) NULL`; `issued_on date`; `expires_on date NULL`; `document_id uuid NULL`                                                            | driver 1:N courses                | expiry >= issue; index expiry; soft delete only for erroneous record, not expiry               |
+| `driver_availability`       | tenant mutable/current-state; `driver_id`; `status varchar(32)`; `available_from timestamptz`; `current_city_id uuid NULL`; `destination_city_id uuid NULL`; `max_distance_km numeric(10,2) NULL`; `notes varchar(500) NULL` | driver 1:0/1 current availability | unique tenant/driver; status check; distance >= 0; indexes city/status/available_from          |
+| `driver_bank_accounts`      | tenant mutable; driver; bank code/branch/account fields; `account_type`; `holder_tax_id`; `is_default`                                                                                                                       | driver 1:N accounts               | only one default live account per driver via partial unique; sensitive-field access restricted |
+| `driver_pix_keys`           | tenant mutable; driver; `key_type`; encrypted/tokenized `key_value`; `is_default`                                                                                                                                            | driver 1:N keys                   | unique normalized key hash; one default; never expose raw secrets in audit                     |
+| `driver_emergency_contacts` | tenant mutable; driver; name/relation/phone                                                                                                                                                                                  | driver 1:N                        | phone non-empty; soft-delete capable                                                           |
+| `driver_blocks`             | tenant mutable; driver; `reason_code`; `reason`; `starts_at`; `ends_at NULL`; `created_by_user_id`                                                                                                                           | driver 1:N blocks                 | period valid; partial unique can prevent duplicate active block by reason; history retained    |
+| `driver_ratings`            | tenant event-like; driver; optional request/trip; `score numeric(3,2)`; `dimension varchar(64)`; note                                                                                                                        | driver 1:N ratings                | score range; indexes tenant/driver/dimension/time; immutable after acceptance                  |
 
 `driver_vehicle_links` from the initial concept is **not created** because `capacity_assignments` already owns the driver × vehicle × carrier temporal relationship.
 
 ### 4.2 Capacity asset extensions
 
-| Table | Specific fields | Relationships | Constraints / indexes |
-| --- | --- | --- | --- |
-| `capacity_asset_capabilities` | `tenant_id`, `asset_id`; booleans `refrigerated`,`sealed`,`side_loading`,`rear_loading`,`dangerous_goods`,`food_grade`; `max_pallets integer NULL`; optional temperature min/max numeric | asset 1:0/1 capabilities | PK tenant/asset; positive pallets; temp min <= max |
-| `capacity_asset_documents` | asset, document type, document | asset 1:N docs | typed tenant-aware FKs |
-| `capacity_asset_insurances` | tenant mutable; asset; insurer party NULL; policy number; starts/ends; coverage amount/currency; document | asset 1:N policies | dates/amount valid; expiry index |
-| `capacity_asset_maintenance` | tenant mutable; asset; `maintenance_type`; planned/performed timestamps; odometer numeric NULL; cost numeric(18,2) NULL; provider party NULL; status | asset 1:N maintenance | non-negative odometer/cost; indexes next/planned dates |
-| `capacity_asset_maintenance_items` | tenant; maintenance_id; `item_type`; description; quantity numeric; amount numeric | maintenance 1:N items | quantity > 0; amount >= 0 |
-| `capacity_asset_inspections` | tenant mutable; asset; inspector user NULL; performed_at; result; checklist jsonb; notes | asset 1:N inspections | result check; immutable after finalized status |
-| `capacity_asset_availability` | tenant current-state; asset; status; available_from; current_city; notes | asset 1:0/1 | unique tenant/asset; indexes status/city/time |
-| `capacity_asset_locations` | tenant event; asset; observed_at; lat numeric(9,6); lon numeric(10,6); source varchar(32); accuracy_m numeric NULL | asset 1:N positions | lat/lon/accuracy checks; index `(tenant_id,asset_id,observed_at desc)`; BRIN on observed_at at scale |
-| `capacity_asset_costs` | tenant event/mutable-approved; asset; cost_type; incurred_on; amount/currency; request/trip optional; note | asset 1:N costs | amount >= 0; indexes asset/date/type |
-| `capacity_asset_blocks` | asset; reason; period; actor | asset 1:N blocks | same temporal rule as driver blocks |
+| Table                              | Specific fields                                                                                                                                                                          | Relationships            | Constraints / indexes                                                                                |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------- |
+| `capacity_asset_capabilities`      | `tenant_id`, `asset_id`; booleans `refrigerated`,`sealed`,`side_loading`,`rear_loading`,`dangerous_goods`,`food_grade`; `max_pallets integer NULL`; optional temperature min/max numeric | asset 1:0/1 capabilities | PK tenant/asset; positive pallets; temp min <= max                                                   |
+| `capacity_asset_documents`         | asset, document type, document                                                                                                                                                           | asset 1:N docs           | typed tenant-aware FKs                                                                               |
+| `capacity_asset_insurances`        | tenant mutable; asset; insurer party NULL; policy number; starts/ends; coverage amount/currency; document                                                                                | asset 1:N policies       | dates/amount valid; expiry index                                                                     |
+| `capacity_asset_maintenance`       | tenant mutable; asset; `maintenance_type`; planned/performed timestamps; odometer numeric NULL; cost numeric(18,2) NULL; provider party NULL; status                                     | asset 1:N maintenance    | non-negative odometer/cost; indexes next/planned dates                                               |
+| `capacity_asset_maintenance_items` | tenant; maintenance_id; `item_type`; description; quantity numeric; amount numeric                                                                                                       | maintenance 1:N items    | quantity > 0; amount >= 0                                                                            |
+| `capacity_asset_inspections`       | tenant mutable; asset; inspector user NULL; performed_at; result; checklist jsonb; notes                                                                                                 | asset 1:N inspections    | result check; immutable after finalized status                                                       |
+| `capacity_asset_availability`      | tenant current-state; asset; status; available_from; current_city; notes                                                                                                                 | asset 1:0/1              | unique tenant/asset; indexes status/city/time                                                        |
+| `capacity_asset_locations`         | tenant event; asset; observed_at; lat numeric(9,6); lon numeric(10,6); source varchar(32); accuracy_m numeric NULL                                                                       | asset 1:N positions      | lat/lon/accuracy checks; index `(tenant_id,asset_id,observed_at desc)`; BRIN on observed_at at scale |
+| `capacity_asset_costs`             | tenant event/mutable-approved; asset; cost_type; incurred_on; amount/currency; request/trip optional; note                                                                               | asset 1:N costs          | amount >= 0; indexes asset/date/type                                                                 |
+| `capacity_asset_blocks`            | asset; reason; period; actor                                                                                                                                                             | asset 1:N blocks         | same temporal rule as driver blocks                                                                  |
 
 ## 5. Wave `0018` — document core
 
@@ -495,18 +495,18 @@ Trip, asset, role (`tractor|vehicle|implement|support`), starts/ends.
 
 ## 10. Wave `0023` — Viagens execution
 
-| Table | Core fields | Relationships / rules |
-| --- | --- | --- |
-| `trip_events` | trip; type; occurred_at; optional stop; payload JSON; actor | trip 1:N; immutable; index trip/occurred/type |
-| `trip_checkins` | trip; stop; driver; type (`arrival|departure|manual`); occurred_at; lat/lon; proof document NULL | stop 1:N; geo checks; immutable |
-| `trip_locations` | trip; asset NULL; driver NULL; observed_at; lat/lon; speed numeric; heading numeric; source | trip 1:N high-volume positions; at least asset or driver; BRIN/time + trip/time indexes at scale |
-| `trip_checklists` | trip; stop NULL; checklist_type; status; performed_by; performed_at; result JSON | trip 1:N; finalized checklist immutable |
-| `trip_expenses` | trip; expense_type; incurred_at; amount numeric(18,2); currency; paid_by party/user; document NULL | trip 1:N; amount >= 0 |
-| `trip_tolls` | trip; stop/segment NULL; occurred_at; plaza/name; amount/currency; payment method | trip 1:N; amount >= 0 |
-| `trip_fuel` | trip; asset; occurred_at; liters numeric(12,3); amount numeric(18,2); odometer numeric; station party/location NULL | trip 1:N; positive liters; non-negative values |
-| `trip_proofs` | trip; stop/request; proof_type; document; captured_at; captured_by | trip/stop 1:N proofs; typed document FK |
-| `trip_delivery_proofs` | trip; stop; request; receiver_name; receiver_document_hash NULL; delivered_at; document | delivery stop 1:0..N POD versions; immutable accepted proof |
-| `trip_documents` | trip + document | N:M typed link; composite PK/FKs |
+| Table                  | Core fields                                                                                                         | Relationships / rules                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `trip_events`          | trip; type; occurred_at; optional stop; payload JSON; actor                                                         | trip 1:N; immutable; index trip/occurred/type                                                    |
+| `trip_checkins`        | trip; stop; driver; type (`arrival                                                                                  | departure                                                                                        | manual`); occurred_at; lat/lon; proof document NULL | stop 1:N; geo checks; immutable |
+| `trip_locations`       | trip; asset NULL; driver NULL; observed_at; lat/lon; speed numeric; heading numeric; source                         | trip 1:N high-volume positions; at least asset or driver; BRIN/time + trip/time indexes at scale |
+| `trip_checklists`      | trip; stop NULL; checklist_type; status; performed_by; performed_at; result JSON                                    | trip 1:N; finalized checklist immutable                                                          |
+| `trip_expenses`        | trip; expense_type; incurred_at; amount numeric(18,2); currency; paid_by party/user; document NULL                  | trip 1:N; amount >= 0                                                                            |
+| `trip_tolls`           | trip; stop/segment NULL; occurred_at; plaza/name; amount/currency; payment method                                   | trip 1:N; amount >= 0                                                                            |
+| `trip_fuel`            | trip; asset; occurred_at; liters numeric(12,3); amount numeric(18,2); odometer numeric; station party/location NULL | trip 1:N; positive liters; non-negative values                                                   |
+| `trip_proofs`          | trip; stop/request; proof_type; document; captured_at; captured_by                                                  | trip/stop 1:N proofs; typed document FK                                                          |
+| `trip_delivery_proofs` | trip; stop; request; receiver_name; receiver_document_hash NULL; delivered_at; document                             | delivery stop 1:0..N POD versions; immutable accepted proof                                      |
+| `trip_documents`       | trip + document                                                                                                     | N:M typed link; composite PK/FKs                                                                 |
 
 ## 11. Wave `0024` — transversal audit and durable integration events
 
@@ -553,35 +553,35 @@ Tenant; job type; payload; status; run_at; attempt/max_attempts; locked_at/by; e
 
 These tables are catalogued now so Trips/Pricing do not later require a competing route model.
 
-| Table | Core fields / relationships |
-| --- | --- |
-| `routes` | tenant mutable; code/name; origin/destination location/city; distance_km; duration_minutes; provider/reference; active |
-| `route_segments` | route 1:N; sequence; origin/destination; distance/duration; road identifiers |
-| `route_tolls` | route/segment; toll plaza/location; vehicle type; amount/currency; effective dates |
-| `route_restrictions` | route/segment; restriction type; vehicle/body/weight/dimension criteria; valid dates |
-| `route_risks` | route/segment; risk type/severity; source; valid dates; notes |
-| `route_costs` | route; cost type; amount/currency; valid dates; source |
-| `route_performance` | route/lane/date bucket; trips; avg transit; delay rate; cost/revenue metrics; projection/aggregate |
-| `route_preferences` | tenant/customer/carrier optional; route preference/exclusion and validity |
+| Table                | Core fields / relationships                                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `routes`             | tenant mutable; code/name; origin/destination location/city; distance_km; duration_minutes; provider/reference; active |
+| `route_segments`     | route 1:N; sequence; origin/destination; distance/duration; road identifiers                                           |
+| `route_tolls`        | route/segment; toll plaza/location; vehicle type; amount/currency; effective dates                                     |
+| `route_restrictions` | route/segment; restriction type; vehicle/body/weight/dimension criteria; valid dates                                   |
+| `route_risks`        | route/segment; risk type/severity; source; valid dates; notes                                                          |
+| `route_costs`        | route; cost type; amount/currency; valid dates; source                                                                 |
+| `route_performance`  | route/lane/date bucket; trips; avg transit; delay rate; cost/revenue metrics; projection/aggregate                     |
+| `route_preferences`  | tenant/customer/carrier optional; route preference/exclusion and validity                                              |
 
 `freight_lanes` is commercial origin-destination segmentation; `routes` are physical/operational path definitions. They are related but not synonyms.
 
 ## 13. Future — Pricing
 
-| Table | Core fields / keys |
-| --- | --- |
-| `pricing_tables` | tenant; code/name; customer/party optional; currency; valid_from/until; status/version |
-| `pricing_rules` | pricing table; rule type; priority; condition JSON; formula/config JSON; active |
-| `pricing_components` | code/name; component type (`base_freight`,`toll`,`gris`,`ad_valorem`,`insurance`,`waiting`,`helper`,`pickup`,`delivery`,`urgency`,`other`) |
-| `freight_rates` | table; component; min/max weight/volume/distance; amount/rate; unit |
-| `freight_lane_rates` | table; freight_lane; vehicle/body type optional; amount; valid dates |
-| `vehicle_rates` | table; vehicle type/body type; amount; charging unit |
-| `additional_charges` | table/customer; charge code; amount/percentage; trigger config |
-| `toll_rates` | route/segment/vehicle type; amount; effective dates |
-| `fuel_surcharges` | table; reference index/value; percentage/amount; effective dates |
-| `minimum_freight_rates` | jurisdiction/vehicle/cargo scope; source; rate; effective dates |
-| `pricing_simulations` | tenant event/workflow; request; ruleset/table version; calculated totals; input snapshot |
-| `pricing_history` | immutable pricing table/rule version snapshots |
+| Table                   | Core fields / keys                                                                                                                         |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pricing_tables`        | tenant; code/name; customer/party optional; currency; valid_from/until; status/version                                                     |
+| `pricing_rules`         | pricing table; rule type; priority; condition JSON; formula/config JSON; active                                                            |
+| `pricing_components`    | code/name; component type (`base_freight`,`toll`,`gris`,`ad_valorem`,`insurance`,`waiting`,`helper`,`pickup`,`delivery`,`urgency`,`other`) |
+| `freight_rates`         | table; component; min/max weight/volume/distance; amount/rate; unit                                                                        |
+| `freight_lane_rates`    | table; freight_lane; vehicle/body type optional; amount; valid dates                                                                       |
+| `vehicle_rates`         | table; vehicle type/body type; amount; charging unit                                                                                       |
+| `additional_charges`    | table/customer; charge code; amount/percentage; trigger config                                                                             |
+| `toll_rates`            | route/segment/vehicle type; amount; effective dates                                                                                        |
+| `fuel_surcharges`       | table; reference index/value; percentage/amount; effective dates                                                                           |
+| `minimum_freight_rates` | jurisdiction/vehicle/cargo scope; source; rate; effective dates                                                                            |
+| `pricing_simulations`   | tenant event/workflow; request; ruleset/table version; calculated totals; input snapshot                                                   |
+| `pricing_history`       | immutable pricing table/rule version snapshots                                                                                             |
 
 All monetary fields use numeric + explicit currency; no floating point.
 
@@ -630,21 +630,21 @@ Each stores period/as-of timestamp, revenue, direct costs, gross margin and marg
 
 ## 15. Future — Risk, compliance and insurance
 
-| Table | Core model |
-| --- | --- |
-| `risk_providers` | tenant/global integration provider metadata, active |
-| `risk_checks` | tenant; subject type + typed subject link strategy; provider; requested/completed timestamps; status |
-| `risk_results` | risk check 1:N result facts; code/severity/value/evidence |
-| `risk_rules` | tenant; code; subject scope; configuration; version; active |
-| `risk_scores` | subject/check; score numeric; model/ruleset version; created_at |
-| `risk_restrictions` | subject; restriction code; starts/ends; source check; active status |
-| `blacklists` | tenant; code/name; scope; active |
-| `blacklist_entries` | blacklist; typed subject; reason; starts/ends; actor |
-| `compliance_checks` | subject; compliance type; result/status; checked_at; provider/actor |
-| `compliance_rules` | tenant; code; scope; configuration; version |
-| `compliance_evidence` | check; document/evidence metadata |
-| `insurance_policies` | tenant; insured subject; insurer; policy; coverage; dates; amount/currency; document |
-| `insurance_claims` | policy; request/trip/occurrence; opened/closed; amount/status; evidence |
+| Table                 | Core model                                                                                           |
+| --------------------- | ---------------------------------------------------------------------------------------------------- |
+| `risk_providers`      | tenant/global integration provider metadata, active                                                  |
+| `risk_checks`         | tenant; subject type + typed subject link strategy; provider; requested/completed timestamps; status |
+| `risk_results`        | risk check 1:N result facts; code/severity/value/evidence                                            |
+| `risk_rules`          | tenant; code; subject scope; configuration; version; active                                          |
+| `risk_scores`         | subject/check; score numeric; model/ruleset version; created_at                                      |
+| `risk_restrictions`   | subject; restriction code; starts/ends; source check; active status                                  |
+| `blacklists`          | tenant; code/name; scope; active                                                                     |
+| `blacklist_entries`   | blacklist; typed subject; reason; starts/ends; actor                                                 |
+| `compliance_checks`   | subject; compliance type; result/status; checked_at; provider/actor                                  |
+| `compliance_rules`    | tenant; code; scope; configuration; version                                                          |
+| `compliance_evidence` | check; document/evidence metadata                                                                    |
+| `insurance_policies`  | tenant; insured subject; insurer; policy; coverage; dates; amount/currency; document                 |
+| `insurance_claims`    | policy; request/trip/occurrence; opened/closed; amount/status; evidence                              |
 
 Driver-specific risk checks use this generic compliance model rather than a competing `driver_risk_checks` fact table; a view may expose driver-focused queries.
 
@@ -745,30 +745,30 @@ Every metric row must expose its grain explicitly (tenant + period + dimensions)
 
 The following initial ideas are already covered and must not become duplicates:
 
-| Initial idea | Canonical treatment |
-| --- | --- |
-| `addresses` | use `business_party_addresses`; use `locations` for operational sites not owned by a party |
-| `contacts` | use `business_party_contacts` |
-| `customer_*`, `carrier_*`, `supplier_*` master roots | use `business_parties` + roles + extension tables |
-| `vehicle_documents` | `capacity_asset_documents` |
-| `vehicle_capabilities` | `capacity_asset_capabilities` |
-| `vehicle_availability` | `capacity_asset_availability` |
-| `vehicle_locations` | `capacity_asset_locations` |
-| `vehicle_blocks` | `capacity_asset_blocks` |
-| `load_items` | `transport_request_items` |
-| `load_stops` | existing `transport_request_stops` |
-| `load_requirements` | `transport_request_requirements` |
-| `load_status_history` | `transport_request_status_history` |
-| `load_events` | `transport_request_events` |
-| `matching_requests` | `matching_runs` against a canonical transport request |
-| `matching_scores` | `matching_candidate_scores` |
-| `freight_offers` / `counteroffers` | existing `freight_proposals` self-chain |
-| `negotiation_acceptances` | proposal accepted event + capacity reservation + transport contract |
-| `driver_vehicle_links` | existing `capacity_assignments` |
-| `trip_loads` | `trip_transport_requests` |
-| `load_profitability` | projection keyed by `transport_request_id` |
-| generic `entity_tags` | typed tag joins for strong tenant-aware FKs |
-| generic `document_links` | typed document joins for strong FKs |
+| Initial idea                                         | Canonical treatment                                                                        |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| `addresses`                                          | use `business_party_addresses`; use `locations` for operational sites not owned by a party |
+| `contacts`                                           | use `business_party_contacts`                                                              |
+| `customer_*`, `carrier_*`, `supplier_*` master roots | use `business_parties` + roles + extension tables                                          |
+| `vehicle_documents`                                  | `capacity_asset_documents`                                                                 |
+| `vehicle_capabilities`                               | `capacity_asset_capabilities`                                                              |
+| `vehicle_availability`                               | `capacity_asset_availability`                                                              |
+| `vehicle_locations`                                  | `capacity_asset_locations`                                                                 |
+| `vehicle_blocks`                                     | `capacity_asset_blocks`                                                                    |
+| `load_items`                                         | `transport_request_items`                                                                  |
+| `load_stops`                                         | existing `transport_request_stops`                                                         |
+| `load_requirements`                                  | `transport_request_requirements`                                                           |
+| `load_status_history`                                | `transport_request_status_history`                                                         |
+| `load_events`                                        | `transport_request_events`                                                                 |
+| `matching_requests`                                  | `matching_runs` against a canonical transport request                                      |
+| `matching_scores`                                    | `matching_candidate_scores`                                                                |
+| `freight_offers` / `counteroffers`                   | existing `freight_proposals` self-chain                                                    |
+| `negotiation_acceptances`                            | proposal accepted event + capacity reservation + transport contract                        |
+| `driver_vehicle_links`                               | existing `capacity_assignments`                                                            |
+| `trip_loads`                                         | `trip_transport_requests`                                                                  |
+| `load_profitability`                                 | projection keyed by `transport_request_id`                                                 |
+| generic `entity_tags`                                | typed tag joins for strong tenant-aware FKs                                                |
+| generic `document_links`                             | typed document joins for strong FKs                                                        |
 
 ## 21. Index standards for target tables
 
