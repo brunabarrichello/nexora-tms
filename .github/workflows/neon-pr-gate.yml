@@ -209,8 +209,8 @@ jobs:
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 23 THEN
-              RAISE EXCEPTION 'Expected 23 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 24 THEN
+              RAISE EXCEPTION 'Expected 24 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
@@ -2058,7 +2058,7 @@ jobs:
           fi
 
       - name: Gate summary
-        run: echo "Neon database gate passed through Wave 0017 driver/asset qualification plus NEX-40 transport contracts."
+        run: echo "Neon database gate passed through Wave 0023; Trips Core and Trip Execution remain covered by their dedicated Neon gates."
 
       - name: Delete isolated Neon branch
         if: always()

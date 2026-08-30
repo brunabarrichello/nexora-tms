@@ -1,0 +1,303 @@
+name: Neon Trip Execution Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/database/**'
+      - 'apps/api/src/trips/**'
+      - '.github/workflows/neon-trip-execution-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-trip-execution-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  trip-execution:
+    name: Trip Execution schema, grants, RLS and API integration
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
+
+      - name: Set ephemeral branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-trip-exec-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch
+        id: admin
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Bootstrap migration capability
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator connection
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply migrations
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify Wave 0023 schema, RLS and grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $block$
+          DECLARE
+            v_count integer;
+          BEGIN
+            SELECT count(*) INTO v_count
+              FROM information_schema.tables
+             WHERE table_schema='public'
+               AND table_name IN (
+                 'trip_events','trip_checkins','trip_locations','trip_checklists','trip_documents',
+                 'trip_expenses','trip_tolls','trip_fuel','trip_proofs','trip_delivery_proofs'
+               );
+            IF v_count <> 10 THEN
+              RAISE EXCEPTION 'Expected 10 Wave 0023 tables, found %', v_count;
+            END IF;
+
+            SELECT count(*) INTO v_count
+              FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public'
+               AND c.relname IN (
+                 'trip_events','trip_checkins','trip_locations','trip_checklists','trip_documents',
+                 'trip_expenses','trip_tolls','trip_fuel','trip_proofs','trip_delivery_proofs'
+               )
+               AND c.relrowsecurity;
+            IF v_count <> 10 THEN
+              RAISE EXCEPTION 'Expected RLS on 10 Wave 0023 tables, found %', v_count;
+            END IF;
+
+            IF EXISTS (
+              SELECT 1 FROM unnest(ARRAY[
+                'trip_events','trip_checkins','trip_locations','trip_documents',
+                'trip_tolls','trip_fuel','trip_proofs','trip_delivery_proofs'
+              ]) AS t(table_name)
+               WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT')
+                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT')
+                  OR has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE')
+                  OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')
+            ) THEN
+              RAISE EXCEPTION 'Wave 0023 append-only grants are incorrect';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1 FROM unnest(ARRAY['trip_checklists','trip_expenses']) AS t(table_name)
+               WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT')
+                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT')
+                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE')
+                  OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')
+            ) THEN
+              RAISE EXCEPTION 'Wave 0023 lifecycle grants are incorrect';
+            END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_documents_document_fk') THEN
+              RAISE EXCEPTION 'Canonical trip document FK is missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_delivery_proofs_proof_fk') THEN
+              RAISE EXCEPTION 'Delivery proof FK is missing';
+            END IF;
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_indexes
+               WHERE schemaname='public' AND indexname='trip_locations_provider_event_unique'
+            ) THEN
+              RAISE EXCEPTION 'Provider event idempotency index is missing';
+            END IF;
+          END
+          $block$;
+          SQL
+
+      - name: Seed Wave 0023 integration fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO tenants (id,slug,name) VALUES
+            ('71000000-0000-4000-8000-000000000001','trip-exec-a','Trip Execution A'),
+            ('71000000-0000-4000-8000-000000000002','trip-exec-b','Trip Execution B');
+
+          INSERT INTO users (id,display_name) VALUES
+            ('71000000-0000-4000-8000-000000000101','Trip Execution User A'),
+            ('71000000-0000-4000-8000-000000000102','Trip Execution User B');
+
+          INSERT INTO countries (id,code,iso3,name) VALUES
+            ('72000000-0000-4000-8000-000000000101','BR','BRA','Brazil');
+          INSERT INTO states (id,country_id,code,name) VALUES
+            ('72000000-0000-4000-8000-000000000102','72000000-0000-4000-8000-000000000101','SP','Sao Paulo');
+          INSERT INTO cities (id,state_id,ibge_code,name) VALUES
+            ('72000000-0000-4000-8000-000000000103','72000000-0000-4000-8000-000000000102','3550308','Sao Paulo'),
+            ('72000000-0000-4000-8000-000000000104','72000000-0000-4000-8000-000000000102','3509502','Campinas');
+
+          INSERT INTO locations (
+            id,tenant_id,code,name,type,city_id,street,created_by_user_id,updated_by_user_id
+          ) VALUES
+            ('72000000-0000-4000-8000-000000000111','71000000-0000-4000-8000-000000000001','PICKUP-A','Pickup A','warehouse','72000000-0000-4000-8000-000000000103','Rua Pickup','71000000-0000-4000-8000-000000000101','71000000-0000-4000-8000-000000000101'),
+            ('72000000-0000-4000-8000-000000000112','71000000-0000-4000-8000-000000000001','DELIVERY-A','Delivery A','warehouse','72000000-0000-4000-8000-000000000104','Rua Delivery','71000000-0000-4000-8000-000000000101','71000000-0000-4000-8000-000000000101');
+
+          INSERT INTO currencies (id,code,numeric_code,name,symbol,minor_unit) VALUES
+            ('72000000-0000-4000-8000-000000000031','BRL','986','Brazilian Real','R$',2);
+
+          INSERT INTO document_types (
+            id,tenant_id,code,name,subject_scope,has_expiry,requires_validation
+          ) VALUES (
+            '72000000-0000-4000-8000-000000000041','71000000-0000-4000-8000-000000000001',
+            'TRIP-PROOF','Trip proof','trip',false,false
+          );
+
+          INSERT INTO documents (
+            id,tenant_id,document_type_id,title,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '72000000-0000-4000-8000-000000000021','71000000-0000-4000-8000-000000000001',
+            '72000000-0000-4000-8000-000000000041','Wave 0023 execution evidence','valid',
+            '71000000-0000-4000-8000-000000000101','71000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO trips (
+            id,tenant_id,code,status,planned_start_at,planned_end_at,origin_location_id,destination_location_id,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '72000000-0000-4000-8000-000000000001','71000000-0000-4000-8000-000000000001','TRIP-EXEC-001','ready',
+            '2026-08-20T07:00:00Z','2026-08-21T20:00:00Z',
+            '72000000-0000-4000-8000-000000000111','72000000-0000-4000-8000-000000000112',
+            '71000000-0000-4000-8000-000000000101','71000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO trip_stops (
+            id,tenant_id,trip_id,sequence,type,location_id,planned_arrival_at,planned_departure_at,
+            created_by_user_id,updated_by_user_id
+          ) VALUES
+            ('72000000-0000-4000-8000-000000000011','71000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000001',1,'pickup','72000000-0000-4000-8000-000000000111','2026-08-20T07:30:00Z','2026-08-20T08:30:00Z','71000000-0000-4000-8000-000000000101','71000000-0000-4000-8000-000000000101'),
+            ('72000000-0000-4000-8000-000000000012','71000000-0000-4000-8000-000000000001','72000000-0000-4000-8000-000000000001',2,'delivery','72000000-0000-4000-8000-000000000112','2026-08-21T15:00:00Z','2026-08-21T17:00:00Z','71000000-0000-4000-8000-000000000101','71000000-0000-4000-8000-000000000101');
+          SQL
+
+      - name: Resolve nexora_app connection
+        id: app
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Build API
+        run: pnpm --filter @nexora/api build
+
+      - name: Run Wave 0023 API integration against Neon
+        env:
+          DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_POOL_MAX: '2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$DATABASE_URL"
+          node apps/api/dist/trips/trip-execution.integration.js
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '### Wave 0023 Trip Execution Gate'
+            echo '- 10 execution tables + RLS: verified'
+            echo '- append-only versus lifecycle grants: verified'
+            echo '- check-ins update stop actual milestones: verified'
+            echo '- pickup starts trip execution: verified'
+            echo '- tracking provider idempotency: verified'
+            echo '- Document Core linkage + POD: verified'
+            echo '- operational expense/toll/fuel persistence: verified'
+            echo '- tenant isolation with nexora_app: verified'
+            echo '- Production: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ env.NEON_TEST_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}

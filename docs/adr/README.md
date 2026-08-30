@@ -39,6 +39,7 @@ ADRs 0001–0010 form the accepted NEX-17 / NEX-64 Wave 0 baseline. ADR-0011 con
 16. [`0016-rbac-contextual-authorization.md`](./0016-rbac-contextual-authorization.md) — contextual authorization and RBAC boundaries for tenant-scoped runtime actions.
 17. [`0017-persistent-explainable-matching.md`](./0017-persistent-explainable-matching.md) — Wave 0020 persistent, reproducible and explainable matching with immutable historical results.
 18. [`0018-negotiation-collaboration-boundary.md`](./0018-negotiation-collaboration-boundary.md) — Wave 0021 collaboration threads, tenant-aware participants and append-only messages without duplicating commercial aggregates.
+19. [`0019-trip-execution-operational-facts.md`](./0019-trip-execution-operational-facts.md) — Wave 0023 trip execution, tracking, operational costs, evidence/POD and append-only runtime facts.
 
 ## Process
 
