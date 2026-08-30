@@ -38,11 +38,7 @@ export const tripStopStatusEnum = pgEnum('trip_stop_status', [
   'cancelled',
 ]);
 
-export const tripDriverRoleEnum = pgEnum('trip_driver_role', [
-  'primary',
-  'secondary',
-  'relief',
-]);
+export const tripDriverRoleEnum = pgEnum('trip_driver_role', ['primary', 'secondary', 'relief']);
 
 export const tripAssetRoleEnum = pgEnum('trip_asset_role', [
   'tractor',
@@ -164,10 +160,7 @@ export const tripTransportRequests = pgTable(
       table.transportRequestId,
       table.createdAt,
     ),
-    index('trip_transport_requests_contract_idx').on(
-      table.tenantId,
-      table.transportContractId,
-    ),
+    index('trip_transport_requests_contract_idx').on(table.tenantId, table.transportContractId),
     pgPolicy('trip_transport_requests_tenant_isolation', {
       for: 'all',
       to: 'public',
@@ -230,11 +223,7 @@ export const tripStops = pgTable(
       name: 'trip_stops_trip_request_fk',
     }).onDelete('restrict'),
     foreignKey({
-      columns: [
-        table.tenantId,
-        table.sourceTransportRequestId,
-        table.sourceTransportRequestStopId,
-      ],
+      columns: [table.tenantId, table.sourceTransportRequestId, table.sourceTransportRequestStopId],
       foreignColumns: [
         transportRequestStops.tenantId,
         transportRequestStops.transportRequestId,
@@ -306,7 +295,10 @@ export const tripDrivers = pgTable(
       foreignColumns: [drivers.tenantId, drivers.id],
       name: 'trip_drivers_driver_fk',
     }).onDelete('restrict'),
-    check('trip_drivers_period_check', sql`${table.endsAt} IS NULL OR ${table.endsAt} >= ${table.startsAt}`),
+    check(
+      'trip_drivers_period_check',
+      sql`${table.endsAt} IS NULL OR ${table.endsAt} >= ${table.startsAt}`,
+    ),
     uniqueIndex('trip_drivers_active_driver_unique')
       .on(table.tenantId, table.tripId, table.driverId)
       .where(sql`${table.endsAt} IS NULL`),
@@ -358,15 +350,14 @@ export const tripAssets = pgTable(
       foreignColumns: [capacityAssets.tenantId, capacityAssets.id],
       name: 'trip_assets_asset_fk',
     }).onDelete('restrict'),
-    check('trip_assets_period_check', sql`${table.endsAt} IS NULL OR ${table.endsAt} >= ${table.startsAt}`),
+    check(
+      'trip_assets_period_check',
+      sql`${table.endsAt} IS NULL OR ${table.endsAt} >= ${table.startsAt}`,
+    ),
     uniqueIndex('trip_assets_active_asset_unique')
       .on(table.tenantId, table.tripId, table.assetId)
       .where(sql`${table.endsAt} IS NULL`),
-    index('trip_assets_tenant_asset_period_idx').on(
-      table.tenantId,
-      table.assetId,
-      table.startsAt,
-    ),
+    index('trip_assets_tenant_asset_period_idx').on(table.tenantId, table.assetId, table.startsAt),
     pgPolicy('trip_assets_tenant_isolation', {
       for: 'all',
       to: 'public',

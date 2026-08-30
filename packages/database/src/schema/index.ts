@@ -19,3 +19,4 @@ export * from './negotiation.js';
 export * from './platform.js';
 export * from './reference-data.js';
 export * from './transport-contract.js';
+export * from './trips.js';

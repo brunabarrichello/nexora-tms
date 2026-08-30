@@ -73,6 +73,11 @@ export const transportContracts = pgTable(
   },
   (table) => [
     unique('transport_contracts_tenant_id_unique').on(table.tenantId, table.id),
+    unique('transport_contracts_tenant_request_id_unique').on(
+      table.tenantId,
+      table.transportRequestId,
+      table.id,
+    ),
     unique('transport_contracts_reservation_unique').on(table.tenantId, table.reservationId),
     foreignKey({
       columns: [table.tenantId, table.transportRequestId],
