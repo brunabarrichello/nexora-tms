@@ -53,7 +53,6 @@ jobs:
           branch_name: pr-${{ github.event.pull_request.number }}-documents-${{ github.run_id }}
           database: neondb
           role: neondb_owner
-          expires_at: ${{ format('{0}', '') }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Ensure PostgreSQL client
