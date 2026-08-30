@@ -48,3 +48,5 @@ jobs:
           git add scripts/.nex-39-formatted-integration.ts
           git commit -m 'NEX-39 render exact Prettier integration artifact'
           git push --no-verify
+
+# activation
