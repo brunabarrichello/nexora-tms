@@ -1,22 +1,35 @@
-import { OperationalPage } from '../../../_components/operational-page';
+import {
+  displayBoolean,
+  displayStatus,
+  displayValue,
+  ReferenceCatalogPage,
+  type CatalogSearchParams,
+} from '../_components/reference-catalog-page';
+
 export const metadata = { title: 'Tipos de embalagem' };
-export default function Page() {
+
+export default function Page({ searchParams }: Readonly<{ searchParams: CatalogSearchParams }>) {
   return (
-    <OperationalPage
+    <ReferenceCatalogPage
+      searchParams={searchParams}
+      slug="package-types"
+      basePath="/cadastros/catalogos/tipos-embalagem"
       eyebrow="Catálogos • package_types"
       title="Tipos de embalagem"
-      description="Espécies de embalagem/volume com comportamento padrão de empilhamento."
-      filters={[
-        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
-        { label: 'Empilhável', name: 'stackable', options: ['Sim', 'Não', 'Não definido'] },
-      ]}
+      description="Tipos de volume/embalagem e comportamento padrão de empilhamento."
       columns={[
         { key: 'code', label: 'Código' },
         { key: 'name', label: 'Nome' },
         { key: 'stackable', label: 'Empilhável padrão' },
         { key: 'status', label: 'Status' },
       ]}
-      integrationNotes={['Persistência já prevista em package_types com RLS por tenant.']}
+      mapRow={(item) => ({
+        id: item.id,
+        code: displayValue(item.code),
+        name: item.name,
+        stackable: displayBoolean(item.stackableDefault),
+        status: displayStatus(item),
+      })}
     />
   );
 }

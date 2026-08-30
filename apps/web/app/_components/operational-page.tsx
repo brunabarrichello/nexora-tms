@@ -6,10 +6,12 @@ type Metric = {
   helper: string;
 };
 
+type FilterOption = string | { label: string; value: string };
+
 type Filter = {
   label: string;
   name: string;
-  options?: string[];
+  options?: readonly FilterOption[];
   placeholder?: string;
 };
 
@@ -30,20 +32,30 @@ type Tab = {
   label: string;
 };
 
+type Pagination = {
+  label: string;
+  previousHref?: string;
+  nextHref?: string;
+};
+
 type OperationalPageProps = {
   eyebrow: string;
   title: string;
   description: string;
   status?: string;
   metrics?: Metric[];
-  filters: Filter[];
-  columns: Column[];
+  filters: readonly Filter[];
+  columns: readonly Column[];
   rows?: Array<Record<string, string>>;
   actions?: Action[];
   tabs?: Tab[];
   emptyTitle?: string;
   emptyDescription?: string;
-  integrationNotes?: string[];
+  integrationNotes?: readonly string[];
+  filterAction?: string;
+  filterValues?: Readonly<Record<string, string>>;
+  totalRows?: number;
+  pagination?: Pagination;
 };
 
 export function OperationalPage({
@@ -60,6 +72,10 @@ export function OperationalPage({
   emptyTitle = 'Nenhum registro carregado',
   emptyDescription = 'A estrutura visual está pronta para receber dados reais da API.',
   integrationNotes = [],
+  filterAction,
+  filterValues = {},
+  totalRows,
+  pagination,
 }: Readonly<OperationalPageProps>) {
   return (
     <div className="page-stack">
@@ -116,37 +132,65 @@ export function OperationalPage({
             <h2>Registros</h2>
           </div>
           <span className="result-count">
-            {rows.length > 0 ? `${rows.length} carregados` : 'Aguardando dados'}
+            {totalRows !== undefined
+              ? `${totalRows} encontrados`
+              : rows.length > 0
+                ? `${rows.length} carregados`
+                : 'Aguardando dados'}
           </span>
         </div>
 
-        <form className="filter-grid" aria-label={`Filtros de ${title}`}>
+        <form
+          className="filter-grid"
+          aria-label={`Filtros de ${title}`}
+          action={filterAction}
+          method="get"
+        >
           <label className="filter-field filter-search">
             <span>Busca</span>
-            <input name="q" type="search" placeholder="Buscar por nome, código ou referência" />
+            <input
+              name="q"
+              type="search"
+              placeholder="Buscar por nome, código ou referência"
+              defaultValue={filterValues.q ?? ''}
+            />
           </label>
           {filters.map((filter) => (
             <label className="filter-field" key={filter.name}>
               <span>{filter.label}</span>
               {filter.options ? (
-                <select name={filter.name} defaultValue="">
+                <select name={filter.name} defaultValue={filterValues[filter.name] ?? ''}>
                   <option value="">Todos</option>
-                  {filter.options.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
+                  {filter.options.map((option) => {
+                    const value = typeof option === 'string' ? option : option.value;
+                    const label = typeof option === 'string' ? option : option.label;
+                    return (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    );
+                  })}
                 </select>
               ) : (
-                <input name={filter.name} placeholder={filter.placeholder ?? 'Filtrar'} />
+                <input
+                  name={filter.name}
+                  placeholder={filter.placeholder ?? 'Filtrar'}
+                  defaultValue={filterValues[filter.name] ?? ''}
+                />
               )}
             </label>
           ))}
           <div className="filter-actions">
-            <button className="button button-secondary" type="button">
-              Limpar
-            </button>
-            <button className="button button-primary" type="button">
+            {filterAction ? (
+              <Link className="button button-secondary" href={filterAction}>
+                Limpar
+              </Link>
+            ) : (
+              <button className="button button-secondary" type="button">
+                Limpar
+              </button>
+            )}
+            <button className="button button-primary" type="submit">
               Aplicar filtros
             </button>
           </div>
@@ -204,15 +248,27 @@ export function OperationalPage({
         </div>
 
         <footer className="table-footer">
-          <span>Paginação preparada para cursor/offset da API.</span>
+          <span>{pagination ? 'Paginação conectada à API.' : 'Paginação preparada para cursor/offset da API.'}</span>
           <div className="pager" aria-label="Paginação">
-            <button type="button" disabled>
-              Anterior
-            </button>
-            <span>Página 1</span>
-            <button type="button" disabled>
-              Próxima
-            </button>
+            {pagination?.previousHref ? (
+              <Link className="pager-control" href={pagination.previousHref}>
+                Anterior
+              </Link>
+            ) : (
+              <button type="button" disabled>
+                Anterior
+              </button>
+            )}
+            <span>{pagination?.label ?? 'Página 1'}</span>
+            {pagination?.nextHref ? (
+              <Link className="pager-control" href={pagination.nextHref}>
+                Próxima
+              </Link>
+            ) : (
+              <button type="button" disabled>
+                Próxima
+              </button>
+            )}
           </div>
         </footer>
       </section>

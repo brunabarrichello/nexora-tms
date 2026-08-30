@@ -1,26 +1,41 @@
-import { OperationalPage } from '../../../_components/operational-page';
+import {
+  displayStatus,
+  displayValue,
+  ReferenceCatalogPage,
+  type CatalogSearchParams,
+} from '../_components/reference-catalog-page';
+
 export const metadata = { title: 'Cidades' };
-export default function Page() {
+
+export default function Page({ searchParams }: Readonly<{ searchParams: CatalogSearchParams }>) {
   return (
-    <OperationalPage
-      eyebrow="Geografia • cities"
+    <ReferenceCatalogPage
+      searchParams={searchParams}
+      slug="cities"
+      basePath="/cadastros/catalogos/cidades"
+      eyebrow="Geografia global • cities"
       title="Cidades"
-      description="Municípios vinculados a estado, com código IBGE e coordenadas opcionais validadas em par."
-      filters={[
-        { label: 'Estado', name: 'state' },
-        { label: 'IBGE', name: 'ibge' },
-        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
-      ]}
+      description="Municípios com código IBGE e coordenadas geográficas opcionais."
+      filters={[{ label: 'State ID', name: 'stateId', placeholder: 'UUID do estado' }]}
       columns={[
-        { key: 'name', label: 'Cidade' },
-        { key: 'state', label: 'Estado' },
-        { key: 'ibge', label: 'IBGE' },
+        { key: 'ibgeCode', label: 'IBGE' },
+        { key: 'name', label: 'Nome' },
+        { key: 'stateId', label: 'Estado' },
         { key: 'coordinates', label: 'Coordenadas' },
         { key: 'status', label: 'Status' },
       ]}
-      integrationNotes={[
-        'Latitude e longitude devem ser informadas juntas ou permanecer ambas nulas.',
-      ]}
+      mapRow={(item) => ({
+        id: item.id,
+        ibgeCode: displayValue(item.ibgeCode),
+        name: item.name,
+        stateId: displayValue(item.stateId),
+        coordinates:
+          item.latitude && item.longitude
+            ? `${displayValue(item.latitude)}, ${displayValue(item.longitude)}`
+            : '—',
+        status: displayStatus(item),
+      })}
+      readOnly
     />
   );
 }
