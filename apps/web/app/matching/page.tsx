@@ -1,41 +1,48 @@
 import { OperationalPage } from '../_components/operational-page';
+
 export const metadata = { title: 'Matching' };
+
 export default function Page() {
   return (
     <OperationalPage
       eyebrow="Inteligência operacional"
       title="Matching"
-      description="Matching persistente e explicável entre cargas, motoristas, veículos, transportadoras e capacidades."
+      description="Central de matching persistente e explicável entre cargas e capacidades, com execuções reproduzíveis, ranking, regras, scores e rejeições auditáveis."
       metrics={[
-        { label: 'Cargas elegíveis', helper: 'Cargas abertas' },
-        { label: 'Candidatos', helper: 'Resultados persistidos' },
-        { label: 'Alta aderência', helper: 'Score configurável' },
-        { label: 'Com bloqueios', helper: 'Regras impeditivas' },
+        { label: 'Cargas elegíveis', helper: 'Solicitações disponíveis para matching' },
+        { label: 'Execuções', helper: 'Histórico persistido' },
+        { label: 'Candidatos', helper: 'Resultados por execução' },
+        { label: 'Rejeições', helper: 'Blockers explicados' },
       ]}
       filters={[
         { label: 'Score mínimo', name: 'score', options: ['90%+', '80%+', '70%+'] },
-        {
-          label: 'Disponibilidade',
-          name: 'availability',
-          options: ['Agora', '24 horas', '48 horas'],
-        },
-        { label: 'Tipo', name: 'type', options: ['Motorista/veículo', 'Transportadora'] },
+        { label: 'Status', name: 'status', options: ['eligible', 'rejected'] },
+        { label: 'Execução', name: 'run', placeholder: 'ID da execução' },
       ]}
       columns={[
         { key: 'load', label: 'Carga' },
         { key: 'candidate', label: 'Candidato' },
-        { key: 'score', label: 'Score' },
+        { key: 'score', label: 'Score', align: 'right' },
         { key: 'explanation', label: 'Principais critérios' },
         { key: 'status', label: 'Status' },
       ]}
+      actions={[
+        { href: '/matching/execucoes', label: 'Ver execuções' },
+        { href: '/matching/regras', label: 'Configurar regras', variant: 'secondary' },
+      ]}
       tabs={[
-        { href: '/matching', label: 'Resultados' },
+        { href: '/matching', label: 'Visão geral' },
+        { href: '/matching/execucoes', label: 'Execuções' },
+        { href: '/matching/candidatos', label: 'Candidatos' },
+        { href: '/matching/explicabilidade', label: 'Explicabilidade' },
+        { href: '/matching/rejeicoes', label: 'Rejeições' },
+        { href: '/matching/regras', label: 'Regras' },
+        { href: '/matching/preferencias', label: 'Preferências' },
         { href: '/matching/propostas', label: 'Propostas' },
-        { href: '/cargas', label: 'Cargas abertas' },
-        { href: '/negociacoes', label: 'Negociações' },
       ]}
       integrationNotes={[
-        'Cada resultado armazenará score, critérios positivos, penalidades e blockers para explicabilidade.',
+        'Wave 0020 persistirá cada execução com snapshot do algoritmo, preferências e regras.',
+        'Candidatos, scores, resultados de regra e rejeições serão históricos imutáveis; negociação continua no bounded context existente.',
       ]}
     />
   );
