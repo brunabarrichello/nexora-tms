@@ -52,7 +52,10 @@ async function run(): Promise<void> {
       reason: 'Integration cancellation releases the reserved capacity',
     });
     assert.equal(cancelled.status, 'cancelled');
-    assert.equal(cancelled.cancelReason, 'Integration cancellation releases the reserved capacity');
+    assert.equal(
+      cancelled.cancelReason,
+      'Integration cancellation releases the reserved capacity',
+    );
     assert.deepEqual(
       cancelled.events.map((event) => event.type),
       ['approved', 'cancelled'],
@@ -65,8 +68,14 @@ async function run(): Promise<void> {
 
     const finalHistory = await reservations.list(REQUEST_A);
     assert.equal(finalHistory.length, 2);
-    assert.equal(finalHistory.filter((reservation) => reservation.status === 'active').length, 1);
-    assert.equal(finalHistory.filter((reservation) => reservation.status === 'cancelled').length, 1);
+    assert.equal(
+      finalHistory.filter((reservation) => reservation.status === 'active').length,
+      1,
+    );
+    assert.equal(
+      finalHistory.filter((reservation) => reservation.status === 'cancelled').length,
+      1,
+    );
   } finally {
     await database.onModuleDestroy();
   }
