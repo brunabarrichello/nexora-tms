@@ -14,6 +14,7 @@ import {
   varchar,
 } from 'drizzle-orm/pg-core';
 
+import { users } from './identity.js';
 import { tenants } from './platform.js';
 import { tenantMatchesSession } from './rls.js';
 
@@ -107,7 +108,9 @@ export const businessPartyAudit = pgTable(
     id: uuid('id').defaultRandom().primaryKey(),
     tenantId: uuid('tenant_id').notNull(),
     partyId: uuid('party_id').notNull(),
-    actorUserId: uuid('actor_user_id').notNull(),
+    actorUserId: uuid('actor_user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'restrict' }),
     changeType: varchar('change_type', { length: 32 }).notNull(),
     beforeSnapshot: jsonb('before_snapshot').$type<BusinessPartyAuditSnapshot | null>(),
     afterSnapshot: jsonb('after_snapshot').$type<BusinessPartyAuditSnapshot>().notNull(),
