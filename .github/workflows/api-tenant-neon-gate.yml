@@ -228,6 +228,15 @@ jobs:
           set -euo pipefail
           node apps/api/dist/negotiation/freight-proposal.integration.js
 
+      - name: Run Capacity Reservation integration against Neon
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          DATABASE_POOL_MAX: "2"
+        run: |
+          set -euo pipefail
+          node apps/api/dist/negotiation/capacity-reservation.integration.js
+
       - name: Gate summary
         shell: bash
         run: |
@@ -251,6 +260,10 @@ jobs:
             echo "- Freight proposal append-only history: verified"
             echo "- Freight counterproposal version preservation: verified"
             echo "- Freight proposal terminal status immutability: verified"
+            echo "- Winning proposal capacity reservation: verified"
+            echo "- Double active capacity allocation: rejected"
+            echo "- Reservation cancellation with reason: verified"
+            echo "- Reservation history and capacity release: verified"
             echo "- IdP integration: intentionally not part of this gate"
           } >> "$GITHUB_STEP_SUMMARY"
 
