@@ -43,13 +43,13 @@ BEGIN
   IF c <> 1 THEN RAISE EXCEPTION 'Soft delete must preserve document validations'; END IF;
 
   BEGIN
-    EXECUTE $$UPDATE document_versions SET source='import' WHERE id='10000000-0000-4000-8000-000000000401'$$;
+    EXECUTE $q$UPDATE document_versions SET source='import' WHERE id='10000000-0000-4000-8000-000000000401'$q$;
     RAISE EXCEPTION 'document_versions must reject UPDATE for nexora_app';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
 
   BEGIN
-    EXECUTE $$UPDATE document_validations SET notes='mutated' WHERE id='10000000-0000-4000-8000-000000000501'$$;
+    EXECUTE $q$UPDATE document_validations SET notes='mutated' WHERE id='10000000-0000-4000-8000-000000000501'$q$;
     RAISE EXCEPTION 'document_validations must reject UPDATE for nexora_app';
   EXCEPTION WHEN insufficient_privilege THEN NULL;
   END;
