@@ -16,7 +16,11 @@ export default function Page() {
       ]}
       filters={[
         { label: 'Viagem', name: 'trip', placeholder: 'Código ou identificador' },
-        { label: 'Status', name: 'status', options: ['Planejada', 'Pronta', 'Em trânsito', 'Concluída', 'Cancelada'] },
+        {
+          label: 'Status',
+          name: 'status',
+          options: ['Planejada', 'Pronta', 'Em trânsito', 'Concluída', 'Cancelada'],
+        },
       ]}
       columns={[
         { key: 'section', label: 'Seção' },
