@@ -1,8 +1,6 @@
 import assert from 'node:assert/strict';
 
-import {
-  CapacityMatchingService,
-} from '../matching/capacity-matching.service.js';
+import { CapacityMatchingService } from '../matching/capacity-matching.service.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantDatabaseService } from '../tenancy/tenant-database.service.js';
 import { CapacityReservationService } from './capacity-reservation.service.js';
@@ -23,22 +21,12 @@ async function run(): Promise<void> {
   });
 
   const matching = new CapacityMatchingService(tenantContext, database);
-  const proposals = new FreightProposalService(
-    tenantContext,
-    database,
-    matching,
-  );
-  const reservations = new CapacityReservationService(
-    tenantContext,
-    database,
-    matching,
-  );
+  const proposals = new FreightProposalService(tenantContext, database, matching);
+  const reservations = new CapacityReservationService(tenantContext, database, matching);
 
   try {
     const proposalHistory = await proposals.list(REQUEST_A);
-    const accepted = proposalHistory.find(
-      (proposal) => proposal.status === 'accepted',
-    );
+    const accepted = proposalHistory.find((proposal) => proposal.status === 'accepted');
     assert.ok(accepted, 'NEX-38 integration must leave one accepted proposal');
     assert.equal(accepted.capacityAssignmentId, ASSIGNMENT_A);
 
@@ -64,10 +52,7 @@ async function run(): Promise<void> {
       reason: 'Integration cancellation releases the reserved capacity',
     });
     assert.equal(cancelled.status, 'cancelled');
-    assert.equal(
-      cancelled.cancelReason,
-      'Integration cancellation releases the reserved capacity',
-    );
+    assert.equal(cancelled.cancelReason, 'Integration cancellation releases the reserved capacity');
     assert.deepEqual(
       cancelled.events.map((event) => event.type),
       ['approved', 'cancelled'],
