@@ -1,4 +1,5 @@
 export * from './capacity-assignment.js';
+export * from './capacity-qualification.js';
 export * from './capacity-reservation.js';
 export * from './capacity.js';
 export * from './currency.js';
