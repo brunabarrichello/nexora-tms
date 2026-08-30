@@ -10,6 +10,7 @@ on:
       - 'apps/api/src/capacity/**'
       - 'apps/api/src/documents/**'
       - 'apps/api/src/negotiation/**'
+      - 'apps/api/src/trips/**'
       - 'apps/api/src/master-data/**'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/neon-pr-gate.yml'
@@ -208,8 +209,8 @@ jobs:
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 22 THEN
-              RAISE EXCEPTION 'Expected 22 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 23 THEN
+              RAISE EXCEPTION 'Expected 23 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
