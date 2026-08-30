@@ -1,0 +1,96 @@
+name: Wave 0022 Regenerate Migration
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0022-trips-core
+    paths:
+      - '.github/workflows/wave0022-regenerate.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0022-trips-core
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+      - run: pnpm install --frozen-lockfile
+      - name: Harden schema and regenerate unpublished Wave 0022 migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+          import json
+
+          schema = Path('packages/database/src/schema/trips.ts')
+          text = schema.read_text()
+          needle = """    uniqueIndex('trip_transport_requests_active_sequence_unique')
+                .on(table.tenantId, table.tripId, table.sequence)
+                .where(sql`${table.removedAt} IS NULL`),
+          """
+          replacement = needle + """    uniqueIndex('trip_transport_requests_active_request_unique')
+                .on(table.tenantId, table.transportRequestId)
+                .where(sql`${table.removedAt} IS NULL`),
+              uniqueIndex('trip_transport_requests_active_contract_unique')
+                .on(table.tenantId, table.transportContractId)
+                .where(sql`${table.removedAt} IS NULL`),
+          """
+          if 'trip_transport_requests_active_request_unique' not in text:
+              if needle not in text:
+                  raise SystemExit('expected trip request index anchor not found')
+              text = text.replace(needle, replacement, 1)
+              schema.write_text(text)
+
+          migration = Path('packages/database/migrations/0022_minor_tyrannus.sql')
+          snapshot = Path('packages/database/migrations/meta/0022_snapshot.json')
+          if migration.exists(): migration.unlink()
+          if snapshot.exists(): snapshot.unlink()
+
+          journal_path = Path('packages/database/migrations/meta/_journal.json')
+          journal = json.loads(journal_path.read_text())
+          journal['entries'] = [e for e in journal['entries'] if e.get('idx') != 22]
+          journal_path.write_text(json.dumps(journal, indent=2) + '\n')
+          PY
+
+          pnpm exec prettier --write packages/database/src/schema/trips.ts packages/database/migrations/meta/_journal.json
+          pnpm --filter @nexora/database db:generate
+
+          migration_tag="$(jq -r '.entries[-1].tag' packages/database/migrations/meta/_journal.json)"
+          migration_file="packages/database/migrations/${migration_tag}.sql"
+          test -f "$migration_file"
+          cat >> "$migration_file" <<'SQL'
+          GRANT SELECT, INSERT, UPDATE ON trips TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_transport_requests TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_stops TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_drivers TO nexora_app;
+          GRANT SELECT, INSERT, UPDATE ON trip_assets TO nexora_app;
+          GRANT SELECT, INSERT ON trip_status_history TO nexora_app;
+          SQL
+
+          if grep -Eqi '(^|[;[:space:]])(DROP TABLE|TRUNCATE|ALTER TABLE .* RENAME)' "$migration_file"; then
+            echo 'Destructive DDL detected' >&2
+            exit 1
+          fi
+          grep -q 'trip_transport_requests_active_request_unique' "$migration_file"
+          grep -q 'trip_transport_requests_active_contract_unique' "$migration_file"
+          pnpm --filter @nexora/database typecheck
+          pnpm --filter @nexora/database db:check
+          pnpm validate
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/database/src/schema/trips.ts packages/database/migrations packages/database/migrations/meta
+          git commit -m 'fix(database): enforce unique active trip assignments'
+          git push origin HEAD:feat/database-wave-0022-trips-core
