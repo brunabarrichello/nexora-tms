@@ -7,10 +7,21 @@ import { BusinessPartyDirectoryController } from './business-party-directory.con
 import { BusinessPartyDirectoryService } from './business-party-directory.service.js';
 import { BusinessPartyController } from './business-party.controller.js';
 import { BusinessPartyService } from './business-party.service.js';
+import { ReferenceDataController } from './reference-data.controller.js';
+import { ReferenceDataService } from './reference-data.service.js';
 
 @Module({
   imports: [AuthenticationModule, TenancyModule],
-  controllers: [BusinessPartyController, BusinessPartyDirectoryController],
-  providers: [BusinessPartyService, BusinessPartyDirectoryService, TenantRuntimeGateGuard],
+  controllers: [
+    BusinessPartyController,
+    BusinessPartyDirectoryController,
+    ReferenceDataController,
+  ],
+  providers: [
+    BusinessPartyService,
+    BusinessPartyDirectoryService,
+    ReferenceDataService,
+    TenantRuntimeGateGuard,
+  ],
 })
 export class MasterDataModule {}
