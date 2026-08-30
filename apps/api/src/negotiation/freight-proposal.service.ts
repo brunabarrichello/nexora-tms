@@ -1,12 +1,12 @@
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 
+import { requireUuid } from '../freight/transport-request.validation.js';
 import { CapacityMatchingService } from '../matching/capacity-matching.service.js';
 import { TenantContext } from '../tenancy/tenant-context.js';
 import {
   TenantDatabaseService,
   type TenantQueryClient,
 } from '../tenancy/tenant-database.service.js';
-import { requireUuid } from '../freight/transport-request.validation.js';
 import {
   parseFreightCounterproposal,
   parseFreightProposalCreate,
@@ -179,7 +179,7 @@ export class FreightProposalService {
     const context = this.tenantContext.require();
 
     const parentSnapshot = await this.database.withTenantContext(context, async (client) =>
-      this.requireProposalIdentity(client, parentId, false),
+      this.requireProposalIdentity(client, parentId),
     );
     const match = await this.matching.search(parentSnapshot.transport_request_id);
     const candidate = match.compatible.find(
@@ -192,7 +192,8 @@ export class FreightProposalService {
     }
 
     return this.database.withTenantContext(context, async (client) => {
-      const parent = await this.requireProposalIdentity(client, parentId, true);
+      await this.lockProposal(client, context.tenantId, parentId);
+      const parent = await this.requireProposalIdentity(client, parentId);
       await this.requireNegotiableRequest(client, parent.transport_request_id, true);
       this.requireOpenProposal(parent);
       await this.requireActiveAssignment(
@@ -235,7 +236,8 @@ export class FreightProposalService {
     const context = this.tenantContext.require();
 
     return this.database.withTenantContext(context, async (client) => {
-      const proposal = await this.requireProposalIdentity(client, id, true);
+      await this.lockProposal(client, context.tenantId, id);
+      const proposal = await this.requireProposalIdentity(client, id);
       await this.requireNegotiableRequest(client, proposal.transport_request_id, true);
       this.requireOpenProposal(proposal);
 
@@ -315,7 +317,6 @@ export class FreightProposalService {
   private async requireProposalIdentity(
     client: TenantQueryClient,
     proposalId: string,
-    lock: boolean,
   ): Promise<ProposalIdentityRow> {
     const result = await client.query<ProposalIdentityRow>(
       `SELECT p.id::text AS id,
@@ -332,8 +333,7 @@ export class FreightProposalService {
             ORDER BY created_at DESC,id DESC
             LIMIT 1
          ) e ON true
-        WHERE p.id=$1::uuid
-        ${lock ? 'FOR UPDATE OF p' : ''}`,
+        WHERE p.id=$1::uuid`,
       [proposalId],
     );
     const proposal = result.rows[0];
@@ -347,6 +347,16 @@ export class FreightProposalService {
     if (proposal.current_status !== 'open') {
       throw new ConflictException(`Proposal is already ${proposal.current_status}`);
     }
+  }
+
+  private async lockProposal(
+    client: TenantQueryClient,
+    tenantId: string,
+    proposalId: string,
+  ): Promise<void> {
+    await client.query('SELECT pg_advisory_xact_lock(hashtextextended($1, 0))', [
+      `${tenantId}:${proposalId}:freight-proposal-state`,
+    ]);
   }
 
   private async lockRequestSequence(
