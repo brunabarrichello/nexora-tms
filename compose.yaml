@@ -11,6 +11,7 @@ services:
       - '5432:5432'
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      - ./ops/docker/postgres/init.sql:/docker-entrypoint-initdb.d/001-nexora-runtime-role.sql:ro
     healthcheck:
       test: ['CMD-SHELL', 'pg_isready -U nexora -d nexora']
       interval: 10s
@@ -30,6 +31,19 @@ services:
       timeout: 5s
       retries: 5
 
+  migrate:
+    profiles: ['application']
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      DATABASE_URL: postgresql://nexora:local-only-nexora@postgres:5432/nexora
+    command: ['pnpm', '--filter', '@nexora/database', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: 'no'
+
   api:
     profiles: ['application']
     build:
@@ -38,7 +52,7 @@ services:
     environment:
       NODE_ENV: development
       PORT: 3001
-      DATABASE_URL: postgresql://nexora:nexora@postgres:5432/nexora
+      DATABASE_URL: postgresql://nexora_app:local-only-nexora-app@postgres:5432/nexora
       DATABASE_POOL_MAX: 10
       AUTH_DATABASE_POOL_MAX: 4
       OIDC_PROVIDER_KEY: ${OIDC_PROVIDER_KEY:-auth0}
@@ -47,8 +61,8 @@ services:
       OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
       OIDC_ALLOWED_ALGORITHMS: ${OIDC_ALLOWED_ALGORITHMS:-RS256}
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     ports:
       - '3001:3001'
 
@@ -73,11 +87,11 @@ services:
       dockerfile: apps/worker/Dockerfile
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://nexora:nexora@postgres:5432/nexora
+      DATABASE_URL: postgresql://nexora_app:local-only-nexora-app@postgres:5432/nexora
       REDIS_URL: redis://redis:6379/0
     depends_on:
-      postgres:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
       redis:
         condition: service_healthy
 
