@@ -10,6 +10,26 @@ export async function apiGet<T>(
   path: string,
   query?: Readonly<Record<string, string | undefined>>,
 ): Promise<ApiResult<T>> {
+  return apiRequest<T>(path, { method: 'GET' }, query);
+}
+
+export async function apiSend<T>(
+  path: string,
+  method: 'POST' | 'PATCH',
+  body: Readonly<Record<string, unknown>>,
+): Promise<ApiResult<T>> {
+  return apiRequest<T>(path, {
+    method,
+    body: JSON.stringify(body),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+async function apiRequest<T>(
+  path: string,
+  init: RequestInit,
+  query?: Readonly<Record<string, string | undefined>>,
+): Promise<ApiResult<T>> {
   const baseUrl = process.env.NEXORA_API_BASE_URL?.trim();
   if (!baseUrl) {
     return {
@@ -19,7 +39,8 @@ export async function apiGet<T>(
   }
 
   const incomingHeaders = await headers();
-  const outgoingHeaders = new Headers({ Accept: 'application/json' });
+  const outgoingHeaders = new Headers(init.headers);
+  outgoingHeaders.set('Accept', 'application/json');
   for (const headerName of ['authorization', 'x-correlation-id']) {
     const value = incomingHeaders.get(headerName);
     if (value) outgoingHeaders.set(headerName, value);
@@ -32,6 +53,7 @@ export async function apiGet<T>(
 
   try {
     const response = await fetch(url, {
+      ...init,
       headers: outgoingHeaders,
       cache: 'no-store',
     });
@@ -46,7 +68,7 @@ export async function apiGet<T>(
     if (!response.ok) {
       return {
         kind: 'error',
-        message: `A API respondeu com HTTP ${response.status}.`,
+        message: await safeApiErrorMessage(response),
       };
     }
 
@@ -57,4 +79,20 @@ export async function apiGet<T>(
       message: 'Não foi possível alcançar a API do Nexora neste momento.',
     };
   }
+}
+
+async function safeApiErrorMessage(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as { message?: unknown };
+    if (typeof payload.message === 'string' && payload.message.trim()) {
+      return payload.message.trim().slice(0, 300);
+    }
+    if (Array.isArray(payload.message)) {
+      const messages = payload.message.filter((item): item is string => typeof item === 'string');
+      if (messages.length > 0) return messages.join(' • ').slice(0, 300);
+    }
+  } catch {
+    // Fall back to a stable HTTP-only message below.
+  }
+  return `A API respondeu com HTTP ${response.status}.`;
 }

@@ -16,6 +16,7 @@ type CatalogColumn = {
   readonly key: string;
   readonly label: string;
   readonly align?: 'left' | 'right';
+  readonly hrefKey?: string;
 };
 
 interface ReferenceItem {
@@ -74,10 +75,7 @@ export async function ReferenceCatalogPage({
   const values = singleValueParams(rawParams);
   const limit = 25;
   const offset = positiveInteger(values.offset) ?? 0;
-  const query = pickQuery(
-    values,
-    filters.map((filter) => filter.name),
-  );
+  const query = pickQuery(values, filters.map((filter) => filter.name));
   const result = await apiGet<ReferencePage>(`/api/v1/reference-data/${slug}`, {
     ...query,
     limit: String(limit),
@@ -85,17 +83,33 @@ export async function ReferenceCatalogPage({
   });
   const view = toViewState(result);
   const page = result.kind === 'ready' ? result.data.page : undefined;
-  const rows = result.kind === 'ready' ? result.data.items.map(mapRow) : [];
+  const baseRows = result.kind === 'ready' ? result.data.items.map(mapRow) : [];
+  const rows = readOnly
+    ? baseRows
+    : baseRows.map((row) => ({
+        ...row,
+        edit: 'Editar',
+        editHref: `/cadastros/catalogos/editar/${slug}/${row.id}`,
+      }));
+  const tableColumns = readOnly
+    ? [...columns]
+    : [...columns, { key: 'edit', label: 'Ações', hrefKey: 'editHref' }];
+  const status = values.saved === '1' && result.kind === 'ready' ? 'Cadastro salvo' : view.status;
 
   return (
     <OperationalPage
       eyebrow={eyebrow}
       title={title}
       description={description}
-      status={view.status}
+      status={status}
       filters={[activeFilter, ...filters]}
-      columns={[...columns]}
+      columns={tableColumns}
       rows={rows}
+      actions={
+        readOnly
+          ? []
+          : [{ href: `/cadastros/catalogos/novo/${slug}`, label: 'Novo cadastro' }]
+      }
       filterAction={basePath}
       filterValues={values}
       totalRows={page?.total}
@@ -108,7 +122,7 @@ export async function ReferenceCatalogPage({
         `GET /api/v1/reference-data/${slug} conectado com filtros e paginação server-side.`,
         readOnly
           ? 'Catálogo global exposto como somente leitura para tenants.'
-          : 'POST/PATCH disponíveis no contrato; lifecycle por isActive, sem DELETE físico.',
+          : 'Criação e edição conectadas a POST/PATCH; lifecycle por isActive, sem DELETE físico.',
         ...integrationNotes,
       ]}
     />
@@ -152,27 +166,14 @@ function toViewState(result: ApiResult<ReferencePage>): {
       return {
         status: 'API conectada',
         emptyTitle: 'Nenhum registro encontrado',
-        message:
-          'A consulta foi executada com sucesso, mas não retornou registros para os filtros atuais.',
+        message: 'A consulta foi executada com sucesso, mas não retornou registros para os filtros atuais.',
       };
     case 'unconfigured':
-      return {
-        status: 'API não configurada',
-        emptyTitle: 'Integração aguardando ambiente',
-        message: result.message,
-      };
+      return { status: 'API não configurada', emptyTitle: 'Integração aguardando ambiente', message: result.message };
     case 'unauthorized':
-      return {
-        status: 'Autorização pendente',
-        emptyTitle: 'Sessão sem acesso à API',
-        message: result.message,
-      };
+      return { status: 'Autorização pendente', emptyTitle: 'Sessão sem acesso à API', message: result.message };
     case 'error':
-      return {
-        status: 'API indisponível',
-        emptyTitle: 'Falha ao consultar dados',
-        message: result.message,
-      };
+      return { status: 'API indisponível', emptyTitle: 'Falha ao consultar dados', message: result.message };
   }
 }
 
@@ -199,7 +200,7 @@ function pageHref(
 ): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) {
-    if (key !== 'offset' && value) params.set(key, value);
+    if (key !== 'offset' && key !== 'saved' && value) params.set(key, value);
   }
   if (offset > 0) params.set('offset', String(offset));
   const query = params.toString();

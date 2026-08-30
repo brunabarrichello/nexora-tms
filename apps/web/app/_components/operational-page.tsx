@@ -19,6 +19,7 @@ type Column = {
   key: string;
   label: string;
   align?: 'left' | 'right';
+  hrefKey?: string;
 };
 
 type Action = {
@@ -214,18 +215,24 @@ export function OperationalPage({
               {rows.length > 0 ? (
                 rows.map((row, index) => (
                   <tr key={row.id ?? String(index)}>
-                    {columns.map((column) => (
-                      <td
-                        key={column.key}
-                        className={column.align === 'right' ? 'align-right' : undefined}
-                      >
-                        {column.key === 'status' ? (
-                          <span className="table-status">{row[column.key]}</span>
-                        ) : (
-                          row[column.key]
-                        )}
-                      </td>
-                    ))}
+                    {columns.map((column) => {
+                      const value = row[column.key] ?? '';
+                      const href = column.hrefKey ? row[column.hrefKey] : undefined;
+                      return (
+                        <td
+                          key={column.key}
+                          className={column.align === 'right' ? 'align-right' : undefined}
+                        >
+                          {column.key === 'status' ? (
+                            <span className="table-status">{value}</span>
+                          ) : href ? (
+                            <Link href={href}>{value}</Link>
+                          ) : (
+                            value
+                          )}
+                        </td>
+                      );
+                    })}
                   </tr>
                 ))
               ) : (
