@@ -95,3 +95,5 @@ def patch_neon_migrate() -> None:
 
 patch_neon_pr_gate()
 patch_neon_migrate()
+
+# Retrigger permanent gate patch after synchronizing Wave 0022 with main.
