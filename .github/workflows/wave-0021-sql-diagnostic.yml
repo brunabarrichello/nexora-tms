@@ -1,0 +1,94 @@
+name: Wave 0021 SQL Diagnostic
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0021-negotiation-complement
+    paths:
+      - .github/workflows/wave-0021-sql-diagnostic.yml
+
+permissions:
+  contents: read
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0021-negotiation-complement
+
+      - name: Set ephemeral branch
+        shell: bash
+        run: |
+          echo "NEON_TEST_BRANCH=wave-0021-sql-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+1 hour' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch
+        id: admin
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Bootstrap owner capability
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        run: |
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply only Wave 0021 SQL with PostgreSQL diagnostics
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f packages/database/migrations/0021_dizzy_longshot.sql
+
+      - name: Delete ephemeral Neon branch
+        if: ${{ always() }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ env.NEON_TEST_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}
