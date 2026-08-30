@@ -1,0 +1,60 @@
+name: Wave 0019 Prepare Hardening
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0019-freight-normalization
+    paths:
+      - .github/workflows/wave-0019-prepare-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0019-freight-normalization
+
+      - name: Harden migration and general Neon gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          migration = Path('packages/database/migrations/0019_safe_human_fly.sql')
+          text = migration.read_text()
+          marker = 'GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE transport_request_items'
+          if marker not in text:
+              text = text.rstrip() + '''\nGRANT SELECT, INSERT, UPDATE, DELETE ON TABLE transport_request_items, transport_request_packages, transport_request_requirements, transport_request_references TO nexora_app;\nGRANT SELECT, INSERT, UPDATE ON TABLE freight_lanes TO nexora_app;\nGRANT SELECT, INSERT ON TABLE transport_request_status_history, transport_request_events TO nexora_app;\n'''
+              migration.write_text(text)
+
+          gate = Path('.github/workflows/neon-pr-gate.yml')
+          gate_text = gate.read_text()
+          old_if = 'IF migration_count <> 19 THEN'
+          old_msg = "Expected 19 Drizzle migration records, found %"
+          if gate_text.count(old_if) != 1 or gate_text.count(old_msg) != 1:
+              raise SystemExit('Unexpected Neon gate migration baseline shape')
+          gate_text = gate_text.replace(old_if, 'IF migration_count <> 20 THEN')
+          gate_text = gate_text.replace(old_msg, 'Expected 20 Drizzle migration records, found %')
+          gate.write_text(gate_text)
+          PY
+
+          grep -q "GRANT SELECT, INSERT ON TABLE transport_request_status_history, transport_request_events TO nexora_app" packages/database/migrations/0019_safe_human_fly.sql
+          grep -q "IF migration_count <> 20 THEN" .github/workflows/neon-pr-gate.yml
+
+      - name: Create remote blobs for connector commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          migration_blob="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" -f content="$(cat packages/database/migrations/0019_safe_human_fly.sql)" -f encoding=utf-8 --jq .sha)"
+          gate_blob="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" -f content="$(cat .github/workflows/neon-pr-gate.yml)" -f encoding=utf-8 --jq .sha)"
+          echo "MIGRATION_BLOB=$migration_blob"
+          echo "NEON_GATE_BLOB=$gate_blob"
