@@ -28,9 +28,9 @@ jobs:
           path = Path('.github/workflows/neon-pr-gate.yml')
           text = path.read_text()
 
-          def sub_once(pattern, replacement, label, flags=0):
+          def sub_once(pattern, replacement, label):
               global text
-              text, count = re.subn(pattern, replacement, text, count=1, flags=flags)
+              text, count = re.subn(pattern, replacement, text, count=1)
               if count != 1:
                   raise SystemExit(f'{label}: expected one match, found {count}')
 
@@ -86,11 +86,10 @@ jobs:
                   f"OR NOT has_table_privilege('nexora_app','public.{table}','UPDATE')",
                   f"OR has_table_privilege('nexora_app','public.{table}','DELETE')",
               ])
-          privilege_replacement = ('\n               '.join(privilege_lines)) + ' THEN'
+          replacement = ('\n               '.join(privilege_lines)) + ' THEN'
           if text.count(privilege_anchor) != 1:
               raise SystemExit(f'privilege matrix anchor: expected one match, found {text.count(privilege_anchor)}')
-          text = text.replace(privilege_anchor, privilege_replacement, 1)
-
+          text = text.replace(privilege_anchor, replacement, 1)
           path.write_text(text)
           PY
 
@@ -102,10 +101,21 @@ jobs:
           grep -q "public.vehicle_types" .github/workflows/neon-pr-gate.yml
           grep -q "public.countries" .github/workflows/neon-pr-gate.yml
 
-      - name: Commit gate evolution
+      - name: Emit reviewed git object and payload
+        shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add .github/workflows/neon-pr-gate.yml
           git commit -m "ci(database): validate wave 0015 catalogs"
-          git push origin HEAD:feat/database-wave-0015-foundations
+          echo "LOCAL_COMMIT=$(git rev-parse HEAD)"
+          echo "LOCAL_TREE=$(git rev-parse 'HEAD^{tree}')"
+          echo "WORKFLOW_BLOB=$(git rev-parse 'HEAD:.github/workflows/neon-pr-gate.yml')"
+          python - <<'PY'
+          from pathlib import Path
+          import base64, gzip
+          payload = base64.b64encode(gzip.compress(Path('.github/workflows/neon-pr-gate.yml').read_bytes(), compresslevel=9)).decode()
+          print('GZIP_BASE64_BEGIN')
+          print(payload)
+          print('GZIP_BASE64_END')
+          PY
