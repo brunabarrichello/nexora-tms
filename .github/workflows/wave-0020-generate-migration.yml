@@ -1,0 +1,61 @@
+name: Wave 0020 Generate Migration
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0020-matching-persistence
+    paths:
+      - .github/workflows/wave-0020-generate-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0020-matching-persistence
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format Wave 0020 schema
+        run: pnpm exec prettier --write packages/database/src/schema/matching-persistence.ts packages/database/src/schema/index.ts
+
+      - name: Generate Drizzle migration
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Verify generated artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(jq '.entries | length' packages/database/migrations/meta/_journal.json)" -eq 21
+          git status --short
+
+      - name: Commit generated migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "nexora-wave-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add packages/database/src/schema/matching-persistence.ts packages/database/src/schema/index.ts packages/database/migrations
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(database): generate Wave 0020 matching migration"
+          git push origin HEAD:feat/database-wave-0020-matching-persistence
