@@ -1,0 +1,54 @@
+name: Wave 0022 Migration Order Fix
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0022-trips-core
+    paths:
+      - '.github/workflows/wave0022-migration-order-fix.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0022-trips-core
+          fetch-depth: 0
+      - name: Reorder transport contract unique constraint before FK
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('packages/database/migrations/0022_flat_ronan.sql')
+          text = path.read_text()
+          unique_stmt = 'ALTER TABLE "transport_contracts" ADD CONSTRAINT "transport_contracts_tenant_request_id_unique" UNIQUE("tenant_id","transport_request_id","id");--> statement-breakpoint\n'
+          fk_stmt = 'ALTER TABLE "trip_transport_requests" ADD CONSTRAINT "trip_transport_requests_contract_fk" FOREIGN KEY ("tenant_id","transport_request_id","transport_contract_id") REFERENCES "public"."transport_contracts"("tenant_id","transport_request_id","id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint\n'
+
+          if text.count(unique_stmt) != 1 or text.count(fk_stmt) != 1:
+              raise SystemExit('Expected exactly one contract unique constraint and one trip contract FK')
+
+          text = text.replace(unique_stmt, '', 1)
+          text = text.replace(fk_stmt, unique_stmt + fk_stmt, 1)
+          path.write_text(text)
+
+          fixed = path.read_text()
+          if fixed.index(unique_stmt) > fixed.index(fk_stmt):
+              raise SystemExit('Unique constraint still appears after FK')
+          PY
+          git diff --check
+          git diff -- packages/database/migrations/0022_flat_ronan.sql
+      - name: Commit migration order fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add packages/database/migrations/0022_flat_ronan.sql
+          git commit -m 'fix(database): order Wave 0022 contract constraint before FK'
+          git push origin HEAD:feat/database-wave-0022-trips-core
