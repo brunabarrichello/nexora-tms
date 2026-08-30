@@ -12,22 +12,32 @@ export class CapacityQualificationController {
   constructor(private readonly qualification: CapacityQualificationService) {}
 
   @Get('drivers/:driverId/documents')
-  listDriverDocuments(@Param('driverId') driverId: string): Promise<readonly QualificationRecord[]> {
+  listDriverDocuments(
+    @Param('driverId') driverId: string,
+  ): Promise<readonly QualificationRecord[]> {
     return this.qualification.listDriverDocuments(driverId);
   }
 
   @Post('drivers/:driverId/documents')
-  createDriverDocument(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createDriverDocument(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createDriverDocument(driverId, body);
   }
 
   @Get('drivers/:driverId/qualifications')
-  listDriverQualifications(@Param('driverId') driverId: string): Promise<readonly QualificationRecord[]> {
+  listDriverQualifications(
+    @Param('driverId') driverId: string,
+  ): Promise<readonly QualificationRecord[]> {
     return this.qualification.listDriverQualifications(driverId);
   }
 
   @Post('drivers/:driverId/qualifications')
-  createDriverQualification(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createDriverQualification(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createDriverQualification(driverId, body);
   }
 
@@ -37,7 +47,10 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/courses')
-  createDriverCourse(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createDriverCourse(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createDriverCourse(driverId, body);
   }
 
@@ -47,27 +60,40 @@ export class CapacityQualificationController {
   }
 
   @Put('drivers/:driverId/availability')
-  setDriverAvailability(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  setDriverAvailability(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.setDriverAvailability(driverId, body);
   }
 
   @Get('drivers/:driverId/unavailability')
-  listDriverUnavailability(@Param('driverId') driverId: string): Promise<readonly QualificationRecord[]> {
+  listDriverUnavailability(
+    @Param('driverId') driverId: string,
+  ): Promise<readonly QualificationRecord[]> {
     return this.qualification.listDriverUnavailability(driverId);
   }
 
   @Post('drivers/:driverId/unavailability')
-  createDriverUnavailability(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createDriverUnavailability(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createDriverUnavailability(driverId, body);
   }
 
   @Get('drivers/:driverId/emergency-contacts')
-  listDriverEmergencyContacts(@Param('driverId') driverId: string): Promise<readonly QualificationRecord[]> {
+  listDriverEmergencyContacts(
+    @Param('driverId') driverId: string,
+  ): Promise<readonly QualificationRecord[]> {
     return this.qualification.listDriverEmergencyContacts(driverId);
   }
 
   @Post('drivers/:driverId/emergency-contacts')
-  createDriverEmergencyContact(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createDriverEmergencyContact(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createDriverEmergencyContact(driverId, body);
   }
 
@@ -77,7 +103,10 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/blocks')
-  createDriverBlock(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createDriverBlock(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createDriverBlock(driverId, body);
   }
 
@@ -96,7 +125,10 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/ratings')
-  createDriverRating(@Param('driverId') driverId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createDriverRating(
+    @Param('driverId') driverId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createDriverRating(driverId, body);
   }
 
@@ -106,7 +138,10 @@ export class CapacityQualificationController {
   }
 
   @Put('assets/:assetId/capabilities')
-  setAssetCapabilities(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  setAssetCapabilities(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.setAssetCapabilities(assetId, body);
   }
 
@@ -116,7 +151,10 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/documents')
-  createAssetDocument(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createAssetDocument(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createAssetDocument(assetId, body);
   }
 
@@ -126,7 +164,10 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/maintenance-plans')
-  createMaintenancePlan(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createMaintenancePlan(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createMaintenancePlan(assetId, body);
   }
 
@@ -136,7 +177,10 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/maintenance')
-  createMaintenance(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createMaintenance(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createMaintenance(assetId, body);
   }
 
@@ -163,7 +207,10 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/insurances')
-  createInsurance(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createInsurance(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createInsurance(assetId, body);
   }
 
@@ -173,7 +220,10 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/inspections')
-  createInspection(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createInspection(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createInspection(assetId, body);
   }
 
@@ -183,17 +233,25 @@ export class CapacityQualificationController {
   }
 
   @Put('assets/:assetId/availability')
-  setAssetAvailability(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  setAssetAvailability(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.setAssetAvailability(assetId, body);
   }
 
   @Get('assets/:assetId/unavailability')
-  listAssetUnavailability(@Param('assetId') assetId: string): Promise<readonly QualificationRecord[]> {
+  listAssetUnavailability(
+    @Param('assetId') assetId: string,
+  ): Promise<readonly QualificationRecord[]> {
     return this.qualification.listAssetUnavailability(assetId);
   }
 
   @Post('assets/:assetId/unavailability')
-  createAssetUnavailability(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createAssetUnavailability(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createAssetUnavailability(assetId, body);
   }
 
@@ -203,7 +261,10 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/locations')
-  createAssetLocation(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createAssetLocation(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createAssetLocation(assetId, body);
   }
 
@@ -213,7 +274,10 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/blocks')
-  createAssetBlock(@Param('assetId') assetId: string, @Body() body: unknown): Promise<QualificationRecord> {
+  createAssetBlock(
+    @Param('assetId') assetId: string,
+    @Body() body: unknown,
+  ): Promise<QualificationRecord> {
     return this.qualification.createAssetBlock(assetId, body);
   }
 

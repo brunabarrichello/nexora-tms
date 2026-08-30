@@ -192,12 +192,21 @@ export function parseDocumentRegister(input: unknown): DocumentRegisterInput {
   const expiresOn = optionalDate(body.expiresOn, 'expiresOn');
   chronological(issuedOn, expiresOn, 'document validity');
   return {
-    documentTypeId: requireUuid(requiredString(body.documentTypeId, 'documentTypeId', 80), 'documentTypeId'),
+    documentTypeId: requireUuid(
+      requiredString(body.documentTypeId, 'documentTypeId', 80),
+      'documentTypeId',
+    ),
     documentNumber: optionalString(body.documentNumber, 'documentNumber', 120),
     issuer: optionalString(body.issuer, 'issuer', 180),
     issuedOn,
     expiresOn,
-    status: enumeration(body.status ?? 'pending', 'status', ['pending', 'valid', 'expired', 'blocked', 'inactive']),
+    status: enumeration(body.status ?? 'pending', 'status', [
+      'pending',
+      'valid',
+      'expired',
+      'blocked',
+      'inactive',
+    ]),
     validationStatus: enumeration(body.validationStatus ?? 'pending', 'validationStatus', [
       'pending',
       'validated',
@@ -227,7 +236,13 @@ export function parseQualification(input: unknown): QualificationInput {
     issuer: optionalString(body.issuer, 'issuer', 180),
     issuedOn,
     expiresOn,
-    status: enumeration(body.status ?? 'valid', 'status', ['pending', 'valid', 'expired', 'blocked', 'inactive']),
+    status: enumeration(body.status ?? 'valid', 'status', [
+      'pending',
+      'valid',
+      'expired',
+      'blocked',
+      'inactive',
+    ]),
     notes: optionalString(body.notes, 'notes', 1000),
   };
 }
@@ -245,7 +260,13 @@ export function parseCourse(input: unknown): CourseInput {
     completedOn,
     expiresOn,
     workloadHours: optionalPositiveNumber(body.workloadHours, 'workloadHours'),
-    status: enumeration(body.status ?? 'valid', 'status', ['pending', 'valid', 'expired', 'blocked', 'inactive']),
+    status: enumeration(body.status ?? 'valid', 'status', [
+      'pending',
+      'valid',
+      'expired',
+      'blocked',
+      'inactive',
+    ]),
     notes: optionalString(body.notes, 'notes', 1000),
   };
 }
@@ -263,7 +284,12 @@ export function parseUnavailability(input: unknown): UnavailabilityInput {
     reason: requiredString(body.reason, 'reason', 500),
     startsAt,
     endsAt,
-    status: enumeration(body.status ?? 'scheduled', 'status', ['scheduled', 'active', 'completed', 'cancelled']),
+    status: enumeration(body.status ?? 'scheduled', 'status', [
+      'scheduled',
+      'active',
+      'completed',
+      'cancelled',
+    ]),
   };
 }
 
@@ -288,9 +314,13 @@ export function parseBlock(input: unknown, asset = false): BlockInput {
   return {
     reasonCode: requiredString(body.reasonCode, 'reasonCode', 64),
     reason: requiredString(body.reason, 'reason', 1000),
-    severity: enumeration(body.severity ?? 'operational', 'severity', asset
-      ? ['operational', 'compliance', 'legal', 'safety', 'maintenance']
-      : ['operational', 'compliance', 'legal', 'safety']),
+    severity: enumeration(
+      body.severity ?? 'operational',
+      'severity',
+      asset
+        ? ['operational', 'compliance', 'legal', 'safety', 'maintenance']
+        : ['operational', 'compliance', 'legal', 'safety'],
+    ),
     startsAt,
     endsAt,
   };
@@ -321,7 +351,8 @@ export function parseAssetCapabilities(input: unknown): AssetCapabilitiesInput {
     throw new BadRequestException('minTemperatureC must be <= maxTemperatureC');
   }
   const maxPallets = optionalInteger(body.maxPallets, 'maxPallets');
-  if (maxPallets !== null && maxPallets <= 0) throw new BadRequestException('maxPallets must be greater than 0');
+  if (maxPallets !== null && maxPallets <= 0)
+    throw new BadRequestException('maxPallets must be greater than 0');
   return {
     refrigerated: booleanValue(body.refrigerated ?? false, 'refrigerated'),
     sealed: booleanValue(body.sealed ?? false, 'sealed'),
@@ -341,7 +372,9 @@ export function parseMaintenancePlan(input: unknown): MaintenancePlanInput {
   const intervalDays = optionalInteger(body.intervalDays, 'intervalDays');
   const intervalOdometerKm = optionalPositiveNumber(body.intervalOdometerKm, 'intervalOdometerKm');
   if ((intervalDays === null || intervalDays <= 0) && intervalOdometerKm === null) {
-    throw new BadRequestException('maintenance plan requires a positive intervalDays or intervalOdometerKm');
+    throw new BadRequestException(
+      'maintenance plan requires a positive intervalDays or intervalOdometerKm',
+    );
   }
   return {
     name: requiredString(body.name, 'name', 180),
@@ -364,12 +397,18 @@ export function parseMaintenance(input: unknown): MaintenanceInput {
   chronological(startedAt, completedAt, 'maintenance start/completion');
   const totalCost = optionalNonNegativeNumber(body.totalCost, 'totalCost');
   const currencyId = optionalUuid(body.currencyId, 'currencyId');
-  if (totalCost !== null && currencyId === null) throw new BadRequestException('currencyId is required when totalCost is provided');
+  if (totalCost !== null && currencyId === null)
+    throw new BadRequestException('currencyId is required when totalCost is provided');
   return {
     maintenancePlanId: optionalUuid(body.maintenancePlanId, 'maintenancePlanId'),
     providerPartyId: optionalUuid(body.providerPartyId, 'providerPartyId'),
     maintenanceType: requiredString(body.maintenanceType, 'maintenanceType', 64),
-    status: enumeration(body.status ?? 'planned', 'status', ['planned', 'in_progress', 'completed', 'cancelled']),
+    status: enumeration(body.status ?? 'planned', 'status', [
+      'planned',
+      'in_progress',
+      'completed',
+      'cancelled',
+    ]),
     plannedAt,
     startedAt,
     completedAt,
@@ -407,7 +446,8 @@ export function parseInsurance(input: unknown): InsuranceInput {
   chronological(startsOn, endsOn, 'insurance validity');
   const coverageAmount = optionalNonNegativeNumber(body.coverageAmount, 'coverageAmount');
   const currencyId = optionalUuid(body.currencyId, 'currencyId');
-  if (coverageAmount !== null && currencyId === null) throw new BadRequestException('currencyId is required when coverageAmount is provided');
+  if (coverageAmount !== null && currencyId === null)
+    throw new BadRequestException('currencyId is required when coverageAmount is provided');
   return {
     insurerPartyId: optionalUuid(body.insurerPartyId, 'insurerPartyId'),
     policyNumber: requiredString(body.policyNumber, 'policyNumber', 120),
@@ -415,7 +455,12 @@ export function parseInsurance(input: unknown): InsuranceInput {
     endsOn,
     coverageAmount,
     currencyId,
-    status: enumeration(body.status ?? 'active', 'status', ['pending', 'active', 'expired', 'cancelled']),
+    status: enumeration(body.status ?? 'active', 'status', [
+      'pending',
+      'active',
+      'expired',
+      'cancelled',
+    ]),
     notes: optionalString(body.notes, 'notes', 1000),
   };
 }
@@ -429,7 +474,12 @@ export function parseInspection(input: unknown): InspectionInput {
     inspectionType: requiredString(body.inspectionType, 'inspectionType', 64),
     inspectorUserId: optionalUuid(body.inspectorUserId, 'inspectorUserId'),
     performedAt,
-    result: enumeration(body.result, 'result', ['passed', 'failed', 'conditional', 'not_applicable']),
+    result: enumeration(body.result, 'result', [
+      'passed',
+      'failed',
+      'conditional',
+      'not_applicable',
+    ]),
     status: enumeration(body.status ?? 'finalized', 'status', ['draft', 'finalized', 'cancelled']),
     checklist: jsonObject(body.checklist ?? {}, 'checklist'),
     notes: optionalString(body.notes, 'notes', 1500),
@@ -441,14 +491,22 @@ export function parseAssetLocation(input: unknown): AssetLocationInput {
   const body = object(input);
   const latitude = numberValue(body.latitude, 'latitude');
   const longitude = numberValue(body.longitude, 'longitude');
-  if (latitude < -90 || latitude > 90) throw new BadRequestException('latitude must be between -90 and 90');
-  if (longitude < -180 || longitude > 180) throw new BadRequestException('longitude must be between -180 and 180');
+  if (latitude < -90 || latitude > 90)
+    throw new BadRequestException('latitude must be between -90 and 90');
+  if (longitude < -180 || longitude > 180)
+    throw new BadRequestException('longitude must be between -180 and 180');
   return {
     cityId: optionalUuid(body.cityId, 'cityId'),
     observedAt: requiredDateTime(body.observedAt, 'observedAt'),
     latitude,
     longitude,
-    source: enumeration(body.source, 'source', ['gps', 'mobile', 'manual', 'integration', 'telematics']),
+    source: enumeration(body.source, 'source', [
+      'gps',
+      'mobile',
+      'manual',
+      'integration',
+      'telematics',
+    ]),
     accuracyM: optionalNonNegativeNumber(body.accuracyM, 'accuracyM'),
     providerReference: optionalString(body.providerReference, 'providerReference', 160),
   };
@@ -511,7 +569,8 @@ function optionalPositiveNumber(value: unknown, field: string): number | null {
 
 function optionalInteger(value: unknown, field: string): number | null {
   if (value === undefined || value === null) return null;
-  if (typeof value !== 'number' || !Number.isInteger(value)) throw new BadRequestException(`${field} must be an integer`);
+  if (typeof value !== 'number' || !Number.isInteger(value))
+    throw new BadRequestException(`${field} must be an integer`);
   return value;
 }
 
@@ -522,7 +581,11 @@ function optionalUuid(value: unknown, field: string): string | null {
 }
 
 function requiredDate(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || Number.isNaN(Date.parse(`${value}T00:00:00Z`))) {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    Number.isNaN(Date.parse(`${value}T00:00:00Z`))
+  ) {
     throw new BadRequestException(`${field} must be an ISO date (YYYY-MM-DD)`);
   }
   return value;
