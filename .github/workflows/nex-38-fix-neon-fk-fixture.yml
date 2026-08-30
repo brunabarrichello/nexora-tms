@@ -1,0 +1,48 @@
+name: NEX-38 Fix Neon FK Fixture
+
+on:
+  push:
+    branches:
+      - feature/NEX-38-freight-proposals
+    paths:
+      - "scripts/nex-38-fix-neon-fk-fixture.py"
+      - ".github/workflows/nex-38-fix-neon-fk-fixture.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-38-freight-proposals
+
+      - name: Render corrected gate
+        run: python scripts/nex-38-fix-neon-fk-fixture.py
+
+      - name: Validate correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          gate=scripts/.nex-38-neon-gate-fixed.yml
+          grep -q "WHERE id='00000000-0000-4000-8000-000000000909';" "$gate"
+          grep -q "freight_proposals_capacity_assignment_fk" "$gate"
+          grep -q "Expected 30 application tables" "$gate"
+          git diff --check -- "$gate"
+
+      - name: Commit rendered gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add scripts/.nex-38-neon-gate-fixed.yml
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git -c core.hooksPath=/dev/null commit -m 'NEX-38 render corrected Neon FK fixture gate'
+          git push origin HEAD:feature/NEX-38-freight-proposals
