@@ -5,12 +5,12 @@ on:
     branches:
       - main
     paths:
-      - "packages/database/**"
-      - "apps/api/src/freight/**"
-      - "apps/api/src/capacity/**"
-      - "apps/api/src/negotiation/**"
-      - "pnpm-workspace.yaml"
-      - ".github/workflows/neon-pr-gate.yml"
+      - 'packages/database/**'
+      - 'apps/api/src/freight/**'
+      - 'apps/api/src/capacity/**'
+      - 'apps/api/src/negotiation/**'
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/neon-pr-gate.yml'
 
 permissions:
   contents: read
@@ -163,6 +163,8 @@ jobs:
             freight_proposal_status_enum_count integer;
             capacity_reservation_status_enum_count integer;
             capacity_reservation_event_enum_count integer;
+            transport_contract_status_enum_count integer;
+            transport_contract_event_enum_count integer;
           BEGIN
             SELECT count(*) INTO table_count
               FROM information_schema.tables
@@ -174,10 +176,10 @@ jobs:
                  'business_parties','business_party_roles','business_party_audit',
                  'business_party_addresses','business_party_contacts','transport_requests',
                  'transport_request_stops','transport_request_cargo_profiles',
-                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events'
+                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
                );
-            IF table_count <> 32 THEN
-              RAISE EXCEPTION 'Expected 32 application tables, found %', table_count;
+            IF table_count <> 34 THEN
+              RAISE EXCEPTION 'Expected 34 application tables, found %', table_count;
             END IF;
 
             SELECT count(*) INTO rls_count
@@ -191,16 +193,16 @@ jobs:
                  'business_parties','business_party_roles','business_party_audit',
                  'business_party_addresses','business_party_contacts','transport_requests',
                  'transport_request_stops','transport_request_cargo_profiles',
-                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events'
+                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
                )
                AND c.relrowsecurity;
-            IF rls_count <> 29 THEN
-              RAISE EXCEPTION 'Expected RLS on 29 tenant-scoped tables, found %', rls_count;
+            IF rls_count <> 31 THEN
+              RAISE EXCEPTION 'Expected RLS on 31 tenant-scoped tables, found %', rls_count;
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 14 THEN
-              RAISE EXCEPTION 'Expected 14 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 15 THEN
+              RAISE EXCEPTION 'Expected 15 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
@@ -299,6 +301,22 @@ jobs:
               RAISE EXCEPTION 'Expected two capacity reservation event values, found %', capacity_reservation_event_enum_count;
             END IF;
 
+            SELECT count(*) INTO transport_contract_status_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='transport_contract_status'
+               AND e.enumlabel IN ('confirmed','refused','cancelled');
+            IF transport_contract_status_enum_count <> 3 THEN
+              RAISE EXCEPTION 'Expected three transport contract status values, found %', transport_contract_status_enum_count;
+            END IF;
+
+            SELECT count(*) INTO transport_contract_event_enum_count
+              FROM pg_type t JOIN pg_enum e ON e.enumtypid=t.oid
+             WHERE t.typname='transport_contract_event_type'
+               AND e.enumlabel IN ('confirmed','refused','cancelled');
+            IF transport_contract_event_enum_count <> 3 THEN
+              RAISE EXCEPTION 'Expected three transport contract event values, found %', transport_contract_event_enum_count;
+            END IF;
+
             IF NOT EXISTS (
               SELECT 1 FROM pg_roles
                WHERE rolname='nexora_app' AND rolcanlogin AND NOT rolbypassrls
@@ -317,7 +335,7 @@ jobs:
                    'business_parties','business_party_roles','business_party_audit',
                    'business_party_addresses','business_party_contacts','transport_requests',
                    'transport_request_stops','transport_request_cargo_profiles',
-                   'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events'
+                   'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
                  )
                  AND r.rolname='nexora_app'
             ) THEN
@@ -417,7 +435,39 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.capacity_reservation_events','SELECT')
                OR NOT has_table_privilege('nexora_app','public.capacity_reservation_events','INSERT')
                OR has_table_privilege('nexora_app','public.capacity_reservation_events','UPDATE')
-               OR has_table_privilege('nexora_app','public.capacity_reservation_events','DELETE') THEN
+               OR has_table_privilege('nexora_app','public.capacity_reservation_events','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_contracts','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_contracts','INSERT')
+               OR has_table_privilege('nexora_app','public.transport_contracts','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_contracts','DELETE')
+               OR NOT has_column_privilege('nexora_app','public.transport_contracts','status','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.transport_contracts','cancelled_by_user_id','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.transport_contracts','cancelled_at','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.transport_contracts','cancel_reason','UPDATE')
+               OR NOT has_column_privilege('nexora_app','public.transport_contracts','updated_at','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','tenant_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','transport_request_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','reservation_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','proposal_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','capacity_assignment_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','driver_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','vehicle_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','carrier_party_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','currency_code','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','freight_amount','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','toll_amount','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','additional_amount','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','payment_terms','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','commercial_notes','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','confirmed_by_user_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','confirmed_at','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','refused_by_user_id','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','refused_at','UPDATE')
+               OR has_column_privilege('nexora_app','public.transport_contracts','refusal_reason','UPDATE')
+               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','INSERT')
+               OR has_table_privilege('nexora_app','public.transport_contract_events','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE') THEN
               RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
             END IF;
           END $$;
@@ -561,6 +611,10 @@ jobs:
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context capacity reservations must be 0, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM capacity_reservation_events;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context capacity reservation events must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_contracts;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context transport contracts must be 0, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_contract_events;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'No-context transport contract events must be 0, got %', visible_count; END IF;
 
             PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
             SELECT count(*) INTO visible_count FROM memberships;
@@ -591,6 +645,10 @@ jobs:
             IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose capacity reservations, got %', visible_count; END IF;
             SELECT count(*) INTO visible_count FROM capacity_reservation_events;
             IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose capacity reservation events, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_contracts;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose transport contracts, got %', visible_count; END IF;
+            SELECT count(*) INTO visible_count FROM transport_contract_events;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'User-only context must not expose transport contract events, got %', visible_count; END IF;
 
             PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
             SELECT count(*) INTO visible_count FROM transport_requests;
@@ -1155,6 +1213,203 @@ jobs:
           END $$;
           SQL
 
+      - name: Validate NEX-40 transport contract runtime and isolation
+        shell: bash
+        env:
+          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APP_DATABASE_URL"
+
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE transport_requests SET status='in_negotiation',updated_at=now() WHERE id='00000000-0000-4000-8000-000000000801';
+          INSERT INTO transport_contracts (
+            id,tenant_id,transport_request_id,reservation_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,
+            status,currency_code,freight_amount,toll_amount,additional_amount,payment_terms,commercial_notes,
+            refused_by_user_id,refused_at,refusal_reason
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000912','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000801','00000000-0000-4000-8000-000000000911','00000000-0000-4000-8000-000000000908',
+            '00000000-0000-4000-8000-000000000904','00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000902',
+            '00000000-0000-4000-8000-000000000501','refused','BRL',9500,313.80,100,'50/50 Pix','Counterproposal',
+            '00000000-0000-4000-8000-000000000101',now(),'Carrier refused final operational confirmation'
+          );
+          INSERT INTO transport_contract_events (tenant_id,contract_id,type,actor_user_id,reason) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000912','refused','00000000-0000-4000-8000-000000000101','Carrier refused final operational confirmation');
+          UPDATE capacity_reservations
+             SET status='cancelled',cancelled_by_user_id='00000000-0000-4000-8000-000000000101',cancelled_at=now(),cancel_reason='Contract refused: Carrier refused final operational confirmation',updated_at=now()
+           WHERE id='00000000-0000-4000-8000-000000000911';
+          INSERT INTO capacity_reservation_events (tenant_id,reservation_id,type,actor_user_id,reason) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000911','cancelled','00000000-0000-4000-8000-000000000101','Contract refused: Carrier refused final operational confirmation');
+
+          INSERT INTO capacity_reservations (
+            id,tenant_id,transport_request_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,approved_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000913','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            '00000000-0000-4000-8000-000000000908','00000000-0000-4000-8000-000000000904','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000101'
+          );
+          INSERT INTO capacity_reservation_events (tenant_id,reservation_id,type,actor_user_id) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000913','approved','00000000-0000-4000-8000-000000000101');
+          INSERT INTO transport_contracts (
+            id,tenant_id,transport_request_id,reservation_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,
+            status,currency_code,freight_amount,toll_amount,additional_amount,payment_terms,commercial_notes,confirmed_by_user_id,confirmed_at
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000914','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            '00000000-0000-4000-8000-000000000913','00000000-0000-4000-8000-000000000908','00000000-0000-4000-8000-000000000904',
+            '00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501',
+            'confirmed','BRL',9500,313.80,100,'50/50 Pix','Counterproposal','00000000-0000-4000-8000-000000000101',now()
+          );
+          INSERT INTO transport_contract_events (tenant_id,contract_id,type,actor_user_id) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000914','confirmed','00000000-0000-4000-8000-000000000101');
+          UPDATE transport_requests SET status='contracted',updated_at=now() WHERE id='00000000-0000-4000-8000-000000000801';
+          DO $$ DECLARE c integer; s text; amount numeric; toll numeric; additional numeric; terms text; request_state text; BEGIN
+            SELECT count(*),max(status::text),max(freight_amount),max(toll_amount),max(additional_amount),max(payment_terms)
+              INTO c,s,amount,toll,additional,terms FROM transport_contracts WHERE id='00000000-0000-4000-8000-000000000914';
+            SELECT status::text INTO request_state FROM transport_requests WHERE id='00000000-0000-4000-8000-000000000801';
+            IF c <> 1 OR s <> 'confirmed' OR amount <> 9500 OR toll <> 313.80 OR additional <> 100 OR terms <> '50/50 Pix' OR request_state <> 'contracted' THEN
+              RAISE EXCEPTION 'Confirmed contract snapshot/request state invalid';
+            END IF;
+          END $$;
+          SQL
+
+          set +e
+          frozen_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE transport_contracts SET freight_amount=1 WHERE id='00000000-0000-4000-8000-000000000914';
+          SQL
+          )"
+          frozen_status=$?
+          set -e
+          if [[ "$frozen_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$frozen_output"; then
+            echo "Frozen contract commercial terms must not be mutable by nexora_app." >&2
+            echo "$frozen_output" >&2
+            exit 1
+          fi
+
+          set +e
+          event_update_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE transport_contract_events SET reason='tampered' WHERE contract_id='00000000-0000-4000-8000-000000000914';
+          SQL
+          )"
+          event_update_status=$?
+          set -e
+          if [[ "$event_update_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$event_update_output"; then
+            echo "Transport contract events must be append-only for nexora_app." >&2
+            echo "$event_update_output" >&2
+            exit 1
+          fi
+
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO capacity_reservations (
+            id,tenant_id,transport_request_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,status,approved_by_user_id,
+            cancelled_by_user_id,cancelled_at,cancel_reason
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000917','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            '00000000-0000-4000-8000-000000000908','00000000-0000-4000-8000-000000000904','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','cancelled','00000000-0000-4000-8000-000000000101',
+            '00000000-0000-4000-8000-000000000101',now(),'Historical duplicate probe'
+          );
+          SQL
+
+          set +e
+          duplicate_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_contracts (
+            id,tenant_id,transport_request_id,reservation_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,status,currency_code,freight_amount,toll_amount,additional_amount,payment_terms,confirmed_by_user_id,confirmed_at
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000918','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            '00000000-0000-4000-8000-000000000917','00000000-0000-4000-8000-000000000908','00000000-0000-4000-8000-000000000904',
+            '00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','confirmed','BRL',9500,313.80,100,'50/50 Pix','00000000-0000-4000-8000-000000000101',now()
+          );
+          SQL
+          )"
+          duplicate_status=$?
+          set -e
+          if [[ "$duplicate_status" -eq 0 ]] || ! grep -qi "transport_contracts_confirmed_" <<<"$duplicate_output"; then
+            echo "Duplicate confirmed transport contract was not rejected as expected." >&2
+            echo "$duplicate_output" >&2
+            exit 1
+          fi
+
+          set +e
+          cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          INSERT INTO transport_contracts (
+            tenant_id,transport_request_id,reservation_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,status,currency_code,freight_amount,toll_amount,additional_amount,payment_terms,refused_by_user_id,refused_at,refusal_reason
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000002','00000000-0000-4000-8000-000000000801','00000000-0000-4000-8000-000000000917',
+            '00000000-0000-4000-8000-000000000908','00000000-0000-4000-8000-000000000904','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','refused','BRL',9500,313.80,100,'50/50 Pix',
+            '00000000-0000-4000-8000-000000000101',now(),'Cross tenant probe'
+          );
+          SQL
+          )"
+          cross_tenant_status=$?
+          set -e
+          if [[ "$cross_tenant_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cross_tenant_output"; then
+            echo "Cross-tenant contract RLS rejection did not behave as expected." >&2
+            echo "$cross_tenant_output" >&2
+            exit 1
+          fi
+
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE transport_contracts
+             SET status='cancelled',cancelled_by_user_id='00000000-0000-4000-8000-000000000101',cancelled_at=now(),cancel_reason='Operational cancellation before trip',updated_at=now()
+           WHERE id='00000000-0000-4000-8000-000000000914';
+          INSERT INTO transport_contract_events (tenant_id,contract_id,type,actor_user_id,reason) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000914','cancelled','00000000-0000-4000-8000-000000000101','Operational cancellation before trip');
+          UPDATE capacity_reservations
+             SET status='cancelled',cancelled_by_user_id='00000000-0000-4000-8000-000000000101',cancelled_at=now(),cancel_reason='Contract cancelled: Operational cancellation before trip',updated_at=now()
+           WHERE id='00000000-0000-4000-8000-000000000913';
+          INSERT INTO capacity_reservation_events (tenant_id,reservation_id,type,actor_user_id,reason) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000913','cancelled','00000000-0000-4000-8000-000000000101','Contract cancelled: Operational cancellation before trip');
+          UPDATE transport_requests SET status='in_negotiation',updated_at=now() WHERE id='00000000-0000-4000-8000-000000000801';
+
+          INSERT INTO capacity_reservations (
+            id,tenant_id,transport_request_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,approved_by_user_id
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000915','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            '00000000-0000-4000-8000-000000000908','00000000-0000-4000-8000-000000000904','00000000-0000-4000-8000-000000000901',
+            '00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000101'
+          );
+          INSERT INTO capacity_reservation_events (tenant_id,reservation_id,type,actor_user_id) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000915','approved','00000000-0000-4000-8000-000000000101');
+          INSERT INTO transport_contracts (
+            id,tenant_id,transport_request_id,reservation_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,carrier_party_id,status,currency_code,freight_amount,toll_amount,additional_amount,payment_terms,commercial_notes,confirmed_by_user_id,confirmed_at
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000916','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000801',
+            '00000000-0000-4000-8000-000000000915','00000000-0000-4000-8000-000000000908','00000000-0000-4000-8000-000000000904',
+            '00000000-0000-4000-8000-000000000901','00000000-0000-4000-8000-000000000902','00000000-0000-4000-8000-000000000501','confirmed','BRL',9500,313.80,100,'50/50 Pix','Counterproposal','00000000-0000-4000-8000-000000000101',now()
+          );
+          INSERT INTO transport_contract_events (tenant_id,contract_id,type,actor_user_id) VALUES
+            ('00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000916','confirmed','00000000-0000-4000-8000-000000000101');
+          UPDATE transport_requests SET status='contracted',updated_at=now() WHERE id='00000000-0000-4000-8000-000000000801';
+          DO $$ DECLARE refused_count integer; cancelled_count integer; confirmed_count integer; event_count integer; active_reservations integer; request_state text; frozen_amount numeric; frozen_terms text; BEGIN
+            SELECT count(*) FILTER (WHERE status='refused'),count(*) FILTER (WHERE status='cancelled'),count(*) FILTER (WHERE status='confirmed')
+              INTO refused_count,cancelled_count,confirmed_count FROM transport_contracts;
+            SELECT count(*) INTO event_count FROM transport_contract_events;
+            SELECT count(*) INTO active_reservations FROM capacity_reservations WHERE status='active';
+            SELECT status::text INTO request_state FROM transport_requests WHERE id='00000000-0000-4000-8000-000000000801';
+            SELECT freight_amount,payment_terms INTO frozen_amount,frozen_terms FROM transport_contracts WHERE id='00000000-0000-4000-8000-000000000914';
+            IF refused_count <> 1 OR cancelled_count <> 1 OR confirmed_count <> 1 OR event_count <> 4 OR active_reservations <> 1 OR request_state <> 'contracted' THEN
+              RAISE EXCEPTION 'Contract lifecycle counts/state invalid: refused %, cancelled %, confirmed %, events %, active reservations %, request %', refused_count,cancelled_count,confirmed_count,event_count,active_reservations,request_state;
+            END IF;
+            IF frozen_amount <> 9500 OR frozen_terms <> '50/50 Pix' THEN RAISE EXCEPTION 'Cancelled contract snapshot was mutated'; END IF;
+          END $$;
+          SQL
+
       - name: Validate tenant-aware foreign-key rejection
         shell: bash
         run: |
@@ -1459,7 +1714,7 @@ jobs:
           fi
 
       - name: Gate summary
-        run: echo "Neon database gate passed through NEX-38 append-only freight proposal negotiation history."
+        run: echo "Neon database gate passed through NEX-40 frozen transport contracts, refusals, cancellations and capacity release."
 
       - name: Delete isolated Neon branch
         if: always()

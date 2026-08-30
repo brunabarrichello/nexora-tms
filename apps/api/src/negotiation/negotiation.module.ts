@@ -8,11 +8,22 @@ import { CapacityReservationController } from './capacity-reservation.controller
 import { CapacityReservationService } from './capacity-reservation.service.js';
 import { FreightProposalController } from './freight-proposal.controller.js';
 import { FreightProposalService } from './freight-proposal.service.js';
+import { TransportContractController } from './transport-contract.controller.js';
+import { TransportContractService } from './transport-contract.service.js';
 
 @Module({
   imports: [AuthenticationModule, TenancyModule, MatchingModule],
-  controllers: [FreightProposalController, CapacityReservationController],
-  providers: [FreightProposalService, CapacityReservationService, TenantRuntimeGateGuard],
-  exports: [FreightProposalService, CapacityReservationService],
+  controllers: [
+    FreightProposalController,
+    CapacityReservationController,
+    TransportContractController,
+  ],
+  providers: [
+    FreightProposalService,
+    CapacityReservationService,
+    TransportContractService,
+    TenantRuntimeGateGuard,
+  ],
+  exports: [FreightProposalService, CapacityReservationService, TransportContractService],
 })
 export class NegotiationModule {}
