@@ -26,7 +26,12 @@ export default async function Page({
     if (values.status && status !== values.status) return false;
     if (values.scope && String(item.subject_scope ?? '') !== values.scope) return false;
     const q = values.q?.toLowerCase();
-    return !q || [item.title, item.document_type_name, item.external_reference].filter(Boolean).some((value) => String(value).toLowerCase().includes(q));
+    return (
+      !q ||
+      [item.title, item.document_type_name, item.external_reference]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(q))
+    );
   });
 
   return (

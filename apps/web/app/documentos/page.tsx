@@ -103,11 +103,11 @@ export default async function Page({
       filterAction="/documentos"
       filterValues={values}
       totalRows={filtered.length}
-      emptyTitle={result.kind === 'ready' ? 'Nenhum documento encontrado' : 'Documentos indisponíveis'}
+      emptyTitle={
+        result.kind === 'ready' ? 'Nenhum documento encontrado' : 'Documentos indisponíveis'
+      }
       emptyDescription={
-        result.kind === 'ready'
-          ? 'Crie o primeiro documento ou ajuste os filtros.'
-          : result.message
+        result.kind === 'ready' ? 'Crie o primeiro documento ou ajuste os filtros.' : result.message
       }
       integrationNotes={[
         'Status vencido é calculado pelo backend a partir da validade.',

@@ -74,9 +74,7 @@ export function DocumentCreateForm({
   );
 }
 
-export function DocumentEditForm({
-  document,
-}: Readonly<{ document: DocumentRecord }>) {
+export function DocumentEditForm({ document }: Readonly<{ document: DocumentRecord }>) {
   const [state, action, pending] = useActionState(updateDocument, initialState);
   const id = String(document.id ?? '');
   return (
@@ -235,7 +233,10 @@ export function DocumentLinkForm({
       )}
       {(subjectScope === 'party' || subjectScope === 'request' || subjectScope === 'other') && (
         <Field label="Relação">
-          <select name="relationType" defaultValue={subjectScope === 'request' ? 'request' : 'registration'}>
+          <select
+            name="relationType"
+            defaultValue={subjectScope === 'request' ? 'request' : 'registration'}
+          >
             {relationOptions(subjectScope).map((value) => (
               <option key={value} value={value}>
                 {value}
@@ -286,11 +287,22 @@ function copyTargetSelection(event: React.ChangeEvent<HTMLSelectElement>): void 
 function relationOptions(scope: string): readonly string[] {
   if (scope === 'request') return ['request', 'commercial', 'compliance', 'reference', 'other'];
   if (scope === 'party') return ['registration', 'compliance', 'contract', 'insurance', 'other'];
-  return ['registration', 'compliance', 'contract', 'insurance', 'request', 'commercial', 'reference', 'other'];
+  return [
+    'registration',
+    'compliance',
+    'contract',
+    'insurance',
+    'request',
+    'commercial',
+    'reference',
+    'other',
+  ];
 }
 
 function targetKindLabel(kind: DocumentTargetKind): string {
-  return ({ party: 'Parceiro', driver: 'Motorista', asset: 'Ativo', request: 'Carga' } as const)[kind];
+  return ({ party: 'Parceiro', driver: 'Motorista', asset: 'Ativo', request: 'Carga' } as const)[
+    kind
+  ];
 }
 
 function text(value: unknown): string {
@@ -388,7 +400,11 @@ function DocumentFormShell({
             <Link href={backHref} className="button button-secondary">
               Cancelar
             </Link>
-            <button type="submit" className="button button-primary" disabled={pending || submitDisabled}>
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={pending || submitDisabled}
+            >
               {pending ? 'Salvando…' : submitLabel}
             </button>
           </div>

@@ -7,8 +7,7 @@ import { apiSend } from '../_lib/api-client';
 import type { DocumentTargetKind } from '../_lib/document-ui';
 
 export type DocumentActionState =
-  | { readonly status: 'idle' }
-  | { readonly status: 'error'; readonly message: string };
+  { readonly status: 'idle' } | { readonly status: 'error'; readonly message: string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const targetKinds = new Set<DocumentTargetKind>(['party', 'driver', 'asset', 'request']);
@@ -142,12 +141,16 @@ function revalidateDocuments(documentId: string): void {
   revalidatePath('/documentos/vencimentos');
 }
 
-async function execute(work: () => Promise<DocumentActionState | void>): Promise<DocumentActionState> {
+async function execute(
+  work: () => Promise<DocumentActionState | void>,
+): Promise<DocumentActionState> {
   try {
     return (await work()) ?? { status: 'idle' };
   } catch (error) {
     if (isRedirectError(error)) throw error;
-    return errorState(error instanceof Error ? error.message : 'Não foi possível concluir a operação.');
+    return errorState(
+      error instanceof Error ? error.message : 'Não foi possível concluir a operação.',
+    );
   }
 }
 

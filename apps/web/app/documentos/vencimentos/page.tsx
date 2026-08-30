@@ -81,7 +81,9 @@ export default async function Page({
       filterAction="/documentos/vencimentos"
       filterValues={values}
       totalRows={expiring.length}
-      emptyTitle={result.kind === 'ready' ? 'Nenhum vencimento na janela' : 'Vencimentos indisponíveis'}
+      emptyTitle={
+        result.kind === 'ready' ? 'Nenhum vencimento na janela' : 'Vencimentos indisponíveis'
+      }
       emptyDescription={
         result.kind === 'ready'
           ? 'Não há documentos vencidos ou próximos do vencimento com os filtros atuais.'

@@ -2,10 +2,13 @@ import { DocumentLinkForm } from '../../../../_components/document-forms';
 import { apiGet } from '../../../../_lib/api-client';
 import type { DocumentRecord, DocumentTargetOption } from '../../../../_lib/document-ui';
 
-export default async function Page({ params }: Readonly<{ params: Promise<{ documentId: string }> }>) {
+export default async function Page({
+  params,
+}: Readonly<{ params: Promise<{ documentId: string }> }>) {
   const { documentId } = await params;
   const document = await apiGet<DocumentRecord>(`/api/v1/documents/${documentId}`);
-  const subjectScope = document.kind === 'ready' ? String(document.data.subject_scope ?? 'other') : 'other';
+  const subjectScope =
+    document.kind === 'ready' ? String(document.data.subject_scope ?? 'other') : 'other';
 
   const [parties, drivers, assets, requests] = await Promise.all([
     loadIf(subjectScope, 'party', '/api/v1/master-data/business-parties'),
@@ -17,8 +20,12 @@ export default async function Page({ params }: Readonly<{ params: Promise<{ docu
   const targets: DocumentTargetOption[] = [
     ...toTargets(parties, 'party', (item) => label(item.legalName ?? item.tradeName, item.taxId)),
     ...toTargets(drivers, 'driver', (item) => label(item.fullName, item.cnhNumber)),
-    ...toTargets(assets, 'asset', (item) => label(item.identifier ?? item.plate, item.assetKind ?? item.vehicleType)),
-    ...toTargets(requests, 'request', (item) => label(item.cargoDescription, item.status ?? item.plannedPickupAt)),
+    ...toTargets(assets, 'asset', (item) =>
+      label(item.identifier ?? item.plate, item.assetKind ?? item.vehicleType),
+    ),
+    ...toTargets(requests, 'request', (item) =>
+      label(item.cargoDescription, item.status ?? item.plannedPickupAt),
+    ),
   ];
 
   return <DocumentLinkForm documentId={documentId} subjectScope={subjectScope} targets={targets} />;
