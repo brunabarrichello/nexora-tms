@@ -146,7 +146,10 @@ export const matchingRuns = pgTable(
       .$type<Record<string, unknown>>()
       .default({})
       .notNull(),
-    rulesSnapshot: jsonb('rules_snapshot').$type<readonly Record<string, unknown>[]>().default([]).notNull(),
+    rulesSnapshot: jsonb('rules_snapshot')
+      .$type<readonly Record<string, unknown>[]>()
+      .default([])
+      .notNull(),
     evaluatedCount: integer('evaluated_count').default(0).notNull(),
     eligibleCount: integer('eligible_count').default(0).notNull(),
     rejectedCount: integer('rejected_count').default(0).notNull(),
@@ -260,15 +263,16 @@ export const matchingCandidates = pgTable(
       'matching_candidates_score_check',
       sql`${table.totalScore} >= 0 AND ${table.totalScore} <= 100`,
     ),
-    check(
-      'matching_candidates_blocking_count_check',
-      sql`${table.blockingReasonCount} >= 0`,
-    ),
+    check('matching_candidates_blocking_count_check', sql`${table.blockingReasonCount} >= 0`),
     check(
       'matching_candidates_status_check',
       sql`(${table.status} = 'eligible' AND ${table.blockingReasonCount} = 0) OR (${table.status} = 'rejected' AND ${table.blockingReasonCount} > 0)`,
     ),
-    index('matching_candidates_tenant_run_rank_idx').on(table.tenantId, table.matchingRunId, table.rank),
+    index('matching_candidates_tenant_run_rank_idx').on(
+      table.tenantId,
+      table.matchingRunId,
+      table.rank,
+    ),
     index('matching_candidates_tenant_run_status_idx').on(
       table.tenantId,
       table.matchingRunId,
