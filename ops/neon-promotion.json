@@ -1,6 +1,6 @@
 {
-  "environment": "development",
+  "environment": "staging",
   "wave": "0018",
   "migration": "0018_tired_exodus",
-  "sourceMainSha": "cde7dcfc8f863dc6312d07413d437727df37fb7e"
+  "sourceMainSha": "5344b464ec896f281a03f9337ac7fdfba90cc8e9"
 }
