@@ -16,7 +16,6 @@ import {
   type NegotiationParticipantKind,
   type NegotiationParticipantRole,
   type NegotiationThreadTransition,
-  type NegotiationUserMessageKind,
 } from './negotiation-collaboration.validation.js';
 
 interface MembershipRow {
