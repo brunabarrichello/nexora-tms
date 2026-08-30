@@ -173,8 +173,11 @@ export class DocumentsService {
           [context.userId, data.reason, documentId],
         );
         if (result.rowCount !== 1) throw new NotFoundException('document not found');
-        const archived = await client.query<DocumentRecord>(`${documentSelect}
-          WHERE d.id=$1::uuid`, [documentId]);
+        const archived = await client.query<DocumentRecord>(
+          `${documentSelect}
+          WHERE d.id=$1::uuid`,
+          [documentId],
+        );
         return archived.rows[0]!;
       }),
     );
@@ -472,8 +475,11 @@ export class DocumentsService {
     client: TenantQueryClient,
     id: string,
   ): Promise<DocumentRecord> {
-    const result = await client.query<DocumentRecord>(`${documentSelect}
-      WHERE d.id=$1::uuid AND d.deleted_at IS NULL`, [id]);
+    const result = await client.query<DocumentRecord>(
+      `${documentSelect}
+      WHERE d.id=$1::uuid AND d.deleted_at IS NULL`,
+      [id],
+    );
     if (!result.rows[0]) throw new NotFoundException('document not found');
     return result.rows[0];
   }
@@ -535,7 +541,9 @@ export class DocumentsService {
       | 'capacity_asset_documents',
     id: string,
   ): Promise<DocumentRecord> {
-    const result = await client.query<DocumentRecord>(`SELECT * FROM ${table} WHERE id=$1::uuid`, [id]);
+    const result = await client.query<DocumentRecord>(`SELECT * FROM ${table} WHERE id=$1::uuid`, [
+      id,
+    ]);
     if (!result.rows[0]) throw new NotFoundException('document link not found');
     return result.rows[0];
   }

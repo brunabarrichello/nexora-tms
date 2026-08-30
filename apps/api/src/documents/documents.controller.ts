@@ -1,14 +1,8 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
 
 import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
-import {
-  DocumentsService,
-  type DocumentRecord,
-} from './documents.service.js';
-import type {
-  PreparedDocumentDownload,
-  PreparedDocumentUpload,
-} from './document-storage.port.js';
+import { DocumentsService, type DocumentRecord } from './documents.service.js';
+import type { PreparedDocumentDownload, PreparedDocumentUpload } from './document-storage.port.js';
 
 @Controller('api/v1/documents')
 @UseGuards(TenantRuntimeGateGuard)
@@ -31,10 +25,7 @@ export class DocumentsController {
   }
 
   @Patch(':documentId')
-  update(
-    @Param('documentId') documentId: string,
-    @Body() body: unknown,
-  ): Promise<DocumentRecord> {
+  update(@Param('documentId') documentId: string, @Body() body: unknown): Promise<DocumentRecord> {
     return this.documents.update(documentId, body);
   }
 
