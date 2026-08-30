@@ -82,3 +82,49 @@ ALTER TABLE "freight_proposals" ADD CONSTRAINT "freight_proposals_tenant_request
 CREATE POLICY "negotiation_messages_tenant_isolation" ON "negotiation_messages" AS PERMISSIVE FOR ALL TO public USING ("negotiation_messages"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("negotiation_messages"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "negotiation_participants_tenant_isolation" ON "negotiation_participants" AS PERMISSIVE FOR ALL TO public USING ("negotiation_participants"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("negotiation_participants"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
 CREATE POLICY "negotiation_threads_tenant_isolation" ON "negotiation_threads" AS PERMISSIVE FOR ALL TO public USING ("negotiation_threads"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("negotiation_threads"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
+--> statement-breakpoint
+CREATE FUNCTION "public"."enforce_negotiation_message_reply_scope"() RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+BEGIN
+  IF NEW.reply_to_message_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  PERFORM 1
+    FROM public.negotiation_messages parent_message
+   WHERE parent_message.id = NEW.reply_to_message_id
+     AND parent_message.tenant_id = NEW.tenant_id
+     AND parent_message.thread_id = NEW.thread_id;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION USING
+      ERRCODE = '23503',
+      MESSAGE = 'reply_to_message_id must reference a message in the same tenant and thread';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+REVOKE ALL ON FUNCTION "public"."enforce_negotiation_message_reply_scope"() FROM PUBLIC;
+--> statement-breakpoint
+CREATE TRIGGER "negotiation_messages_reply_scope_trigger"
+BEFORE INSERT OR UPDATE OF "reply_to_message_id", "tenant_id", "thread_id"
+ON "public"."negotiation_messages"
+FOR EACH ROW
+EXECUTE FUNCTION "public"."enforce_negotiation_message_reply_scope"();
+--> statement-breakpoint
+REVOKE ALL ON TABLE "public"."negotiation_threads" FROM nexora_app;
+--> statement-breakpoint
+REVOKE ALL ON TABLE "public"."negotiation_participants" FROM nexora_app;
+--> statement-breakpoint
+REVOKE ALL ON TABLE "public"."negotiation_messages" FROM nexora_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."negotiation_threads" TO nexora_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE "public"."negotiation_participants" TO nexora_app;
+--> statement-breakpoint
+GRANT SELECT, INSERT ON TABLE "public"."negotiation_messages" TO nexora_app;
