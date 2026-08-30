@@ -208,8 +208,8 @@ jobs:
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 20 THEN
-              RAISE EXCEPTION 'Expected 20 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 21 THEN
+              RAISE EXCEPTION 'Expected 21 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
