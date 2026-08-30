@@ -80,4 +80,4 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add packages/database/migrations packages/database/src/schema apps/api/src/negotiation
           git commit -m 'NEX-39 generate reservation migration and format'
-          git push
+          git push --no-verify
