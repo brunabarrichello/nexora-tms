@@ -1,0 +1,52 @@
+name: Wave 0015 artifact
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0015-foundations
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format schema copy
+        run: pnpm exec prettier --write packages/database/src/schema/reference-data.ts packages/database/src/schema/master-data.ts packages/database/src/schema/index.ts
+
+      - name: Generate Drizzle migration
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Validate Drizzle migration
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Upload generated files
+        uses: actions/upload-artifact@v4
+        with:
+          name: wave-0015-generated
+          path: |
+            packages/database/src/schema/reference-data.ts
+            packages/database/src/schema/master-data.ts
+            packages/database/src/schema/index.ts
+            packages/database/migrations/0015_*.sql
+            packages/database/migrations/meta/0015_snapshot.json
+            packages/database/migrations/meta/_journal.json
+          if-no-files-found: error
