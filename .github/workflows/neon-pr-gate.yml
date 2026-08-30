@@ -9,6 +9,7 @@ on:
       - 'apps/api/src/freight/**'
       - 'apps/api/src/capacity/**'
       - 'apps/api/src/negotiation/**'
+      - 'apps/api/src/master-data/**'
       - 'pnpm-workspace.yaml'
       - '.github/workflows/neon-pr-gate.yml'
 
@@ -177,10 +178,10 @@ jobs:
                  'business_party_addresses','business_party_contacts','transport_requests',
                  'transport_request_stops','transport_request_cargo_profiles',
                  'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
-                 'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
+                 'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags','currencies','departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values'
                );
-            IF table_count <> 44 THEN
-              RAISE EXCEPTION 'Expected 44 application tables, found %', table_count;
+            IF table_count <> 65 THEN
+              RAISE EXCEPTION 'Expected 65 application tables, found %', table_count;
             END IF;
 
             SELECT count(*) INTO rls_count
@@ -195,16 +196,17 @@ jobs:
                  'business_party_addresses','business_party_contacts','transport_requests',
                  'transport_request_stops','transport_request_cargo_profiles',
                  'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
-                 'vehicle_types','body_types','cargo_types','package_types','document_types','tags'
+                 'vehicle_types','body_types','cargo_types','package_types','document_types','tags',
+                 'departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values'
                )
                AND c.relrowsecurity;
-            IF rls_count <> 37 THEN
-              RAISE EXCEPTION 'Expected RLS on 37 tenant-scoped tables, found %', rls_count;
+            IF rls_count <> 57 THEN
+              RAISE EXCEPTION 'Expected RLS on 57 tenant-scoped tables, found %', rls_count;
             END IF;
 
             SELECT count(*) INTO migration_count FROM drizzle.__drizzle_migrations;
-            IF migration_count <> 16 THEN
-              RAISE EXCEPTION 'Expected 16 Drizzle migration records, found %', migration_count;
+            IF migration_count <> 17 THEN
+              RAISE EXCEPTION 'Expected 17 Drizzle migration records, found %', migration_count;
             END IF;
 
             SELECT count(*) INTO request_enum_count
@@ -338,7 +340,7 @@ jobs:
                    'business_party_addresses','business_party_contacts','transport_requests',
                    'transport_request_stops','transport_request_cargo_profiles',
                    'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
-                   'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
+                   'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags','currencies','departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values'
                  )
                  AND r.rolname='nexora_app'
             ) THEN
@@ -510,7 +512,91 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.tags','SELECT')
                OR NOT has_table_privilege('nexora_app','public.tags','INSERT')
                OR NOT has_table_privilege('nexora_app','public.tags','UPDATE')
-               OR has_table_privilege('nexora_app','public.tags','DELETE') THEN
+               OR has_table_privilege('nexora_app','public.tags','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.currencies','SELECT')
+               OR has_table_privilege('nexora_app','public.currencies','INSERT')
+               OR has_table_privilege('nexora_app','public.currencies','UPDATE')
+               OR has_table_privilege('nexora_app','public.currencies','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.departments','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.departments','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.departments','UPDATE')
+               OR has_table_privilege('nexora_app','public.departments','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.cost_centers','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.cost_centers','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.cost_centers','UPDATE')
+               OR has_table_privilege('nexora_app','public.cost_centers','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.number_sequences','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.number_sequences','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.number_sequences','UPDATE')
+               OR has_table_privilege('nexora_app','public.number_sequences','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.module_settings','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.module_settings','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.module_settings','UPDATE')
+               OR has_table_privilege('nexora_app','public.module_settings','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.feature_flags','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.feature_flags','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.feature_flags','UPDATE')
+               OR has_table_privilege('nexora_app','public.feature_flags','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.locations','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.locations','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.locations','UPDATE')
+               OR has_table_privilege('nexora_app','public.locations','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_groups','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_groups','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_groups','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_groups','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_group_members','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_group_members','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_group_members','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_group_members','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_requirements','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_requirements','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_requirements','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_requirements','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_document_requirements','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_document_requirements','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_document_requirements','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_document_requirements','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_service_areas','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_service_areas','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_service_areas','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_service_areas','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_billing_rules','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_billing_rules','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_billing_rules','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_billing_rules','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_credit_limits','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_credit_limits','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_credit_limits','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_credit_limits','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.commodities','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.commodities','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.commodities','UPDATE')
+               OR has_table_privilege('nexora_app','public.commodities','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.business_party_tags','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_tags','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.business_party_tags','UPDATE')
+               OR has_table_privilege('nexora_app','public.business_party_tags','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.driver_tags','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.driver_tags','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.driver_tags','UPDATE')
+               OR has_table_privilege('nexora_app','public.driver_tags','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.capacity_asset_tags','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.capacity_asset_tags','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.capacity_asset_tags','UPDATE')
+               OR has_table_privilege('nexora_app','public.capacity_asset_tags','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_tags','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_tags','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.transport_request_tags','UPDATE')
+               OR has_table_privilege('nexora_app','public.transport_request_tags','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.custom_field_definitions','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.custom_field_definitions','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.custom_field_definitions','UPDATE')
+               OR has_table_privilege('nexora_app','public.custom_field_definitions','DELETE')
+               OR NOT has_table_privilege('nexora_app','public.custom_field_values','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.custom_field_values','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.custom_field_values','UPDATE')
+               OR has_table_privilege('nexora_app','public.custom_field_values','DELETE') THEN
               RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
             END IF;
           END $$;
@@ -1136,6 +1222,41 @@ jobs:
             echo "$cross_tenant_output" >&2
             exit 1
           fi
+
+      - name: Validate Wave 0016 master-data RLS and lifecycle
+        shell: bash
+        env:
+          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APP_DATABASE_URL"
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE
+            visible_count integer;
+          BEGIN
+            PERFORM set_config('app.tenant_id','',false);
+            PERFORM set_config('app.user_id','',false);
+            SELECT count(*) INTO visible_count FROM locations;
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'Wave 0016 locations visible without tenant context: %', visible_count; END IF;
+            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+            INSERT INTO locations (id, tenant_id, created_by_user_id, updated_by_user_id, party_id, address_id, code, name, type, is_active)
+            VALUES ('00000000-0000-4000-8000-000000001601','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','GATE-LOC-A','Gate Location A','warehouse',true);
+            SELECT count(*) INTO visible_count FROM locations WHERE id='00000000-0000-4000-8000-000000001601';
+            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see its Wave 0016 location'; END IF;
+            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
+            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000102',false);
+            SELECT count(*) INTO visible_count FROM locations WHERE id='00000000-0000-4000-8000-000000001601';
+            IF visible_count <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A Wave 0016 location'; END IF;
+            BEGIN
+              INSERT INTO locations (id, tenant_id, created_by_user_id, updated_by_user_id, party_id, address_id, code, name, type, is_active)
+              VALUES ('00000000-0000-4000-8000-000000001602','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','GATE-CROSS','Cross Tenant Location','warehouse',true);
+              RAISE EXCEPTION 'Cross-tenant Wave 0016 insert unexpectedly succeeded';
+            EXCEPTION WHEN insufficient_privilege THEN NULL;
+            END;
+          END $$;
+          SQL
 
       - name: Validate NEX-39 capacity reservation runtime and isolation
         shell: bash
