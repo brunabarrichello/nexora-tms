@@ -1,32 +1,63 @@
-import { OperationalPage } from '../../_components/operational-page';
+import {
+  ApiCollectionPage,
+  collectionRoles,
+  collectionText,
+  hasCollectionRole,
+  type CollectionSearchParams,
+} from '../../_components/api-collection-page';
+
 export const metadata = { title: 'Clientes e embarcadores' };
-export default function Page() {
+
+export default function Page({ searchParams }: Readonly<{ searchParams: CollectionSearchParams }>) {
   return (
-    <OperationalPage
-      eyebrow="Cadastros • Comercial"
+    <ApiCollectionPage
+      searchParams={searchParams}
+      endpoint="/api/v1/master-data/business-parties"
+      basePath="/cadastros/clientes"
+      eyebrow="Master Data • Business Parties"
       title="Clientes e embarcadores"
-      description="Cadastro comercial dos contratantes, embarcadores, contatos, condições e pontos relacionados."
-      actions={[{ href: '/cadastros/clientes/novo', label: 'Novo cliente' }]}
-      metrics={[
-        { label: 'Clientes ativos', helper: 'API de customers' },
-        { label: 'Com dados completos', helper: 'Validação cadastral' },
-        { label: 'Com operação recente', helper: 'Relacionamento com cargas' },
-      ]}
+      description="Contratantes e embarcadores reais do tenant, reutilizando o aggregate root de business parties."
       filters={[
-        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo', 'Bloqueado'] },
-        { label: 'Tipo', name: 'type', options: ['Embarcador', 'Contratante', 'Destinatário'] },
-        { label: 'UF', name: 'uf' },
+        {
+          label: 'Status',
+          name: 'status',
+          options: [
+            { label: 'Ativo', value: 'active' },
+            { label: 'Inativo', value: 'inactive' },
+          ],
+        },
+        {
+          label: 'Papel',
+          name: 'role',
+          options: [
+            { label: 'Cliente', value: 'customer' },
+            { label: 'Embarcador', value: 'shipper' },
+            { label: 'Consignatário', value: 'consignee' },
+          ],
+        },
       ]}
       columns={[
-        { key: 'name', label: 'Cliente' },
-        { key: 'document', label: 'Documento' },
-        { key: 'type', label: 'Tipo' },
-        { key: 'city', label: 'Cidade/UF' },
+        { key: 'legalName', label: 'Razão social' },
+        { key: 'taxId', label: 'CPF/CNPJ' },
+        { key: 'roles', label: 'Papéis' },
+        { key: 'contact', label: 'Contato' },
         { key: 'status', label: 'Status' },
       ]}
-      integrationNotes={[
-        'Condições comerciais e vínculos com freight lanes serão associados sem duplicar o cadastro mestre.',
-      ]}
+      filterItem={(item, values) => {
+        if (!hasCollectionRole(item, ['customer', 'shipper', 'consignee'])) return false;
+        if (values.status && item.status !== values.status) return false;
+        if (values.role && !hasCollectionRole(item, [values.role])) return false;
+        return true;
+      }}
+      mapRow={(item) => ({
+        id: item.id,
+        legalName: collectionText(item.legalName),
+        taxId: collectionText(item.taxId),
+        roles: collectionRoles(item.roles),
+        contact: [item.email, item.phone].filter((value) => typeof value === 'string' && value).join(' • ') || '—',
+        status: collectionText(item.status),
+      })}
+      integrationNotes={['Roles customer/shipper/consignee filtrados sobre o mesmo business party canônico.']}
     />
   );
 }

@@ -1,29 +1,44 @@
-import { OperationalPage } from '../../_components/operational-page';
+import {
+  ApiCollectionPage,
+  collectionText,
+  type CollectionSearchParams,
+} from '../../_components/api-collection-page';
 
 export const metadata = { title: 'Equipamentos' };
 
-export default function Page() {
+export default function Page({ searchParams }: Readonly<{ searchParams: CollectionSearchParams }>) {
   return (
-    <OperationalPage
-      eyebrow="Capacidade • Equipamentos"
-      title="Equipamentos"
-      description="Equipamentos e acessórios operacionais disponíveis para composição de capacidade e requisitos de transporte."
-      filters={[
-        { label: 'Categoria', name: 'category' },
-        {
-          label: 'Disponibilidade',
-          name: 'availability',
-          options: ['Disponível', 'Em uso', 'Manutenção', 'Indisponível'],
-        },
-        { label: 'Unidade', name: 'unit' },
-      ]}
+    <ApiCollectionPage
+      searchParams={searchParams}
+      endpoint="/api/v1/capacity/assets"
+      basePath="/cadastros/equipamentos"
+      eyebrow="Capacity • Implements"
+      title="Equipamentos e implementos"
+      description="Implementos e equipamentos de transporte registrados no mesmo aggregate root de capacity assets."
+      filters={[{ label: 'Status', name: 'status', options: ['active', 'blocked', 'inactive'] }]}
       columns={[
-        { key: 'code', label: 'Código' },
-        { key: 'name', label: 'Equipamento' },
-        { key: 'category', label: 'Categoria' },
-        { key: 'unit', label: 'Unidade' },
+        { key: 'identifier', label: 'Identificador' },
+        { key: 'plate', label: 'Placa' },
+        { key: 'classification', label: 'Classificação' },
+        { key: 'capacity', label: 'Capacidade' },
+        { key: 'owner', label: 'Proprietário' },
         { key: 'status', label: 'Status' },
       ]}
+      filterItem={(item, values) => {
+        if (item.assetKind !== 'implement') return false;
+        if (values.status && item.status !== values.status) return false;
+        return true;
+      }}
+      mapRow={(item) => ({
+        id: item.id,
+        identifier: collectionText(item.identifier),
+        plate: collectionText(item.plate),
+        classification: `${collectionText(item.vehicleType)} / ${collectionText(item.bodyType)}`,
+        capacity: `${collectionText(item.capacityWeightKg)} kg`,
+        owner: collectionText(item.ownerName ?? item.ownerPartyId),
+        status: collectionText(item.status),
+      })}
+      integrationNotes={['Asset kind implement é filtrado sem criar um aggregate root paralelo.']}
     />
   );
 }
