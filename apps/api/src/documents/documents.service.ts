@@ -91,7 +91,17 @@ export class DocumentsService {
           `(d.title ILIKE ${p} OR coalesce(d.document_number,'') ILIKE ${p} OR dt.name ILIKE ${p})`,
         );
       }
-      if (query.status) filters.push(`d.status = ${parameter(query.status)}`);
+      if (query.status === 'expired') {
+        filters.push(
+          `(d.status = 'expired' OR (d.status NOT IN ('archived','blocked') AND d.expires_on IS NOT NULL AND d.expires_on < current_date))`,
+        );
+      } else if (query.status === 'active') {
+        filters.push(
+          `(d.status = 'active' AND (d.expires_on IS NULL OR d.expires_on >= current_date))`,
+        );
+      } else if (query.status) {
+        filters.push(`d.status = ${parameter(query.status)}`);
+      }
       if (query.validationStatus) {
         filters.push(`d.validation_status = ${parameter(query.validationStatus)}`);
       }
@@ -335,7 +345,14 @@ export class DocumentsService {
              tenant_id,document_id,target_kind,relation_type,${target.column},created_by_user_id
            ) VALUES ($1,$2,$3,$4,$5,$6)
            RETURNING id::text AS id`,
-          [context.tenantId, id, data.targetKind, data.relationType, data.targetId, context.userId],
+          [
+            context.tenantId,
+            id,
+            data.targetKind,
+            data.relationType,
+            data.targetId,
+            context.userId,
+          ],
         );
         return this.fetchLink(client, result.rows[0]!.id);
       }),
@@ -405,10 +422,7 @@ export class DocumentsService {
     return result.rows[0];
   }
 
-  private async requireDocumentType(
-    client: TenantQueryClient,
-    id: string,
-  ): Promise<DocumentTypeRow> {
+  private async requireDocumentType(client: TenantQueryClient, id: string): Promise<DocumentTypeRow> {
     const result = await client.query<DocumentTypeRow>(
       `SELECT id::text AS id,subject_scope,has_expiry,requires_validation
          FROM document_types WHERE id=$1::uuid AND is_active=true`,
@@ -442,8 +456,7 @@ export class DocumentsService {
   }
 
   private requireMutableDocument(document: DocumentAggregate): void {
-    if (document.status === 'archived')
-      throw new ConflictException('archived document is immutable');
+    if (document.status === 'archived') throw new ConflictException('archived document is immutable');
   }
 
   private async fetchById(
