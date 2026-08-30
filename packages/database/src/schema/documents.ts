@@ -11,7 +11,6 @@ import {
   pgTable,
   timestamp,
   unique,
-  uniqueIndex,
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
@@ -76,7 +75,11 @@ export const documents = pgTable(
       sql`(${table.deletedAt} IS NULL AND ${table.deletedByUserId} IS NULL AND ${table.deleteReason} IS NULL) OR (${table.deletedAt} IS NOT NULL AND ${table.deletedByUserId} IS NOT NULL AND ${table.deleteReason} IS NOT NULL AND length(trim(${table.deleteReason})) > 0)`,
     ),
     index('documents_tenant_status_created_idx').on(table.tenantId, table.status, table.createdAt),
-    index('documents_tenant_type_status_idx').on(table.tenantId, table.documentTypeId, table.status),
+    index('documents_tenant_type_status_idx').on(
+      table.tenantId,
+      table.documentTypeId,
+      table.status,
+    ),
     index('documents_tenant_expiry_idx').on(table.tenantId, table.expiresOn),
     index('documents_tenant_deleted_idx').on(table.tenantId, table.deletedAt),
     pgPolicy('documents_tenant_isolation', {
@@ -139,11 +142,11 @@ export const documentVersions = pgTable(
     check('document_versions_file_name_check', sql`length(trim(${table.originalFileName})) > 0`),
     check('document_versions_mime_type_check', sql`length(trim(${table.mimeType})) > 0`),
     check('document_versions_byte_size_check', sql`${table.byteSize} > 0`),
+    check('document_versions_checksum_check', sql`${table.checksumSha256} ~ '^[0-9a-f]{64}$'`),
     check(
-      'document_versions_checksum_check',
-      sql`${table.checksumSha256} ~ '^[0-9a-f]{64}$'`,
+      'document_versions_storage_provider_check',
+      sql`length(trim(${table.storageProvider})) > 0`,
     ),
-    check('document_versions_storage_provider_check', sql`length(trim(${table.storageProvider})) > 0`),
     check('document_versions_storage_key_check', sql`length(trim(${table.storageKey})) > 0`),
     check(
       'document_versions_source_check',
@@ -195,11 +198,7 @@ export const documentValidations = pgTable(
     }).onDelete('restrict'),
     foreignKey({
       columns: [table.tenantId, table.documentId, table.documentVersionId],
-      foreignColumns: [
-        documentVersions.tenantId,
-        documentVersions.documentId,
-        documentVersions.id,
-      ],
+      foreignColumns: [documentVersions.tenantId, documentVersions.documentId, documentVersions.id],
       name: 'document_validations_version_fk',
     }).onDelete('restrict'),
     check(

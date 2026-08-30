@@ -3,6 +3,7 @@ export * from './capacity-qualification.js';
 export * from './capacity-reservation.js';
 export * from './capacity.js';
 export * from './currency.js';
+export * from './documents.js';
 export * from './freight-cargo.js';
 export * from './freight-commercial.js';
 export * from './freight.js';
