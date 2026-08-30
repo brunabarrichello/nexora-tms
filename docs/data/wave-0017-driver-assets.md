@@ -14,32 +14,32 @@ A Wave não cria roots paralelos para motorista/veículo e não antecipa o núcl
 
 ### Motoristas
 
-| Tabela | Papel | Lifecycle/runtime |
-| --- | --- | --- |
-| `driver_documents` | registro cadastral de documento, tipo, validade, status e validação | mutável; sem DELETE runtime |
-| `driver_qualifications` | habilitações, endorsements, certificações e autorizações | mutável; vencimento preservado |
-| `driver_courses` | cursos e certificados | mutável; vencimento preservado |
-| `driver_availability` | snapshot atual de disponibilidade | 1 por tenant+driver; upsert |
-| `driver_unavailability_periods` | indisponibilidades programadas/reais | histórico por período |
-| `driver_emergency_contacts` | contatos de emergência | um contato principal ativo por driver |
-| `driver_blocks` | bloqueios operacional/compliance/legal/safety | release explícito; sem delete |
-| `driver_ratings` | avaliações dimensionais 0..5 | append-oriented: SELECT+INSERT |
+| Tabela                          | Papel                                                               | Lifecycle/runtime                     |
+| ------------------------------- | ------------------------------------------------------------------- | ------------------------------------- |
+| `driver_documents`              | registro cadastral de documento, tipo, validade, status e validação | mutável; sem DELETE runtime           |
+| `driver_qualifications`         | habilitações, endorsements, certificações e autorizações            | mutável; vencimento preservado        |
+| `driver_courses`                | cursos e certificados                                               | mutável; vencimento preservado        |
+| `driver_availability`           | snapshot atual de disponibilidade                                   | 1 por tenant+driver; upsert           |
+| `driver_unavailability_periods` | indisponibilidades programadas/reais                                | histórico por período                 |
+| `driver_emergency_contacts`     | contatos de emergência                                              | um contato principal ativo por driver |
+| `driver_blocks`                 | bloqueios operacional/compliance/legal/safety                       | release explícito; sem delete         |
+| `driver_ratings`                | avaliações dimensionais 0..5                                        | append-oriented: SELECT+INSERT        |
 
 ### Ativos
 
-| Tabela | Papel | Lifecycle/runtime |
-| --- | --- | --- |
-| `capacity_asset_capabilities` | refrigeração, lacre, carregamento lateral/traseiro, cargas perigosas, food grade, tracking, pallets e temperatura | 1 por tenant+asset; upsert |
-| `capacity_asset_documents` | registro cadastral de documentos do ativo | mutável; Wave 0018 liga ao documento canônico |
-| `capacity_asset_maintenance_plans` | recorrência por dias/odômetro e próxima execução | ativação/inativação |
-| `capacity_asset_maintenance` | execução planejada/em andamento/concluída/cancelada | histórico operacional |
-| `capacity_asset_maintenance_items` | peças/serviços/custos da manutenção | filho da manutenção |
-| `capacity_asset_insurances` | apólices, vigência e cobertura | histórico; vencimento indexado |
-| `capacity_asset_inspections` | inspeções, resultado, checklist e próxima inspeção | histórico operacional |
-| `capacity_asset_availability` | snapshot atual de disponibilidade | 1 por tenant+asset; upsert |
-| `capacity_asset_unavailability_periods` | indisponibilidades do ativo | histórico por período |
-| `capacity_asset_locations` | posições observadas | append-oriented: SELECT+INSERT |
-| `capacity_asset_blocks` | bloqueios operacional/compliance/legal/safety/maintenance | release explícito; sem delete |
+| Tabela                                  | Papel                                                                                                             | Lifecycle/runtime                             |
+| --------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| `capacity_asset_capabilities`           | refrigeração, lacre, carregamento lateral/traseiro, cargas perigosas, food grade, tracking, pallets e temperatura | 1 por tenant+asset; upsert                    |
+| `capacity_asset_documents`              | registro cadastral de documentos do ativo                                                                         | mutável; Wave 0018 liga ao documento canônico |
+| `capacity_asset_maintenance_plans`      | recorrência por dias/odômetro e próxima execução                                                                  | ativação/inativação                           |
+| `capacity_asset_maintenance`            | execução planejada/em andamento/concluída/cancelada                                                               | histórico operacional                         |
+| `capacity_asset_maintenance_items`      | peças/serviços/custos da manutenção                                                                               | filho da manutenção                           |
+| `capacity_asset_insurances`             | apólices, vigência e cobertura                                                                                    | histórico; vencimento indexado                |
+| `capacity_asset_inspections`            | inspeções, resultado, checklist e próxima inspeção                                                                | histórico operacional                         |
+| `capacity_asset_availability`           | snapshot atual de disponibilidade                                                                                 | 1 por tenant+asset; upsert                    |
+| `capacity_asset_unavailability_periods` | indisponibilidades do ativo                                                                                       | histórico por período                         |
+| `capacity_asset_locations`              | posições observadas                                                                                               | append-oriented: SELECT+INSERT                |
+| `capacity_asset_blocks`                 | bloqueios operacional/compliance/legal/safety/maintenance                                                         | release explícito; sem delete                 |
 
 ## Normalização de catálogos
 
