@@ -13,9 +13,9 @@ test('rejects an empty reason', () => {
   assert.throws(() => parseTransportContractReason({ reason: '   ' }), /reason is required/);
 });
 
-test('rejects a reason longer than 1000 characters', () => {
+test('rejects a reason longer than 950 characters', () => {
   assert.throws(
-    () => parseTransportContractReason({ reason: 'x'.repeat(1001) }),
-    /must not exceed 1000 characters/,
+    () => parseTransportContractReason({ reason: 'x'.repeat(951) }),
+    /must not exceed 950 characters/,
   );
 });
