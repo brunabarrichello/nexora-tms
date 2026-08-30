@@ -1,0 +1,45 @@
+name: NEX-39 Render Gates
+
+on:
+  push:
+    branches:
+      - feature/NEX-39-capacity-reservation
+    paths:
+      - scripts/nex-39-render-gates.py
+      - .github/workflows/nex-39-render-gates.yml
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature/NEX-39-capacity-reservation
+
+      - name: Render permanent gates
+        run: python3 scripts/nex-39-render-gates.py
+
+      - name: Validate rendered gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q "Run Capacity Reservation integration against Neon" .github/workflows/api-tenant-neon-gate.yml
+          grep -q "Expected 32 application tables" .github/workflows/neon-pr-gate.yml
+          grep -q "Expected RLS on 29 tenant-scoped tables" .github/workflows/neon-pr-gate.yml
+          grep -q "Expected 14 Drizzle migration records" .github/workflows/neon-pr-gate.yml
+          grep -q "Validate NEX-39 capacity reservation runtime and isolation" .github/workflows/neon-pr-gate.yml
+
+      - name: Commit rendered gates
+        shell: bash
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/api-tenant-neon-gate.yml .github/workflows/neon-pr-gate.yml
+          git diff --cached --quiet && exit 0
+          git commit -m 'NEX-39 strengthen permanent reservation gates'
+          git push --no-verify
