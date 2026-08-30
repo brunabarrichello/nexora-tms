@@ -1,0 +1,128 @@
+name: Wave 0017 generate
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0017-driver-assets
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0017-driver-assets
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Normalize capacity asset catalog references
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('packages/database/src/schema/capacity.ts')
+          s = p.read_text()
+          marker = "import { businessParties } from './master-data.js';\n"
+          if "./reference-data.js" not in s:
+              s = s.replace(marker, marker + "import { bodyTypes, vehicleTypes } from './reference-data.js';\n")
+          old = "    vehicleType: varchar('vehicle_type', { length: 80 }).notNull(),\n    bodyType: varchar('body_type', { length: 80 }).notNull(),\n"
+          new = "    vehicleTypeId: uuid('vehicle_type_id'),\n    bodyTypeId: uuid('body_type_id'),\n    vehicleType: varchar('vehicle_type', { length: 80 }).notNull(),\n    bodyType: varchar('body_type', { length: 80 }).notNull(),\n"
+          if "vehicleTypeId:" not in s:
+              s = s.replace(old, new)
+          owner_fk = "    foreignKey({\n      columns: [table.tenantId, table.ownerPartyId],\n      foreignColumns: [businessParties.tenantId, businessParties.id],\n      name: 'capacity_assets_owner_party_fk',\n    }).onDelete('restrict'),\n"
+          catalog_fks = owner_fk + "    foreignKey({\n      columns: [table.tenantId, table.vehicleTypeId],\n      foreignColumns: [vehicleTypes.tenantId, vehicleTypes.id],\n      name: 'capacity_assets_vehicle_type_fk',\n    }).onDelete('restrict'),\n    foreignKey({\n      columns: [table.tenantId, table.bodyTypeId],\n      foreignColumns: [bodyTypes.tenantId, bodyTypes.id],\n      name: 'capacity_assets_body_type_fk',\n    }).onDelete('restrict'),\n"
+          if "capacity_assets_vehicle_type_fk" not in s:
+              s = s.replace(owner_fk, catalog_fks)
+          idx = "    index('capacity_assets_tenant_vehicle_body_idx').on(\n      table.tenantId,\n      table.vehicleType,\n      table.bodyType,\n    ),\n"
+          idx_new = idx + "    index('capacity_assets_tenant_vehicle_body_catalog_idx').on(\n      table.tenantId,\n      table.vehicleTypeId,\n      table.bodyTypeId,\n    ),\n"
+          if "capacity_assets_tenant_vehicle_body_catalog_idx" not in s:
+              s = s.replace(idx, idx_new)
+          p.write_text(s)
+          PY
+
+      - name: Format schema
+        run: pnpm exec prettier --write packages/database/src/schema/capacity.ts packages/database/src/schema/capacity-qualification.ts packages/database/src/schema/index.ts
+
+      - name: Typecheck database
+        run: pnpm --filter @nexora/database typecheck
+
+      - name: Generate migration
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Patch runtime grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          MIGRATION=$(python3 - <<'PY'
+          import json
+          from pathlib import Path
+          journal=json.loads(Path('packages/database/migrations/meta/_journal.json').read_text())
+          print('packages/database/migrations/' + journal['entries'][-1]['tag'] + '.sql')
+          PY
+          )
+          cat >> "$MIGRATION" <<'SQL'
+
+          -- Wave 0017 runtime privileges. RLS remains the row-level authorization boundary.
+          GRANT SELECT, INSERT, UPDATE ON TABLE
+            driver_documents,
+            driver_qualifications,
+            driver_courses,
+            driver_availability,
+            driver_unavailability_periods,
+            driver_emergency_contacts,
+            driver_blocks,
+            capacity_asset_capabilities,
+            capacity_asset_documents,
+            capacity_asset_maintenance_plans,
+            capacity_asset_maintenance,
+            capacity_asset_maintenance_items,
+            capacity_asset_insurances,
+            capacity_asset_inspections,
+            capacity_asset_availability,
+            capacity_asset_unavailability_periods,
+            capacity_asset_blocks
+          TO nexora_app;
+
+          GRANT SELECT, INSERT ON TABLE
+            driver_ratings,
+            capacity_asset_locations
+          TO nexora_app;
+          SQL
+
+      - name: Validate migration artifacts
+        run: |
+          pnpm --filter @nexora/database db:check
+          git diff --check
+          test "$(git diff -- packages/database/migrations | grep -E '^\+.*(DROP TABLE|TRUNCATE TABLE|DROP COLUMN|ALTER COLUMN.*TYPE)' | wc -l)" -eq 0
+
+      - name: Commit generated Wave 0017 artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/database/src/schema/capacity.ts \
+                  packages/database/src/schema/capacity-qualification.ts \
+                  packages/database/src/schema/index.ts \
+                  packages/database/migrations
+          git diff --cached --check
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "feat(database): generate Wave 0017 migration"
+          git push origin HEAD:feat/database-wave-0017-driver-assets
