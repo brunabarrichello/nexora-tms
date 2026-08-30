@@ -83,7 +83,10 @@ export const cities = pgTable(
     uniqueIndex('cities_ibge_code_unique')
       .on(table.ibgeCode)
       .where(sql`${table.ibgeCode} IS NOT NULL`),
-    check('cities_ibge_code_check', sql`${table.ibgeCode} IS NULL OR ${table.ibgeCode} ~ '^[0-9]{1,10}$'`),
+    check(
+      'cities_ibge_code_check',
+      sql`${table.ibgeCode} IS NULL OR ${table.ibgeCode} ~ '^[0-9]{1,10}$'`,
+    ),
     check('cities_name_check', sql`length(trim(${table.name})) >= 2`),
     check(
       'cities_latitude_check',
