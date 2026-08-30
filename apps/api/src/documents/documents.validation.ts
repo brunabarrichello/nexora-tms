@@ -11,12 +11,12 @@ export interface CreateDocumentInput {
 }
 
 export interface UpdateDocumentInput {
-  readonly title?: string;
-  readonly issuedOn?: string | null;
-  readonly expiresOn?: string | null;
-  readonly externalReference?: string | null;
-  readonly notes?: string | null;
-  readonly metadata?: Record<string, unknown>;
+  title?: string;
+  issuedOn?: string | null;
+  expiresOn?: string | null;
+  externalReference?: string | null;
+  notes?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export interface PrepareUploadInput {
@@ -64,7 +64,10 @@ export function parseCreateDocument(input: unknown): CreateDocumentInput {
   const expiresOn = optionalDate(body.expiresOn, 'expiresOn');
   chronological(issuedOn, expiresOn, 'document validity');
   return {
-    documentTypeId: requireUuid(requiredString(body.documentTypeId, 'documentTypeId', 80), 'documentTypeId'),
+    documentTypeId: requireUuid(
+      requiredString(body.documentTypeId, 'documentTypeId', 80),
+      'documentTypeId',
+    ),
     title: requiredString(body.title, 'title', 240),
     issuedOn,
     expiresOn,
@@ -84,7 +87,8 @@ export function parseUpdateDocument(input: unknown): UpdateDocumentInput {
     result.externalReference = optionalString(body.externalReference, 'externalReference', 180);
   if ('notes' in body) result.notes = optionalString(body.notes, 'notes', 1500);
   if ('metadata' in body) result.metadata = record(body.metadata, 'metadata');
-  if (Object.keys(result).length === 0) throw new BadRequestException('at least one document field is required');
+  if (Object.keys(result).length === 0)
+    throw new BadRequestException('at least one document field is required');
   if (result.issuedOn !== undefined && result.expiresOn !== undefined)
     chronological(result.issuedOn, result.expiresOn, 'document validity');
   return result;
@@ -210,7 +214,9 @@ function optionalChecksum(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null;
   const checksum = requiredString(value, 'checksumSha256', 64).toLowerCase();
   if (!checksumPattern.test(checksum))
-    throw new BadRequestException('checksumSha256 must be a 64-character lowercase hexadecimal SHA-256');
+    throw new BadRequestException(
+      'checksumSha256 must be a 64-character lowercase hexadecimal SHA-256',
+    );
   return checksum;
 }
 
