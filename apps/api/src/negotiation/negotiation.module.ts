@@ -8,6 +8,8 @@ import { CapacityReservationController } from './capacity-reservation.controller
 import { CapacityReservationService } from './capacity-reservation.service.js';
 import { FreightProposalController } from './freight-proposal.controller.js';
 import { FreightProposalService } from './freight-proposal.service.js';
+import { NegotiationCollaborationController } from './negotiation-collaboration.controller.js';
+import { NegotiationCollaborationService } from './negotiation-collaboration.service.js';
 import { TransportContractController } from './transport-contract.controller.js';
 import { TransportContractService } from './transport-contract.service.js';
 
@@ -17,13 +19,20 @@ import { TransportContractService } from './transport-contract.service.js';
     FreightProposalController,
     CapacityReservationController,
     TransportContractController,
+    NegotiationCollaborationController,
   ],
   providers: [
     FreightProposalService,
     CapacityReservationService,
     TransportContractService,
+    NegotiationCollaborationService,
     TenantRuntimeGateGuard,
   ],
-  exports: [FreightProposalService, CapacityReservationService, TransportContractService],
+  exports: [
+    FreightProposalService,
+    CapacityReservationService,
+    TransportContractService,
+    NegotiationCollaborationService,
+  ],
 })
 export class NegotiationModule {}
