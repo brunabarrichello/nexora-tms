@@ -18,8 +18,8 @@ export function parseTransportContractReason(input: unknown): TransportContractR
   if (reason.length === 0) {
     throw new BadRequestException('reason is required');
   }
-  if (reason.length > 1000) {
-    throw new BadRequestException('reason must not exceed 1000 characters');
+  if (reason.length > 950) {
+    throw new BadRequestException('reason must not exceed 950 characters');
   }
 
   return { reason };
