@@ -2,7 +2,6 @@ FROM node:24-bookworm-slim
 
 ENV PNPM_HOME=/pnpm
 ENV PATH=$PNPM_HOME:$PATH
-ENV NODE_ENV=production
 
 RUN corepack enable && corepack prepare pnpm@11.24.0 --activate
 
@@ -11,6 +10,8 @@ COPY . .
 
 RUN pnpm install --frozen-lockfile
 RUN pnpm build:api
+
+ENV NODE_ENV=production
 
 EXPOSE 3001
 
