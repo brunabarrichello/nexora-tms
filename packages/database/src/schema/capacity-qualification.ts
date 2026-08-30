@@ -188,7 +188,11 @@ export const driverCourses = pgTable(
       'driver_courses_status_check',
       sql`${table.status} in ('pending','valid','expired','blocked','inactive')`,
     ),
-    index('driver_courses_tenant_driver_status_idx').on(table.tenantId, table.driverId, table.status),
+    index('driver_courses_tenant_driver_status_idx').on(
+      table.tenantId,
+      table.driverId,
+      table.status,
+    ),
     index('driver_courses_tenant_expiry_idx').on(table.tenantId, table.expiresOn),
     pgPolicy('driver_courses_tenant_isolation', {
       for: 'all',
@@ -208,7 +212,9 @@ export const driverAvailability = pgTable(
     availableFrom: timestamp('available_from', { withTimezone: true }),
     availableUntil: timestamp('available_until', { withTimezone: true }),
     currentCityId: uuid('current_city_id').references(() => cities.id, { onDelete: 'restrict' }),
-    destinationCityId: uuid('destination_city_id').references(() => cities.id, { onDelete: 'restrict' }),
+    destinationCityId: uuid('destination_city_id').references(() => cities.id, {
+      onDelete: 'restrict',
+    }),
     maxDistanceKm: numeric('max_distance_km', { precision: 10, scale: 2 }),
     notes: varchar('notes', { length: 500 }),
   },
@@ -264,7 +270,10 @@ export const driverUnavailabilityPeriods = pgTable(
       foreignColumns: [drivers.tenantId, drivers.id],
       name: 'driver_unavailability_periods_driver_fk',
     }).onDelete('restrict'),
-    check('driver_unavailability_periods_reason_code_check', sql`length(trim(${table.reasonCode})) > 0`),
+    check(
+      'driver_unavailability_periods_reason_code_check',
+      sql`length(trim(${table.reasonCode})) > 0`,
+    ),
     check('driver_unavailability_periods_reason_check', sql`length(trim(${table.reason})) > 0`),
     check('driver_unavailability_periods_window_check', sql`${table.endsAt} > ${table.startsAt}`),
     check(
@@ -334,7 +343,9 @@ export const driverBlocks = pgTable(
     startsAt: timestamp('starts_at', { withTimezone: true }).defaultNow().notNull(),
     endsAt: timestamp('ends_at', { withTimezone: true }),
     releasedAt: timestamp('released_at', { withTimezone: true }),
-    releasedByUserId: uuid('released_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    releasedByUserId: uuid('released_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
     releaseReason: varchar('release_reason', { length: 1000 }),
   },
   (table) => [
@@ -350,12 +361,19 @@ export const driverBlocks = pgTable(
       'driver_blocks_severity_check',
       sql`${table.severity} in ('operational','compliance','legal','safety')`,
     ),
-    check('driver_blocks_period_check', sql`${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}`),
+    check(
+      'driver_blocks_period_check',
+      sql`${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}`,
+    ),
     check(
       'driver_blocks_release_check',
       sql`(${table.releasedAt} IS NULL AND ${table.releasedByUserId} IS NULL) OR (${table.releasedAt} IS NOT NULL AND ${table.releasedByUserId} IS NOT NULL AND ${table.releaseReason} IS NOT NULL)`,
     ),
-    index('driver_blocks_tenant_driver_active_idx').on(table.tenantId, table.driverId, table.releasedAt),
+    index('driver_blocks_tenant_driver_active_idx').on(
+      table.tenantId,
+      table.driverId,
+      table.releasedAt,
+    ),
     pgPolicy('driver_blocks_tenant_isolation', {
       for: 'all',
       to: 'public',
@@ -730,7 +748,10 @@ export const capacityAssetInspections = pgTable(
     performedAt: timestamp('performed_at', { withTimezone: true }).notNull(),
     result: varchar('result', { length: 24 }).notNull(),
     status: varchar('status', { length: 24 }).default('finalized').notNull(),
-    checklist: jsonb('checklist').$type<Record<string, unknown>>().default(sql`'{}'::jsonb`).notNull(),
+    checklist: jsonb('checklist')
+      .$type<Record<string, unknown>>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     notes: varchar('notes', { length: 1500 }),
     nextDueAt: timestamp('next_due_at', { withTimezone: true }),
   },
@@ -821,15 +842,27 @@ export const capacityAssetUnavailabilityPeriods = pgTable(
     status: varchar('status', { length: 24 }).default('scheduled').notNull(),
   },
   (table) => [
-    unique('capacity_asset_unavailability_periods_tenant_id_id_unique').on(table.tenantId, table.id),
+    unique('capacity_asset_unavailability_periods_tenant_id_id_unique').on(
+      table.tenantId,
+      table.id,
+    ),
     foreignKey({
       columns: [table.tenantId, table.assetId],
       foreignColumns: [capacityAssets.tenantId, capacityAssets.id],
       name: 'capacity_asset_unavailability_periods_asset_fk',
     }).onDelete('restrict'),
-    check('capacity_asset_unavailability_periods_reason_code_check', sql`length(trim(${table.reasonCode})) > 0`),
-    check('capacity_asset_unavailability_periods_reason_check', sql`length(trim(${table.reason})) > 0`),
-    check('capacity_asset_unavailability_periods_window_check', sql`${table.endsAt} > ${table.startsAt}`),
+    check(
+      'capacity_asset_unavailability_periods_reason_code_check',
+      sql`length(trim(${table.reasonCode})) > 0`,
+    ),
+    check(
+      'capacity_asset_unavailability_periods_reason_check',
+      sql`length(trim(${table.reason})) > 0`,
+    ),
+    check(
+      'capacity_asset_unavailability_periods_window_check',
+      sql`${table.endsAt} > ${table.startsAt}`,
+    ),
     check(
       'capacity_asset_unavailability_periods_status_check',
       sql`${table.status} in ('scheduled','active','completed','cancelled')`,
@@ -872,9 +905,18 @@ export const capacityAssetLocations = pgTable(
       foreignColumns: [capacityAssets.tenantId, capacityAssets.id],
       name: 'capacity_asset_locations_asset_fk',
     }).onDelete('restrict'),
-    check('capacity_asset_locations_latitude_check', sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`),
-    check('capacity_asset_locations_longitude_check', sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`),
-    check('capacity_asset_locations_source_check', sql`${table.source} in ('gps','mobile','manual','integration','telematics')`),
+    check(
+      'capacity_asset_locations_latitude_check',
+      sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`,
+    ),
+    check(
+      'capacity_asset_locations_longitude_check',
+      sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`,
+    ),
+    check(
+      'capacity_asset_locations_source_check',
+      sql`${table.source} in ('gps','mobile','manual','integration','telematics')`,
+    ),
     check(
       'capacity_asset_locations_accuracy_check',
       sql`${table.accuracyM} IS NULL OR ${table.accuracyM} >= 0`,
@@ -905,7 +947,9 @@ export const capacityAssetBlocks = pgTable(
     startsAt: timestamp('starts_at', { withTimezone: true }).defaultNow().notNull(),
     endsAt: timestamp('ends_at', { withTimezone: true }),
     releasedAt: timestamp('released_at', { withTimezone: true }),
-    releasedByUserId: uuid('released_by_user_id').references(() => users.id, { onDelete: 'restrict' }),
+    releasedByUserId: uuid('released_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
     releaseReason: varchar('release_reason', { length: 1000 }),
   },
   (table) => [
@@ -921,12 +965,19 @@ export const capacityAssetBlocks = pgTable(
       'capacity_asset_blocks_severity_check',
       sql`${table.severity} in ('operational','compliance','legal','safety','maintenance')`,
     ),
-    check('capacity_asset_blocks_period_check', sql`${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}`),
+    check(
+      'capacity_asset_blocks_period_check',
+      sql`${table.endsAt} IS NULL OR ${table.endsAt} > ${table.startsAt}`,
+    ),
     check(
       'capacity_asset_blocks_release_check',
       sql`(${table.releasedAt} IS NULL AND ${table.releasedByUserId} IS NULL) OR (${table.releasedAt} IS NOT NULL AND ${table.releasedByUserId} IS NOT NULL AND ${table.releaseReason} IS NOT NULL)`,
     ),
-    index('capacity_asset_blocks_tenant_asset_active_idx').on(table.tenantId, table.assetId, table.releasedAt),
+    index('capacity_asset_blocks_tenant_asset_active_idx').on(
+      table.tenantId,
+      table.assetId,
+      table.releasedAt,
+    ),
     pgPolicy('capacity_asset_blocks_tenant_isolation', {
       for: 'all',
       to: 'public',
