@@ -15,8 +15,22 @@ export default function Page() {
         { label: 'Limite', helper: 'Máximo de candidatos' },
       ]}
       filters={[
-        { label: 'Estado', name: 'active', options: [{ label: 'Ativo', value: 'true' }, { label: 'Inativo', value: 'false' }] },
-        { label: 'Padrão', name: 'default', options: [{ label: 'Somente padrão', value: 'true' }, { label: 'Não padrão', value: 'false' }] },
+        {
+          label: 'Estado',
+          name: 'active',
+          options: [
+            { label: 'Ativo', value: 'true' },
+            { label: 'Inativo', value: 'false' },
+          ],
+        },
+        {
+          label: 'Padrão',
+          name: 'default',
+          options: [
+            { label: 'Somente padrão', value: 'true' },
+            { label: 'Não padrão', value: 'false' },
+          ],
+        },
       ]}
       columns={[
         { key: 'name', label: 'Perfil' },

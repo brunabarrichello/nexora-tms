@@ -15,9 +15,35 @@ export default function Page() {
         { label: 'Versões', helper: 'Evolução auditável' },
       ]}
       filters={[
-        { label: 'Categoria', name: 'category', options: ['eligibility', 'capacity', 'equipment', 'compliance', 'availability', 'commercial', 'preference'] },
-        { label: 'Tipo', name: 'blocking', options: [{ label: 'Bloqueadora', value: 'true' }, { label: 'Não bloqueadora', value: 'false' }] },
-        { label: 'Estado', name: 'active', options: [{ label: 'Ativa', value: 'true' }, { label: 'Inativa', value: 'false' }] },
+        {
+          label: 'Categoria',
+          name: 'category',
+          options: [
+            'eligibility',
+            'capacity',
+            'equipment',
+            'compliance',
+            'availability',
+            'commercial',
+            'preference',
+          ],
+        },
+        {
+          label: 'Tipo',
+          name: 'blocking',
+          options: [
+            { label: 'Bloqueadora', value: 'true' },
+            { label: 'Não bloqueadora', value: 'false' },
+          ],
+        },
+        {
+          label: 'Estado',
+          name: 'active',
+          options: [
+            { label: 'Ativa', value: 'true' },
+            { label: 'Inativa', value: 'false' },
+          ],
+        },
       ]}
       columns={[
         { key: 'code', label: 'Código' },

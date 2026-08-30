@@ -14,15 +14,38 @@ export default function Page() {
           title: 'Identificação',
           description: 'Código e descrição funcional usados no histórico de explicabilidade.',
           fields: [
-            { name: 'code', label: 'Código', placeholder: 'ex.: tracking_unavailable', required: true },
-            { name: 'name', label: 'Nome', placeholder: 'Disponibilidade de rastreamento', required: true },
+            {
+              name: 'code',
+              label: 'Código',
+              placeholder: 'ex.: tracking_unavailable',
+              required: true,
+            },
+            {
+              name: 'name',
+              label: 'Nome',
+              placeholder: 'Disponibilidade de rastreamento',
+              required: true,
+            },
             {
               name: 'category',
               label: 'Categoria',
               required: true,
-              options: ['eligibility', 'capacity', 'equipment', 'compliance', 'availability', 'commercial', 'preference'],
+              options: [
+                'eligibility',
+                'capacity',
+                'equipment',
+                'compliance',
+                'availability',
+                'commercial',
+                'preference',
+              ],
             },
-            { name: 'description', label: 'Descrição', placeholder: 'Explique quando e por que a regra é aplicada.', wide: true },
+            {
+              name: 'description',
+              label: 'Descrição',
+              placeholder: 'Explique quando e por que a regra é aplicada.',
+              wide: true,
+            },
           ],
         },
         {

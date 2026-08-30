@@ -15,7 +15,11 @@ export default function Page() {
         { label: 'Com falha', helper: 'Falhas diagnosticáveis' },
       ]}
       filters={[
-        { label: 'Status', name: 'status', options: ['queued', 'running', 'completed', 'failed', 'cancelled'] },
+        {
+          label: 'Status',
+          name: 'status',
+          options: ['queued', 'running', 'completed', 'failed', 'cancelled'],
+        },
         { label: 'Algoritmo', name: 'algorithm', placeholder: 'Versão do algoritmo' },
         { label: 'Carga', name: 'request', placeholder: 'ID ou referência da carga' },
       ]}
