@@ -301,13 +301,18 @@ export class CapacityReservationService {
     if (proposal.current_status !== 'accepted') {
       throw new ConflictException('Only an accepted freight proposal can reserve capacity');
     }
-    if (proposal.request_status !== 'ready_for_quote' && proposal.request_status !== 'in_negotiation') {
+    if (
+      proposal.request_status !== 'ready_for_quote' &&
+      proposal.request_status !== 'in_negotiation'
+    ) {
       throw new ConflictException(
         `Capacity cannot be reserved while transport request status is ${proposal.request_status}`,
       );
     }
     if (proposal.expires_at !== null && proposal.expires_at.valueOf() <= Date.now()) {
-      throw new ConflictException('Accepted freight proposal has expired before capacity reservation');
+      throw new ConflictException(
+        'Accepted freight proposal has expired before capacity reservation',
+      );
     }
   }
 
@@ -373,7 +378,9 @@ export class CapacityReservationService {
       throw new ConflictException('Selected vehicle is no longer active');
     }
     if (state.assignment_carrier_party_id !== state.carrier_party_id) {
-      throw new ConflictException('Selected assignment carrier no longer matches the winning proposal');
+      throw new ConflictException(
+        'Selected assignment carrier no longer matches the winning proposal',
+      );
     }
   }
 

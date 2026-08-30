@@ -92,6 +92,13 @@
       "when": 1788048390019,
       "tag": "0012_yummy_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788050633870,
+      "tag": "0013_gifted_klaw",
+      "breakpoints": true
     }
   ]
 }
