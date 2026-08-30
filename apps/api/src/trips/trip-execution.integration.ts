@@ -96,7 +96,7 @@ async function run(): Promise<void> {
       accuracyM: 15,
       speedKmh: 62.5,
       headingDegrees: 90,
-      recordedAt: '2026-09-10T09:00:00Z',
+      recordedAt: '2026-08-30T20:00:00Z',
       metadata: { satelliteCount: 12 },
     });
     assert.equal(position.provider, 'wave-0023-gps');
@@ -108,7 +108,7 @@ async function run(): Promise<void> {
         providerEventId: 'position-001',
         latitude: -23.4,
         longitude: -46.2,
-        recordedAt: '2026-09-10T09:00:00Z',
+        recordedAt: '2026-08-30T20:00:00Z',
       }),
       /already ingested/,
     );
