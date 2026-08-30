@@ -1,0 +1,59 @@
+name: Wave 0021 Hardening Runner
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0021-negotiation-complement
+    paths:
+      - .github/workflows/wave-0021-harden-runner.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0021-negotiation-complement
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply hardening script
+        run: python scripts/wave-0021-harden.py
+
+      - name: Format workflows
+        run: pnpm exec prettier --write .github/workflows/neon-pr-gate.yml .github/workflows/neon-migrate.yml .github/workflows/neon-negotiation-gate.yml
+
+      - name: Validate Drizzle artifacts
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Validate repository
+        run: pnpm validate
+
+      - name: Commit hardened Wave 0021
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "nexora-wave-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          git commit -m "feat(database): harden Wave 0021 negotiation migration"
+          echo "HARDENED_COMMIT=$(git rev-parse HEAD)"
+          git push origin HEAD:feat/database-wave-0021-negotiation-complement
