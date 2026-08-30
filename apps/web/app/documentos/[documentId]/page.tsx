@@ -45,7 +45,8 @@ export default async function Page({
   let columns: Array<{ key: string; label: string; hrefKey?: string }> = [];
   let rows: Array<Record<string, string>> = [];
   let emptyTitle = 'Nenhum registro encontrado';
-  let emptyDescription = child.kind === 'ready' ? 'A API respondeu sem itens neste histórico.' : child.message;
+  const emptyDescription =
+    child.kind === 'ready' ? 'A API respondeu sem itens neste histórico.' : child.message;
 
   if (view === 'versions') {
     columns = [
@@ -99,7 +100,9 @@ export default async function Page({
         target: documentText(item.target_id),
         relation: documentText(item.relation_type),
         created: documentDateTime(item.created_at),
-        status: active ? 'Desvincular' : `Desvinculado • ${documentDateTime(item.unlinked_at)}`,
+        status: active
+          ? 'Desvincular'
+          : `Desvinculado • ${documentDateTime(item.unlinked_at)}`,
         statusHref: active
           ? `/documentos/${documentId}/vinculos/${documentText(item.id)}/desvincular`
           : '',
@@ -124,11 +127,31 @@ export default async function Page({
         .join(' • ')}
       status={saved ? 'Operação concluída' : childStatus}
       metrics={[
-        { label: 'Status', value: documentStatusLabel(d.effective_status ?? d.status), helper: 'Lifecycle efetivo.' },
-        { label: 'Validação', value: documentStatusLabel(d.validation_status), helper: 'Estado agregado de validação.' },
-        { label: 'Versão atual', value: documentText(d.current_version_number), helper: 'Incrementada atomicamente.' },
-        { label: 'Validade', value: documentDate(d.expires_on), helper: documentText(d.document_type_name) },
-        { label: 'Vínculos ativos', value: documentText(d.active_link_count), helper: 'Associações tipadas ainda vigentes.' },
+        {
+          label: 'Status',
+          value: documentStatusLabel(d.effective_status ?? d.status),
+          helper: 'Lifecycle efetivo.',
+        },
+        {
+          label: 'Validação',
+          value: documentStatusLabel(d.validation_status),
+          helper: 'Estado agregado de validação.',
+        },
+        {
+          label: 'Versão atual',
+          value: documentText(d.current_version_number),
+          helper: 'Incrementada atomicamente.',
+        },
+        {
+          label: 'Validade',
+          value: documentDate(d.expires_on),
+          helper: documentText(d.document_type_name),
+        },
+        {
+          label: 'Vínculos ativos',
+          value: documentText(d.active_link_count),
+          helper: 'Associações tipadas ainda vigentes.',
+        },
       ]}
       filters={[]}
       columns={columns}
@@ -143,8 +166,16 @@ export default async function Page({
       ]}
       actions={[
         { href: `/documentos/${documentId}/versoes/nova`, label: 'Nova versão' },
-        { href: `/documentos/${documentId}/validacoes/nova`, label: 'Validar', variant: 'secondary' },
-        { href: `/documentos/${documentId}/vinculos/novo`, label: 'Vincular', variant: 'secondary' },
+        {
+          href: `/documentos/${documentId}/validacoes/nova`,
+          label: 'Validar',
+          variant: 'secondary',
+        },
+        {
+          href: `/documentos/${documentId}/vinculos/novo`,
+          label: 'Vincular',
+          variant: 'secondary',
+        },
         { href: '/documentos', label: 'Voltar', variant: 'secondary' },
       ]}
       integrationNotes={[
