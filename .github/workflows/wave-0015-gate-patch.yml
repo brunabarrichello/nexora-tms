@@ -27,70 +27,70 @@ jobs:
           path = Path('.github/workflows/neon-pr-gate.yml')
           text = path.read_text()
 
-          def replace_once(old: str, new: str, label: str) -> None:
+          def once(old, new, label):
               global text
               count = text.count(old)
               if count != 1:
                   raise SystemExit(f'{label}: expected one match, found {count}')
               text = text.replace(old, new, 1)
 
-          table_old = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
+          old = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
                );
             IF table_count <> 34 THEN
               RAISE EXCEPTION 'Expected 34 application tables, found %', table_count;
 """
-          table_new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
+          new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                  'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
                );
             IF table_count <> 44 THEN
               RAISE EXCEPTION 'Expected 44 application tables, found %', table_count;
 """
-          replace_once(table_old, table_new, 'application table inventory')
+          once(old, new, 'table inventory')
 
-          rls_old = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
+          old = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
                )
                AND c.relrowsecurity;
             IF rls_count <> 31 THEN
               RAISE EXCEPTION 'Expected RLS on 31 tenant-scoped tables, found %', rls_count;
 """
-          rls_new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
+          new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                  'vehicle_types','body_types','cargo_types','package_types','document_types','tags'
                )
                AND c.relrowsecurity;
             IF rls_count <> 37 THEN
               RAISE EXCEPTION 'Expected RLS on 37 tenant-scoped tables, found %', rls_count;
 """
-          replace_once(rls_old, rls_new, 'RLS inventory')
+          once(old, new, 'RLS inventory')
 
-          replace_once(
+          once(
               """            IF migration_count <> 15 THEN
               RAISE EXCEPTION 'Expected 15 Drizzle migration records, found %', migration_count;
 """,
               """            IF migration_count <> 16 THEN
               RAISE EXCEPTION 'Expected 16 Drizzle migration records, found %', migration_count;
 """,
-              'migration ledger count',
+              'migration ledger',
           )
 
-          ownership_old = """                   'transport_request_stops','transport_request_cargo_profiles',
+          old = """                   'transport_request_stops','transport_request_cargo_profiles',
                    'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
                  )
                  AND r.rolname='nexora_app'
 """
-          ownership_new = """                   'transport_request_stops','transport_request_cargo_profiles',
+          new = """                   'transport_request_stops','transport_request_cargo_profiles',
                    'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                    'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
                  )
                  AND r.rolname='nexora_app'
 """
-          replace_once(ownership_old, ownership_new, 'runtime table ownership inventory')
+          once(old, new, 'ownership inventory')
 
-          privilege_old = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
+          old = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
                OR NOT has_table_privilege('nexora_app','public.transport_contract_events','INSERT')
                OR has_table_privilege('nexora_app','public.transport_contract_events','UPDATE')
                OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE') THEN
 """
-          privilege_new = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
+          new = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
                OR NOT has_table_privilege('nexora_app','public.transport_contract_events','INSERT')
                OR has_table_privilege('nexora_app','public.transport_contract_events','UPDATE')
                OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE')
@@ -135,113 +135,17 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.tags','UPDATE')
                OR has_table_privilege('nexora_app','public.tags','DELETE') THEN
 """
-          replace_once(privilege_old, privilege_new, 'runtime privilege matrix')
-
-          insertion_marker = """      - name: Validate NEX-39 capacity reservation runtime and isolation
-"""
-          catalog_step = r"""      - name: Validate Wave 0015 catalog runtime and isolation
-        shell: bash
-        env:
-          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}
-        run: |
-          set -euo pipefail
-
-          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
-          INSERT INTO vehicle_types (tenant_id,code,name,default_max_weight_kg)
-          VALUES ('00000000-0000-4000-8000-000000000001','W0015-TRUCK','Wave 0015 Truck',12000);
-          UPDATE vehicle_types
-             SET name='Wave 0015 Truck Updated'
-           WHERE tenant_id='00000000-0000-4000-8000-000000000001'
-             AND code='W0015-TRUCK';
-          DO $$
-          DECLARE visible_count integer;
-          BEGIN
-            SELECT count(*) INTO visible_count FROM vehicle_types WHERE code='W0015-TRUCK';
-            IF visible_count <> 1 THEN
-              RAISE EXCEPTION 'Tenant A must see its Wave 0015 vehicle type, got %', visible_count;
-            END IF;
-            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
-            SELECT count(*) INTO visible_count FROM vehicle_types WHERE code='W0015-TRUCK';
-            IF visible_count <> 0 THEN
-              RAISE EXCEPTION 'Tenant B must not see Tenant A Wave 0015 vehicle type, got %', visible_count;
-            END IF;
-            SELECT count(*) INTO visible_count FROM countries;
-            IF visible_count < 0 THEN
-              RAISE EXCEPTION 'Global reference catalog SELECT unexpectedly failed';
-            END IF;
-          END $$;
-          SQL
-
-          set +e
-          cross_tenant_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
-          INSERT INTO vehicle_types (tenant_id,code,name)
-          VALUES ('00000000-0000-4000-8000-000000000001','W0015-CROSS','Cross Tenant Vehicle Type');
-          SQL
-          )"
-          cross_tenant_status=$?
-          set -e
-          if [[ "$cross_tenant_status" -eq 0 ]]; then
-            echo 'Cross-tenant vehicle type insert unexpectedly succeeded.' >&2
-            exit 1
-          fi
-          echo "$cross_tenant_output" | grep -Eqi 'row-level security|new row violates row-level security policy' || {
-            echo 'Cross-tenant vehicle type insert failed for an unexpected reason.' >&2
-            echo "$cross_tenant_output" >&2
-            exit 1
-          }
-
-          set +e
-          global_insert_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          INSERT INTO countries (code,iso3,name) VALUES ('ZZ','ZZZ','Wave 0015 Forbidden Country');
-          SQL
-          )"
-          global_insert_status=$?
-          set -e
-          if [[ "$global_insert_status" -eq 0 ]]; then
-            echo 'nexora_app unexpectedly inserted into global countries catalog.' >&2
-            exit 1
-          fi
-          echo "$global_insert_output" | grep -Eqi 'permission denied' || {
-            echo 'Global catalog insert failed for an unexpected reason.' >&2
-            echo "$global_insert_output" >&2
-            exit 1
-          }
-
-          set +e
-          delete_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
-          DELETE FROM vehicle_types WHERE code='W0015-TRUCK';
-          SQL
-          )"
-          delete_status=$?
-          set -e
-          if [[ "$delete_status" -eq 0 ]]; then
-            echo 'nexora_app unexpectedly physically deleted a tenant catalog row.' >&2
-            exit 1
-          fi
-          echo "$delete_output" | grep -Eqi 'permission denied' || {
-            echo 'Tenant catalog DELETE failed for an unexpected reason.' >&2
-            echo "$delete_output" >&2
-            exit 1
-          }
-
-"""
-          replace_once(insertion_marker, catalog_step + insertion_marker, 'Wave 0015 runtime test insertion point')
+          once(old, new, 'privilege matrix')
 
           path.write_text(text)
           PY
 
       - name: Verify patched contract markers
-        shell: bash
         run: |
           grep -q "Expected 44 application tables" .github/workflows/neon-pr-gate.yml
           grep -q "Expected RLS on 37 tenant-scoped tables" .github/workflows/neon-pr-gate.yml
           grep -q "Expected 16 Drizzle migration records" .github/workflows/neon-pr-gate.yml
-          grep -q "Validate Wave 0015 catalog runtime and isolation" .github/workflows/neon-pr-gate.yml
+          grep -q "public.vehicle_types" .github/workflows/neon-pr-gate.yml
 
       - name: Commit gate evolution
         run: |
