@@ -15,8 +15,16 @@ export default function Page() {
         { label: 'Preferências ativas', helper: 'Configuração por canal' },
       ]}
       filters={[
-        { label: 'Canal', name: 'channel', options: ['Interna', 'E-mail', 'SMS', 'WhatsApp', 'Webhook'] },
-        { label: 'Estado', name: 'status', options: ['Nova', 'Lida', 'Pendente', 'Entregue', 'Falha'] },
+        {
+          label: 'Canal',
+          name: 'channel',
+          options: ['Interna', 'E-mail', 'SMS', 'WhatsApp', 'Webhook'],
+        },
+        {
+          label: 'Estado',
+          name: 'status',
+          options: ['Nova', 'Lida', 'Pendente', 'Entregue', 'Falha'],
+        },
         { label: 'Módulo', name: 'module' },
       ]}
       columns={[
@@ -31,7 +39,9 @@ export default function Page() {
         { href: '/notificacoes/entregas', label: 'Entregas' },
         { href: '/notificacoes/preferencias', label: 'Preferências' },
       ]}
-      integrationNotes={['Notifications consome eventos versionados e não deve se tornar dependência central dos módulos de negócio.']}
+      integrationNotes={[
+        'Notifications consome eventos versionados e não deve se tornar dependência central dos módulos de negócio.',
+      ]}
     />
   );
 }

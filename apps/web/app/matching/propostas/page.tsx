@@ -9,7 +9,11 @@ export default function Page() {
       title="Propostas"
       description="Propostas geradas a partir de resultados de matching, preservando candidato, score e justificativas."
       filters={[
-        { label: 'Estado', name: 'status', options: ['Gerada', 'Enviada', 'Aceita', 'Recusada', 'Expirada'] },
+        {
+          label: 'Estado',
+          name: 'status',
+          options: ['Gerada', 'Enviada', 'Aceita', 'Recusada', 'Expirada'],
+        },
         { label: 'Carga', name: 'load' },
         { label: 'Candidato', name: 'candidate' },
       ]}

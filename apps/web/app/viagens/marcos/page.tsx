@@ -10,7 +10,11 @@ export default function Page() {
       description="Milestones planejados e realizados para acompanhamento do progresso físico da viagem."
       filters={[
         { label: 'Marco', name: 'milestone' },
-        { label: 'Estado', name: 'status', options: ['Pendente', 'No prazo', 'Atrasado', 'Concluído'] },
+        {
+          label: 'Estado',
+          name: 'status',
+          options: ['Pendente', 'No prazo', 'Atrasado', 'Concluído'],
+        },
         { label: 'Viagem', name: 'trip' },
       ]}
       columns={[

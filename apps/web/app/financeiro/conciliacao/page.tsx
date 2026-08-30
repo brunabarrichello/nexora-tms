@@ -14,7 +14,11 @@ export default function Page() {
         { label: 'Conciliados', helper: 'Período selecionado' },
       ]}
       filters={[
-        { label: 'Estado', name: 'status', options: ['Pendente', 'Conciliado', 'Divergente', 'Revisão'] },
+        {
+          label: 'Estado',
+          name: 'status',
+          options: ['Pendente', 'Conciliado', 'Divergente', 'Revisão'],
+        },
         { label: 'Natureza', name: 'nature', options: ['Pagamento', 'Recebimento', 'Ajuste'] },
         { label: 'Período', name: 'period' },
       ]}

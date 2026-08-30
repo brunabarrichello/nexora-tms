@@ -20,7 +20,9 @@ export default function Page() {
         { key: 'scope', label: 'Escopo' },
         { key: 'status', label: 'Estado' },
       ]}
-      integrationNotes={['Eventos obrigatórios de segurança/compliance não poderão ser desabilitados por preferência de usuário.']}
+      integrationNotes={[
+        'Eventos obrigatórios de segurança/compliance não poderão ser desabilitados por preferência de usuário.',
+      ]}
     />
   );
 }

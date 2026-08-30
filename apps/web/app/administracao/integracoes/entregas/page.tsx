@@ -10,7 +10,11 @@ export default function Page() {
       description="Logs funcionais de entregas, tentativas e falhas de adapters/webhooks com correlação e idempotência."
       filters={[
         { label: 'Integração', name: 'integration' },
-        { label: 'Estado', name: 'status', options: ['Pendente', 'Sucesso', 'Falha', 'Retentativa'] },
+        {
+          label: 'Estado',
+          name: 'status',
+          options: ['Pendente', 'Sucesso', 'Falha', 'Retentativa'],
+        },
         { label: 'Evento', name: 'event' },
       ]}
       columns={[
@@ -20,7 +24,9 @@ export default function Page() {
         { key: 'correlationId', label: 'Correlação' },
         { key: 'status', label: 'Estado' },
       ]}
-      integrationNotes={['Logs funcionais não devem armazenar tokens, payloads sensíveis ou credenciais do provedor.']}
+      integrationNotes={[
+        'Logs funcionais não devem armazenar tokens, payloads sensíveis ou credenciais do provedor.',
+      ]}
     />
   );
 }

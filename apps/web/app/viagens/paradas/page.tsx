@@ -10,7 +10,11 @@ export default function Page() {
       description="Sequência de coleta, entrega e pontos intermediários vinculados às viagens."
       filters={[
         { label: 'Tipo', name: 'type', options: ['Coleta', 'Entrega', 'Parada técnica', 'Outro'] },
-        { label: 'Estado', name: 'status', options: ['Planejada', 'Em andamento', 'Concluída', 'Cancelada'] },
+        {
+          label: 'Estado',
+          name: 'status',
+          options: ['Planejada', 'Em andamento', 'Concluída', 'Cancelada'],
+        },
         { label: 'Viagem', name: 'trip' },
       ]}
       columns={[

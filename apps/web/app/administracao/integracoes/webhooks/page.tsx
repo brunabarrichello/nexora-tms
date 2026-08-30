@@ -20,7 +20,9 @@ export default function Page() {
         { key: 'version', label: 'Versão' },
         { key: 'status', label: 'Estado' },
       ]}
-      integrationNotes={['Chaves de assinatura e secrets nunca serão retornados pela API de consulta.']}
+      integrationNotes={[
+        'Chaves de assinatura e secrets nunca serão retornados pela API de consulta.',
+      ]}
     />
   );
 }

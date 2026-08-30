@@ -10,7 +10,11 @@ export default function Page() {
       description="Equipamentos e acessórios operacionais disponíveis para composição de capacidade e requisitos de transporte."
       filters={[
         { label: 'Categoria', name: 'category' },
-        { label: 'Disponibilidade', name: 'availability', options: ['Disponível', 'Em uso', 'Manutenção', 'Indisponível'] },
+        {
+          label: 'Disponibilidade',
+          name: 'availability',
+          options: ['Disponível', 'Em uso', 'Manutenção', 'Indisponível'],
+        },
         { label: 'Unidade', name: 'unit' },
       ]}
       columns={[

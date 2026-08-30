@@ -20,7 +20,9 @@ export default function Page() {
         { key: 'amount', label: 'Valor', align: 'right' },
         { key: 'status', label: 'Estado' },
       ]}
-      integrationNotes={['O contrato será consequência da negociação aceita e não permitirá reescrever o histórico de propostas.']}
+      integrationNotes={[
+        'O contrato será consequência da negociação aceita e não permitirá reescrever o histórico de propostas.',
+      ]}
     />
   );
 }

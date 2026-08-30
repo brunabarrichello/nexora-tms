@@ -9,7 +9,11 @@ export default function Page() {
       title="Reservas"
       description="Reservas temporárias de capacidade derivadas de negociação para evitar dupla alocação durante a decisão."
       filters={[
-        { label: 'Estado', name: 'status', options: ['Ativa', 'Convertida', 'Expirada', 'Cancelada'] },
+        {
+          label: 'Estado',
+          name: 'status',
+          options: ['Ativa', 'Convertida', 'Expirada', 'Cancelada'],
+        },
         { label: 'Recurso', name: 'resource' },
         { label: 'Carga', name: 'load' },
       ]}
@@ -20,7 +24,9 @@ export default function Page() {
         { key: 'expiresAt', label: 'Expira em' },
         { key: 'status', label: 'Estado' },
       ]}
-      integrationNotes={['Conversão em contrato deve ocorrer de forma idempotente e liberar reservas concorrentes incompatíveis.']}
+      integrationNotes={[
+        'Conversão em contrato deve ocorrer de forma idempotente e liberar reservas concorrentes incompatíveis.',
+      ]}
     />
   );
 }
