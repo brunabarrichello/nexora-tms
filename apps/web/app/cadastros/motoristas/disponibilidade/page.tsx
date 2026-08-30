@@ -1,26 +1,16 @@
-import { OperationalPage } from '../../../_components/operational-page';
+import {
+  QualificationResourcePage,
+  type QualificationSearchParams,
+} from '../../../_components/qualification-resource-page';
+import { qualificationConfigs } from '../../../_lib/qualification-config';
 export const metadata = { title: 'Disponibilidade de motoristas' };
-export default function Page() {
+export default function Page({
+  searchParams,
+}: Readonly<{ searchParams: QualificationSearchParams }>) {
   return (
-    <OperationalPage
-      eyebrow="Motoristas • Wave 0017"
-      title="Disponibilidade"
-      description="Agenda e estado operacional de motoristas para matching e programação."
-      filters={[
-        {
-          label: 'Estado',
-          name: 'state',
-          options: ['Disponível', 'Reservado', 'Em viagem', 'Indisponível'],
-        },
-        { label: 'UF base', name: 'uf' },
-      ]}
-      columns={[
-        { key: 'driver', label: 'Motorista' },
-        { key: 'base', label: 'Base' },
-        { key: 'availableFrom', label: 'Disponível a partir de' },
-        { key: 'until', label: 'Até' },
-        { key: 'status', label: 'Estado' },
-      ]}
+    <QualificationResourcePage
+      config={qualificationConfigs['driver-availability']}
+      searchParams={searchParams}
     />
   );
 }

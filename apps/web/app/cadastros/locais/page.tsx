@@ -1,35 +1,72 @@
-import { OperationalPage } from '../../_components/operational-page';
+import {
+  ApiCollectionPage,
+  collectionText,
+  type CollectionSearchParams,
+} from '../../_components/api-collection-page';
+
 export const metadata = { title: 'Locais' };
-export default function Page() {
+
+export default function Page({ searchParams }: Readonly<{ searchParams: CollectionSearchParams }>) {
   return (
-    <OperationalPage
-      eyebrow="Cadastros • Geografia"
-      title="Locais"
-      description="Pontos reutilizáveis de coleta, entrega, armazém, base, terminal e demais referências geográficas."
-      metrics={[
-        { label: 'Locais ativos', helper: 'API de locations' },
-        { label: 'Geocodificados', helper: 'Latitude/longitude válidas' },
-        { label: 'Com janela operacional', helper: 'Horários e restrições' },
-      ]}
+    <ApiCollectionPage
+      searchParams={searchParams}
+      endpoint="/api/v1/master-data/locations"
+      basePath="/cadastros/locais"
+      eyebrow="Wave 0016 • Locations"
+      title="Locais operacionais"
+      description="Origens, destinos, terminais, armazéns, pátios e outros pontos operacionais tenant-scoped."
       filters={[
         {
           label: 'Tipo',
           name: 'type',
-          options: ['Coleta', 'Entrega', 'Armazém', 'Base', 'Terminal', 'Outro'],
+          options: [
+            'customer',
+            'shipper',
+            'consignee',
+            'terminal',
+            'warehouse',
+            'yard',
+            'port',
+            'airport',
+            'border',
+            'support',
+            'other',
+          ],
         },
-        { label: 'UF', name: 'uf' },
-        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
+        {
+          label: 'Status',
+          name: 'active',
+          options: [
+            { label: 'Ativo', value: 'true' },
+            { label: 'Inativo', value: 'false' },
+          ],
+        },
       ]}
       columns={[
+        { key: 'code', label: 'Código' },
         { key: 'name', label: 'Local' },
         { key: 'type', label: 'Tipo' },
-        { key: 'city', label: 'Cidade/UF' },
-        { key: 'window', label: 'Janela' },
+        { key: 'address', label: 'Endereço' },
+        { key: 'reference', label: 'Referência' },
         { key: 'status', label: 'Status' },
       ]}
-      integrationNotes={[
-        'Geocodificação e cálculo de distância serão adapters externos, não campos acoplados ao frontend.',
-      ]}
+      filterItem={(item, values) => {
+        if (values.type && item.type !== values.type) return false;
+        if (values.active && String(item.isActive) !== values.active) return false;
+        return true;
+      }}
+      mapRow={(item) => ({
+        id: item.id,
+        code: collectionText(item.code),
+        name: collectionText(item.name),
+        type: collectionText(item.type),
+        address:
+          [item.street, item.number, item.district, item.postalCode]
+            .filter((value) => typeof value === 'string' && value)
+            .join(', ') || '—',
+        reference: collectionText(item.operationalReference),
+        status: item.isActive === true ? 'Ativo' : 'Inativo',
+      })}
     />
   );
 }

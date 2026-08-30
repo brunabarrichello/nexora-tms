@@ -1,22 +1,16 @@
-import { OperationalPage } from '../../../_components/operational-page';
+import {
+  QualificationResourcePage,
+  type QualificationSearchParams,
+} from '../../../_components/qualification-resource-page';
+import { qualificationConfigs } from '../../../_lib/qualification-config';
 export const metadata = { title: 'Cursos de motoristas' };
-export default function Page() {
+export default function Page({
+  searchParams,
+}: Readonly<{ searchParams: QualificationSearchParams }>) {
   return (
-    <OperationalPage
-      eyebrow="Motoristas • Wave 0017"
-      title="Cursos e qualificações"
-      description="Cursos, certificações, validade e evidências vinculadas aos motoristas."
-      filters={[
-        { label: 'Curso', name: 'course' },
-        { label: 'Validade', name: 'validity', options: ['Válido', 'A vencer', 'Vencido'] },
-      ]}
-      columns={[
-        { key: 'driver', label: 'Motorista' },
-        { key: 'course', label: 'Curso' },
-        { key: 'issuedAt', label: 'Emissão' },
-        { key: 'expiresAt', label: 'Validade' },
-        { key: 'status', label: 'Status' },
-      ]}
+    <QualificationResourcePage
+      config={qualificationConfigs['driver-course']}
+      searchParams={searchParams}
     />
   );
 }
