@@ -5,11 +5,7 @@ import { requireUuid } from '../freight/transport-request.validation.js';
 export type NegotiationThreadTransition = 'closed' | 'cancelled';
 export type NegotiationParticipantKind = 'internal' | 'external';
 export type NegotiationParticipantRole =
-  | 'operator'
-  | 'commercial'
-  | 'carrier'
-  | 'driver'
-  | 'observer';
+  'operator' | 'commercial' | 'carrier' | 'driver' | 'observer';
 export type NegotiationUserMessageKind = 'message' | 'note';
 
 export interface NegotiationThreadCreateInput {
@@ -91,7 +87,8 @@ export function parseNegotiationParticipantCreate(
 
 export function parseNegotiationMessageCreate(input: unknown): NegotiationMessageCreateInput {
   const body = requireRecord(input);
-  const kind = body.kind === undefined ? 'message' : requireEnum(body.kind, 'kind', userMessageKinds);
+  const kind =
+    body.kind === undefined ? 'message' : requireEnum(body.kind, 'kind', userMessageKinds);
   const messageBody = requireTrimmedString(body.body, 'body', 8000);
   const relatedProposalId = optionalUuid(body.relatedProposalId, 'relatedProposalId');
   const replyToMessageId = optionalUuid(body.replyToMessageId, 'replyToMessageId');

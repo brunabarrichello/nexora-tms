@@ -260,7 +260,8 @@ export class NegotiationCollaborationService {
           ],
         );
         const participantId = created.rows[0]?.id;
-        if (!participantId) throw new ConflictException('Negotiation participant could not be added');
+        if (!participantId)
+          throw new ConflictException('Negotiation participant could not be added');
         return mapParticipant(await this.requireParticipantRow(client, id, participantId));
       } catch (error) {
         if (hasPgCode(error, '23505')) {
@@ -271,7 +272,10 @@ export class NegotiationCollaborationService {
     });
   }
 
-  async removeParticipant(threadId: string, participantId: string): Promise<NegotiationParticipant> {
+  async removeParticipant(
+    threadId: string,
+    participantId: string,
+  ): Promise<NegotiationParticipant> {
     const id = requireUuid(threadId, 'threadId');
     const targetId = requireUuid(participantId, 'participantId');
     const context = this.tenantContext.require();
@@ -354,7 +358,9 @@ export class NegotiationCollaborationService {
         return mapMessage(await this.requireMessageRow(client, id, messageId));
       } catch (error) {
         if (hasPgCode(error, '23503')) {
-          throw new ConflictException('Negotiation message reference is outside the current thread');
+          throw new ConflictException(
+            'Negotiation message reference is outside the current thread',
+          );
         }
         throw error;
       }
@@ -415,7 +421,10 @@ export class NegotiationCollaborationService {
     return row;
   }
 
-  private requireOpenThread(thread: ThreadRow, transition: NegotiationThreadTransition | null): void {
+  private requireOpenThread(
+    thread: ThreadRow,
+    transition: NegotiationThreadTransition | null,
+  ): void {
     if (thread.status !== 'open') {
       throw new ConflictException(`Negotiation thread is already ${thread.status}`);
     }
@@ -586,7 +595,9 @@ export class NegotiationCollaborationService {
     );
     const participant = result.rows[0];
     if (!participant) {
-      throw new ConflictException('Current user is not an active participant in this negotiation thread');
+      throw new ConflictException(
+        'Current user is not an active participant in this negotiation thread',
+      );
     }
     return participant;
   }
@@ -604,7 +615,9 @@ export class NegotiationCollaborationService {
         [message.relatedProposalId, thread.transport_request_id],
       );
       if (!proposal.rows[0]) {
-        throw new NotFoundException('Related freight proposal does not belong to this negotiation request');
+        throw new NotFoundException(
+          'Related freight proposal does not belong to this negotiation request',
+        );
       }
     }
 
