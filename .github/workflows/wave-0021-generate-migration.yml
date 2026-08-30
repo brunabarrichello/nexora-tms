@@ -1,0 +1,56 @@
+name: Wave 0021 Generate Migration
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0021-negotiation-complement
+    paths:
+      - .github/workflows/wave-0021-generate-migration.yml
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0021-negotiation-complement
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format schema
+        run: pnpm exec prettier --write packages/database/src/schema/negotiation-collaboration.ts packages/database/src/schema/negotiation.ts packages/database/src/schema/index.ts
+
+      - name: Generate migration
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Check migration artifacts
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Commit generated artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "nexora-wave-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add packages/database/src/schema packages/database/migrations
+          git diff --cached --quiet && exit 0
+          git commit -m "feat(database): generate Wave 0021 negotiation migration"
+          git push origin HEAD:feat/database-wave-0021-negotiation-complement
