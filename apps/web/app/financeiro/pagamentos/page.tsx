@@ -1,3 +1,32 @@
 import { OperationalPage } from '../../_components/operational-page';
 export const metadata = { title: 'Pagamentos' };
-export default function Page() { return <OperationalPage eyebrow="Financeiro • Contas a pagar" title="Pagamentos" description="Obrigações com motoristas, transportadoras, fornecedores e demais parceiros." metrics={[{label:'A vencer',helper:'Obrigações futuras'},{label:'Vencidos',helper:'Pendências financeiras'},{label:'Pagos',helper:'Período selecionado'}]} filters={[{label:'Status',name:'status',options:['Previsto','A vencer','Vencido','Pago','Cancelado']},{label:'Favorecido',name:'payee'},{label:'Período',name:'period'}]} columns={[{key:'dueDate',label:'Vencimento'},{key:'payee',label:'Favorecido'},{key:'reference',label:'Referência'},{key:'amount',label:'Valor',align:'right'},{key:'status',label:'Status'}]} />; }
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Financeiro • Contas a pagar"
+      title="Pagamentos"
+      description="Obrigações com motoristas, transportadoras, fornecedores e demais parceiros."
+      metrics={[
+        { label: 'A vencer', helper: 'Obrigações futuras' },
+        { label: 'Vencidos', helper: 'Pendências financeiras' },
+        { label: 'Pagos', helper: 'Período selecionado' },
+      ]}
+      filters={[
+        {
+          label: 'Status',
+          name: 'status',
+          options: ['Previsto', 'A vencer', 'Vencido', 'Pago', 'Cancelado'],
+        },
+        { label: 'Favorecido', name: 'payee' },
+        { label: 'Período', name: 'period' },
+      ]}
+      columns={[
+        { key: 'dueDate', label: 'Vencimento' },
+        { key: 'payee', label: 'Favorecido' },
+        { key: 'reference', label: 'Referência' },
+        { key: 'amount', label: 'Valor', align: 'right' },
+        { key: 'status', label: 'Status' },
+      ]}
+    />
+  );
+}

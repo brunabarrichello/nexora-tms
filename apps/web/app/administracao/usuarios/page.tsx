@@ -1,1 +1,26 @@
-import { OperationalPage } from '../../_components/operational-page'; export const metadata={title:'Usuários'}; export default function Page(){return <OperationalPage eyebrow="Administração • Identidade" title="Usuários" description="Tela preparada para usuários, identidade externa, membership e lifecycle sem acoplamento ao IdP." status="Integração estrutural pendente" filters={[{label:'Status',name:'status',options:['Ativo','Pendente','Suspenso','Inativo']},{label:'Unidade',name:'unit'}]} columns={[{key:'name',label:'Usuário'},{key:'email',label:'E-mail'},{key:'membership',label:'Membership'},{key:'identity',label:'Identidade externa'},{key:'status',label:'Status'}]} integrationNotes={['Auth0/OIDC e TenantContext permanecem pendentes no roadmap; a página não simula autenticação.']} />;}
+import { OperationalPage } from '../../_components/operational-page';
+export const metadata = { title: 'Usuários' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Administração • Identidade"
+      title="Usuários"
+      description="Tela preparada para usuários, identidade externa, membership e lifecycle sem acoplamento ao IdP."
+      status="Integração estrutural pendente"
+      filters={[
+        { label: 'Status', name: 'status', options: ['Ativo', 'Pendente', 'Suspenso', 'Inativo'] },
+        { label: 'Unidade', name: 'unit' },
+      ]}
+      columns={[
+        { key: 'name', label: 'Usuário' },
+        { key: 'email', label: 'E-mail' },
+        { key: 'membership', label: 'Membership' },
+        { key: 'identity', label: 'Identidade externa' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={[
+        'Auth0/OIDC e TenantContext permanecem pendentes no roadmap; a página não simula autenticação.',
+      ]}
+    />
+  );
+}

@@ -1,3 +1,27 @@
 import { OperationalPage } from '../../_components/operational-page';
 export const metadata = { title: 'Departamentos' };
-export default function Page() { return <OperationalPage eyebrow="Cadastros • Organização" title="Departamentos" description="Estrutura organizacional para responsáveis, aprovações, escopos e classificações internas." metrics={[{label:'Ativos',helper:'API de departments'},{label:'Usuários vinculados',helper:'Memberships futuros'},{label:'Com centro de custo',helper:'Relacionamento financeiro'}]} filters={[{label:'Status',name:'status',options:['Ativo','Inativo']},{label:'Unidade',name:'unit'}]} columns={[{key:'code',label:'Código'},{key:'name',label:'Departamento'},{key:'unit',label:'Unidade'},{key:'costCenter',label:'Centro de custo'},{key:'status',label:'Status'}]} />; }
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Cadastros • Organização"
+      title="Departamentos"
+      description="Estrutura organizacional para responsáveis, aprovações, escopos e classificações internas."
+      metrics={[
+        { label: 'Ativos', helper: 'API de departments' },
+        { label: 'Usuários vinculados', helper: 'Memberships futuros' },
+        { label: 'Com centro de custo', helper: 'Relacionamento financeiro' },
+      ]}
+      filters={[
+        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
+        { label: 'Unidade', name: 'unit' },
+      ]}
+      columns={[
+        { key: 'code', label: 'Código' },
+        { key: 'name', label: 'Departamento' },
+        { key: 'unit', label: 'Unidade' },
+        { key: 'costCenter', label: 'Centro de custo' },
+        { key: 'status', label: 'Status' },
+      ]}
+    />
+  );
+}

@@ -1,6 +1,65 @@
 import { FormPage } from '../../_components/form-page';
 export const metadata = { title: 'Novo documento' };
-export default function Page() { return <FormPage eyebrow="Governança • Documentos" title="Novo documento" description="Metadados e vínculo do documento preparados para upload/versionamento posterior." backHref="/documentos" groups={[
-  {title:'Classificação',description:'Identifique o tipo e a entidade relacionada.',fields:[{name:'name',label:'Nome do documento',required:true,wide:true},{name:'type',label:'Tipo',options:['CNH','CRLV','RNTRC','Seguro','Comprovante','Fiscal','Contrato','Outro'],required:true},{name:'entityType',label:'Tipo de vínculo',options:['Motorista','Veículo','Transportadora','Carga','Viagem','Empresa'],required:true},{name:'entityId',label:'Entidade vinculada',required:true}]},
-  {title:'Vigência e validação',description:'Regras para vencimento e bloqueio.',fields:[{name:'issuedAt',label:'Emissão',type:'date'},{name:'expiresAt',label:'Validade',type:'date'},{name:'validation',label:'Validação inicial',options:['Pendente','Válido','Reprovado'],required:true},{name:'blocking',label:'Bloqueia operação se inválido',options:['Sim','Não']}]},
- ]} checklist={['Upload seguro e versionado','Hash e metadados do arquivo','Vínculo tipado','Histórico de validação','Alertas de vencimento']} />; }
+export default function Page() {
+  return (
+    <FormPage
+      eyebrow="Governança • Documentos"
+      title="Novo documento"
+      description="Metadados e vínculo do documento preparados para upload/versionamento posterior."
+      backHref="/documentos"
+      groups={[
+        {
+          title: 'Classificação',
+          description: 'Identifique o tipo e a entidade relacionada.',
+          fields: [
+            { name: 'name', label: 'Nome do documento', required: true, wide: true },
+            {
+              name: 'type',
+              label: 'Tipo',
+              options: [
+                'CNH',
+                'CRLV',
+                'RNTRC',
+                'Seguro',
+                'Comprovante',
+                'Fiscal',
+                'Contrato',
+                'Outro',
+              ],
+              required: true,
+            },
+            {
+              name: 'entityType',
+              label: 'Tipo de vínculo',
+              options: ['Motorista', 'Veículo', 'Transportadora', 'Carga', 'Viagem', 'Empresa'],
+              required: true,
+            },
+            { name: 'entityId', label: 'Entidade vinculada', required: true },
+          ],
+        },
+        {
+          title: 'Vigência e validação',
+          description: 'Regras para vencimento e bloqueio.',
+          fields: [
+            { name: 'issuedAt', label: 'Emissão', type: 'date' },
+            { name: 'expiresAt', label: 'Validade', type: 'date' },
+            {
+              name: 'validation',
+              label: 'Validação inicial',
+              options: ['Pendente', 'Válido', 'Reprovado'],
+              required: true,
+            },
+            { name: 'blocking', label: 'Bloqueia operação se inválido', options: ['Sim', 'Não'] },
+          ],
+        },
+      ]}
+      checklist={[
+        'Upload seguro e versionado',
+        'Hash e metadados do arquivo',
+        'Vínculo tipado',
+        'Histórico de validação',
+        'Alertas de vencimento',
+      ]}
+    />
+  );
+}

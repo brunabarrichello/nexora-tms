@@ -9,9 +9,21 @@ const roadmap = [
 ];
 
 const shortcuts = [
-  { href: '/cadastros', label: 'Abrir Cadastros', description: 'Empresas, clientes, motoristas, ativos e locais.' },
-  { href: '/cargas', label: 'Abrir Cargas', description: 'Estrutura preparada para a próxima wave funcional.' },
-  { href: '/documentos', label: 'Abrir Documentos', description: 'Core documental, versões e validações.' },
+  {
+    href: '/cadastros',
+    label: 'Abrir Cadastros',
+    description: 'Empresas, clientes, motoristas, ativos e locais.',
+  },
+  {
+    href: '/cargas',
+    label: 'Abrir Cargas',
+    description: 'Estrutura preparada para a próxima wave funcional.',
+  },
+  {
+    href: '/documentos',
+    label: 'Abrir Documentos',
+    description: 'Core documental, versões e validações.',
+  },
 ];
 
 export default function HomePage() {
@@ -22,8 +34,8 @@ export default function HomePage() {
           <span className="eyebrow">Operação</span>
           <h1>Visão operacional</h1>
           <p>
-            Acompanhe a evolução do Nexora TMS e acesse os módulos que formarão o fluxo
-            Cadastros → Cargas → Matching → Negociação → Viagens.
+            Acompanhe a evolução do Nexora TMS e acesse os módulos que formarão o fluxo Cadastros →
+            Cargas → Matching → Negociação → Viagens.
           </p>
         </div>
         <Link className="button button-primary" href="/cadastros">

@@ -1,1 +1,19 @@
-import { OperationalPage } from '../../../_components/operational-page'; export const metadata={title:'Tags'}; export default function Page(){return <OperationalPage eyebrow="Catálogos • tags" title="Tags" description="Etiquetas reutilizáveis tenant-scoped para classificação transversal de entidades." filters={[{label:'Status',name:'status',options:['Ativo','Inativo']}]} columns={[{key:'code',label:'Código'},{key:'name',label:'Nome'},{key:'description',label:'Descrição'},{key:'status',label:'Status'}]} integrationNotes={['Persistência já prevista em tags com RLS por tenant.']} />;}
+import { OperationalPage } from '../../../_components/operational-page';
+export const metadata = { title: 'Tags' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Catálogos • tags"
+      title="Tags"
+      description="Etiquetas reutilizáveis tenant-scoped para classificação transversal de entidades."
+      filters={[{ label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] }]}
+      columns={[
+        { key: 'code', label: 'Código' },
+        { key: 'name', label: 'Nome' },
+        { key: 'description', label: 'Descrição' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={['Persistência já prevista em tags com RLS por tenant.']}
+    />
+  );
+}

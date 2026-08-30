@@ -102,7 +102,9 @@ export function OperationalPage({
       {tabs.length > 0 ? (
         <nav className="page-tabs" aria-label="Seções relacionadas">
           {tabs.map((tab) => (
-            <Link href={tab.href} key={tab.href}>{tab.label}</Link>
+            <Link href={tab.href} key={tab.href}>
+              {tab.label}
+            </Link>
           ))}
         </nav>
       ) : null}
@@ -113,7 +115,9 @@ export function OperationalPage({
             <span className="eyebrow">Consulta operacional</span>
             <h2>Registros</h2>
           </div>
-          <span className="result-count">{rows.length > 0 ? `${rows.length} carregados` : 'Aguardando dados'}</span>
+          <span className="result-count">
+            {rows.length > 0 ? `${rows.length} carregados` : 'Aguardando dados'}
+          </span>
         </div>
 
         <form className="filter-grid" aria-label={`Filtros de ${title}`}>
@@ -127,7 +131,11 @@ export function OperationalPage({
               {filter.options ? (
                 <select name={filter.name} defaultValue="">
                   <option value="">Todos</option>
-                  {filter.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                  {filter.options.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
                 </select>
               ) : (
                 <input name={filter.name} placeholder={filter.placeholder ?? 'Filtrar'} />
@@ -135,8 +143,12 @@ export function OperationalPage({
             </label>
           ))}
           <div className="filter-actions">
-            <button className="button button-secondary" type="button">Limpar</button>
-            <button className="button button-primary" type="button">Aplicar filtros</button>
+            <button className="button button-secondary" type="button">
+              Limpar
+            </button>
+            <button className="button button-primary" type="button">
+              Aplicar filtros
+            </button>
           </div>
         </form>
 
@@ -145,24 +157,40 @@ export function OperationalPage({
             <thead>
               <tr>
                 {columns.map((column) => (
-                  <th key={column.key} className={column.align === 'right' ? 'align-right' : undefined}>{column.label}</th>
+                  <th
+                    key={column.key}
+                    className={column.align === 'right' ? 'align-right' : undefined}
+                  >
+                    {column.label}
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {rows.length > 0 ? rows.map((row, index) => (
-                <tr key={row.id ?? String(index)}>
-                  {columns.map((column) => (
-                    <td key={column.key} className={column.align === 'right' ? 'align-right' : undefined}>
-                      {column.key === 'status' ? <span className="table-status">{row[column.key]}</span> : row[column.key]}
-                    </td>
-                  ))}
-                </tr>
-              )) : (
+              {rows.length > 0 ? (
+                rows.map((row, index) => (
+                  <tr key={row.id ?? String(index)}>
+                    {columns.map((column) => (
+                      <td
+                        key={column.key}
+                        className={column.align === 'right' ? 'align-right' : undefined}
+                      >
+                        {column.key === 'status' ? (
+                          <span className="table-status">{row[column.key]}</span>
+                        ) : (
+                          row[column.key]
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
                 <tr>
                   <td colSpan={columns.length}>
                     <div className="table-empty">
-                      <span className="empty-icon" aria-hidden="true">NX</span>
+                      <span className="empty-icon" aria-hidden="true">
+                        NX
+                      </span>
                       <div>
                         <strong>{emptyTitle}</strong>
                         <p>{emptyDescription}</p>
@@ -178,9 +206,13 @@ export function OperationalPage({
         <footer className="table-footer">
           <span>Paginação preparada para cursor/offset da API.</span>
           <div className="pager" aria-label="Paginação">
-            <button type="button" disabled>Anterior</button>
+            <button type="button" disabled>
+              Anterior
+            </button>
             <span>Página 1</span>
-            <button type="button" disabled>Próxima</button>
+            <button type="button" disabled>
+              Próxima
+            </button>
           </div>
         </footer>
       </section>
@@ -189,14 +221,34 @@ export function OperationalPage({
         <div>
           <span className="eyebrow">Contrato de evolução</span>
           <h2>Página preparada para produção</h2>
-          <p>Os pontos abaixo já têm lugar definido na interface e podem ser conectados sem redesenho estrutural.</p>
+          <p>
+            Os pontos abaixo já têm lugar definido na interface e podem ser conectados sem redesenho
+            estrutural.
+          </p>
         </div>
         <div className="readiness-grid">
-          <article><strong>API & dados</strong><span>Filtros, paginação, ordenação, detalhe e mutações.</span></article>
-          <article><strong>Segurança</strong><span>TenantContext, RBAC, ações condicionais e escopo por perfil.</span></article>
-          <article><strong>Auditoria</strong><span>created/updated, lifecycle, soft delete e histórico operacional.</span></article>
-          <article><strong>UX operacional</strong><span>Loading, vazio, erro, feedback, atalhos e responsividade.</span></article>
-          {integrationNotes.map((note) => <article key={note}><strong>Integração</strong><span>{note}</span></article>)}
+          <article>
+            <strong>API & dados</strong>
+            <span>Filtros, paginação, ordenação, detalhe e mutações.</span>
+          </article>
+          <article>
+            <strong>Segurança</strong>
+            <span>TenantContext, RBAC, ações condicionais e escopo por perfil.</span>
+          </article>
+          <article>
+            <strong>Auditoria</strong>
+            <span>created/updated, lifecycle, soft delete e histórico operacional.</span>
+          </article>
+          <article>
+            <strong>UX operacional</strong>
+            <span>Loading, vazio, erro, feedback, atalhos e responsividade.</span>
+          </article>
+          {integrationNotes.map((note) => (
+            <article key={note}>
+              <strong>Integração</strong>
+              <span>{note}</span>
+            </article>
+          ))}
         </div>
       </section>
     </div>

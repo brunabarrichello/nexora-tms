@@ -38,7 +38,9 @@ export function ModulePage({
       <section className="card-grid card-grid-3">
         {highlights.map((item) => (
           <article className="feature-card" key={item.title}>
-            <span className="feature-index">{String(highlights.indexOf(item) + 1).padStart(2, '0')}</span>
+            <span className="feature-index">
+              {String(highlights.indexOf(item) + 1).padStart(2, '0')}
+            </span>
             <h2>{item.title}</h2>
             <p>{item.description}</p>
           </article>
@@ -50,8 +52,8 @@ export function ModulePage({
           <span className="eyebrow">Integração progressiva</span>
           <h2>Pronto para receber dados reais</h2>
           <p>
-            Esta página já faz parte da navegação oficial. Tabelas, filtros, formulários,
-            permissões e APIs serão conectados conforme a wave correspondente for concluída.
+            Esta página já faz parte da navegação oficial. Tabelas, filtros, formulários, permissões
+            e APIs serão conectados conforme a wave correspondente for concluída.
           </p>
         </div>
       </section>

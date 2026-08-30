@@ -1,1 +1,22 @@
-import { OperationalPage } from '../../../_components/operational-page'; export const metadata={title:'Tipos de carga'}; export default function Page(){return <OperationalPage eyebrow="Catálogos • cargo_types" title="Tipos de carga" description="Classificação tenant-scoped de cargas e indicação de manuseio especial." filters={[{label:'Status',name:'status',options:['Ativo','Inativo']},{label:'Manuseio especial',name:'special',options:['Sim','Não']}]} columns={[{key:'code',label:'Código'},{key:'name',label:'Nome'},{key:'special',label:'Manuseio especial'},{key:'status',label:'Status'}]} integrationNotes={['Persistência já prevista em cargo_types com RLS por tenant.']} />;}
+import { OperationalPage } from '../../../_components/operational-page';
+export const metadata = { title: 'Tipos de carga' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Catálogos • cargo_types"
+      title="Tipos de carga"
+      description="Classificação tenant-scoped de cargas e indicação de manuseio especial."
+      filters={[
+        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
+        { label: 'Manuseio especial', name: 'special', options: ['Sim', 'Não'] },
+      ]}
+      columns={[
+        { key: 'code', label: 'Código' },
+        { key: 'name', label: 'Nome' },
+        { key: 'special', label: 'Manuseio especial' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={['Persistência já prevista em cargo_types com RLS por tenant.']}
+    />
+  );
+}

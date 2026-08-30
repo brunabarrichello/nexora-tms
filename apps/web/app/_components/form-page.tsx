@@ -25,7 +25,14 @@ type FormPageProps = {
   checklist?: string[];
 };
 
-export function FormPage({ eyebrow, title, description, backHref, groups, checklist = [] }: Readonly<FormPageProps>) {
+export function FormPage({
+  eyebrow,
+  title,
+  description,
+  backHref,
+  groups,
+  checklist = [],
+}: Readonly<FormPageProps>) {
   return (
     <div className="page-stack">
       <section className="page-hero operational-hero">
@@ -34,7 +41,9 @@ export function FormPage({ eyebrow, title, description, backHref, groups, checkl
           <h1>{title}</h1>
           <p>{description}</p>
         </div>
-        <Link href={backHref} className="button button-secondary">Voltar para lista</Link>
+        <Link href={backHref} className="button button-secondary">
+          Voltar para lista
+        </Link>
       </section>
 
       <form className="entity-form">
@@ -50,12 +59,24 @@ export function FormPage({ eyebrow, title, description, backHref, groups, checkl
               </div>
               <div className="field-grid">
                 {group.fields.map((field) => (
-                  <label className={`form-field ${field.wide ? 'field-wide' : ''}`} key={field.name}>
-                    <span>{field.label}{field.required ? ' *' : ''}</span>
+                  <label
+                    className={`form-field ${field.wide ? 'field-wide' : ''}`}
+                    key={field.name}
+                  >
+                    <span>
+                      {field.label}
+                      {field.required ? ' *' : ''}
+                    </span>
                     {field.options ? (
                       <select name={field.name} defaultValue="" required={field.required}>
-                        <option value="" disabled>Selecione</option>
-                        {field.options.map((option) => <option key={option} value={option}>{option}</option>)}
+                        <option value="" disabled>
+                          Selecione
+                        </option>
+                        {field.options.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
                       </select>
                     ) : (
                       <input
@@ -76,20 +97,32 @@ export function FormPage({ eyebrow, title, description, backHref, groups, checkl
           <section className="form-summary-card">
             <span className="eyebrow">Validação</span>
             <h2>Pronto para persistência</h2>
-            <p>O formulário já separa dados por domínio e está preparado para validação server-side, RBAC e auditoria.</p>
+            <p>
+              O formulário já separa dados por domínio e está preparado para validação server-side,
+              RBAC e auditoria.
+            </p>
             <ul className="check-list">
-              {(checklist.length > 0 ? checklist : [
-                'Validação de campos e domínio',
-                'Escopo obrigatório de tenant',
-                'Controle de duplicidade',
-                'Auditoria de criação e alteração',
-                'Soft delete e lifecycle',
-              ]).map((item) => <li key={item}>{item}</li>)}
+              {(checklist.length > 0
+                ? checklist
+                : [
+                    'Validação de campos e domínio',
+                    'Escopo obrigatório de tenant',
+                    'Controle de duplicidade',
+                    'Auditoria de criação e alteração',
+                    'Soft delete e lifecycle',
+                  ]
+              ).map((item) => (
+                <li key={item}>{item}</li>
+              ))}
             </ul>
           </section>
           <div className="sticky-actions">
-            <button type="button" className="button button-secondary">Salvar rascunho</button>
-            <button type="button" className="button button-primary">Salvar cadastro</button>
+            <button type="button" className="button button-secondary">
+              Salvar rascunho
+            </button>
+            <button type="button" className="button button-primary">
+              Salvar cadastro
+            </button>
           </div>
         </aside>
       </form>

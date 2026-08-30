@@ -1,3 +1,41 @@
 import { OperationalPage } from '../_components/operational-page';
 export const metadata = { title: 'Matching' };
-export default function Page() { return <OperationalPage eyebrow="Inteligência operacional" title="Matching" description="Matching persistente e explicável entre cargas, motoristas, veículos, transportadoras e capacidades." metrics={[{label:'Cargas elegíveis',helper:'Cargas abertas'},{label:'Candidatos',helper:'Resultados persistidos'},{label:'Alta aderência',helper:'Score configurável'},{label:'Com bloqueios',helper:'Regras impeditivas'}]} filters={[{label:'Score mínimo',name:'score',options:['90%+','80%+','70%+']},{label:'Disponibilidade',name:'availability',options:['Agora','24 horas','48 horas']},{label:'Tipo',name:'type',options:['Motorista/veículo','Transportadora'] }]} columns={[{key:'load',label:'Carga'},{key:'candidate',label:'Candidato'},{key:'score',label:'Score'},{key:'explanation',label:'Principais critérios'},{key:'status',label:'Status'}]} tabs={[{href:'/matching',label:'Resultados'},{href:'/cargas',label:'Cargas abertas'},{href:'/negociacoes',label:'Negociações'}]} integrationNotes={['Cada resultado armazenará score, critérios positivos, penalidades e blockers para explicabilidade.']} />; }
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Inteligência operacional"
+      title="Matching"
+      description="Matching persistente e explicável entre cargas, motoristas, veículos, transportadoras e capacidades."
+      metrics={[
+        { label: 'Cargas elegíveis', helper: 'Cargas abertas' },
+        { label: 'Candidatos', helper: 'Resultados persistidos' },
+        { label: 'Alta aderência', helper: 'Score configurável' },
+        { label: 'Com bloqueios', helper: 'Regras impeditivas' },
+      ]}
+      filters={[
+        { label: 'Score mínimo', name: 'score', options: ['90%+', '80%+', '70%+'] },
+        {
+          label: 'Disponibilidade',
+          name: 'availability',
+          options: ['Agora', '24 horas', '48 horas'],
+        },
+        { label: 'Tipo', name: 'type', options: ['Motorista/veículo', 'Transportadora'] },
+      ]}
+      columns={[
+        { key: 'load', label: 'Carga' },
+        { key: 'candidate', label: 'Candidato' },
+        { key: 'score', label: 'Score' },
+        { key: 'explanation', label: 'Principais critérios' },
+        { key: 'status', label: 'Status' },
+      ]}
+      tabs={[
+        { href: '/matching', label: 'Resultados' },
+        { href: '/cargas', label: 'Cargas abertas' },
+        { href: '/negociacoes', label: 'Negociações' },
+      ]}
+      integrationNotes={[
+        'Cada resultado armazenará score, critérios positivos, penalidades e blockers para explicabilidade.',
+      ]}
+    />
+  );
+}

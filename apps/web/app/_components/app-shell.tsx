@@ -25,7 +25,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark" aria-hidden="true">N</div>
+          <div className="brand-mark" aria-hidden="true">
+            N
+          </div>
           <div>
             <strong>Nexora</strong>
             <span>Transportation Management</span>
@@ -35,7 +37,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <nav className="primary-nav" aria-label="Navegação principal">
           {primaryNavigation.map((item) => (
             <Link key={item.href} href={item.href} className="nav-link">
-              <span className="nav-icon" aria-hidden="true">{item.short}</span>
+              <span className="nav-icon" aria-hidden="true">
+                {item.short}
+              </span>
               <span>{item.label}</span>
             </Link>
           ))}
@@ -43,7 +47,11 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
 
         <div className="sidebar-section-label">Sistema</div>
         <nav className="secondary-nav" aria-label="Navegação administrativa">
-          {secondaryNavigation.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
+          {secondaryNavigation.map((item) => (
+            <Link href={item.href} key={item.href}>
+              {item.label}
+            </Link>
+          ))}
         </nav>
 
         <div className="sidebar-footer">
@@ -67,7 +75,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               <input type="search" placeholder="Buscar no Nexora" />
             </label>
             <span className="tenant-chip">Tenant: demonstração</span>
-            <div className="avatar" aria-label="Perfil do usuário">NX</div>
+            <div className="avatar" aria-label="Perfil do usuário">
+              NX
+            </div>
           </div>
         </header>
 

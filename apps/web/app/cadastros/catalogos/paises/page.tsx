@@ -1,1 +1,20 @@
-import { OperationalPage } from '../../../_components/operational-page'; export const metadata={title:'Países'}; export default function Page(){return <OperationalPage eyebrow="Geografia • countries" title="Países" description="Catálogo geográfico global com códigos ISO2, ISO3 e numérico." filters={[{label:'Status',name:'status',options:['Ativo','Inativo']}]} columns={[{key:'code',label:'ISO2'},{key:'iso3',label:'ISO3'},{key:'numeric',label:'Numérico'},{key:'name',label:'País'},{key:'status',label:'Status'}]} integrationNotes={['Catálogo global compartilhado entre tenants.']} />;}
+import { OperationalPage } from '../../../_components/operational-page';
+export const metadata = { title: 'Países' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Geografia • countries"
+      title="Países"
+      description="Catálogo geográfico global com códigos ISO2, ISO3 e numérico."
+      filters={[{ label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] }]}
+      columns={[
+        { key: 'code', label: 'ISO2' },
+        { key: 'iso3', label: 'ISO3' },
+        { key: 'numeric', label: 'Numérico' },
+        { key: 'name', label: 'País' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={['Catálogo global compartilhado entre tenants.']}
+    />
+  );
+}

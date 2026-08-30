@@ -1,1 +1,26 @@
-import { OperationalPage } from '../../../_components/operational-page'; export const metadata={title:'Cidades'}; export default function Page(){return <OperationalPage eyebrow="Geografia • cities" title="Cidades" description="Municípios vinculados a estado, com código IBGE e coordenadas opcionais validadas em par." filters={[{label:'Estado',name:'state'},{label:'IBGE',name:'ibge'},{label:'Status',name:'status',options:['Ativo','Inativo']}]} columns={[{key:'name',label:'Cidade'},{key:'state',label:'Estado'},{key:'ibge',label:'IBGE'},{key:'coordinates',label:'Coordenadas'},{key:'status',label:'Status'}]} integrationNotes={['Latitude e longitude devem ser informadas juntas ou permanecer ambas nulas.']} />;}
+import { OperationalPage } from '../../../_components/operational-page';
+export const metadata = { title: 'Cidades' };
+export default function Page() {
+  return (
+    <OperationalPage
+      eyebrow="Geografia • cities"
+      title="Cidades"
+      description="Municípios vinculados a estado, com código IBGE e coordenadas opcionais validadas em par."
+      filters={[
+        { label: 'Estado', name: 'state' },
+        { label: 'IBGE', name: 'ibge' },
+        { label: 'Status', name: 'status', options: ['Ativo', 'Inativo'] },
+      ]}
+      columns={[
+        { key: 'name', label: 'Cidade' },
+        { key: 'state', label: 'Estado' },
+        { key: 'ibge', label: 'IBGE' },
+        { key: 'coordinates', label: 'Coordenadas' },
+        { key: 'status', label: 'Status' },
+      ]}
+      integrationNotes={[
+        'Latitude e longitude devem ser informadas juntas ou permanecer ambas nulas.',
+      ]}
+    />
+  );
+}

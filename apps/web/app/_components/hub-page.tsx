@@ -42,7 +42,10 @@ export function HubPage({ eyebrow, title, description, items }: Readonly<HubPage
         <div>
           <span className="eyebrow">Padrão Nexora</span>
           <h2>Navegação modular e evolutiva</h2>
-          <p>Cada área possui rota própria, contrato visual consistente e espaço reservado para API, permissões, auditoria e lifecycle.</p>
+          <p>
+            Cada área possui rota própria, contrato visual consistente e espaço reservado para API,
+            permissões, auditoria e lifecycle.
+          </p>
         </div>
       </section>
     </div>

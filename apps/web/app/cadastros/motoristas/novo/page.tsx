@@ -1,7 +1,57 @@
 import { FormPage } from '../../../_components/form-page';
 export const metadata = { title: 'Novo motorista' };
-export default function Page() { return <FormPage eyebrow="Cadastros • Motoristas" title="Novo motorista" description="Cadastro preparado para qualificação documental, capabilities, matching e viagens." backHref="/cadastros/motoristas" groups={[
-  {title:'Dados pessoais',description:'Identificação e canais de contato.',fields:[{name:'name',label:'Nome completo',required:true,wide:true},{name:'cpf',label:'CPF',required:true},{name:'birthDate',label:'Data de nascimento',type:'date'},{name:'phone',label:'Telefone',type:'tel',required:true},{name:'email',label:'E-mail',type:'email'}]},
-  {title:'Habilitação',description:'Dados essenciais para qualificação.',fields:[{name:'cnh',label:'CNH',required:true},{name:'category',label:'Categoria',options:['B','C','D','E'],required:true},{name:'expiry',label:'Validade CNH',type:'date',required:true},{name:'rntrcLink',label:'Vínculo RNTRC'}]},
-  {title:'Base e disponibilidade',description:'Informações utilizadas pelo matching.',fields:[{name:'city',label:'Cidade base',required:true},{name:'state',label:'UF base',required:true},{name:'availability',label:'Disponibilidade inicial',options:['Disponível','Indisponível'],required:true},{name:'radius',label:'Raio preferencial (km)',type:'number'}]},
- ]} checklist={['CPF e CNH únicos por tenant','Validade documental','Bloqueios operacionais','Capabilities por tipo de carga','Disponibilidade e histórico']} />; }
+export default function Page() {
+  return (
+    <FormPage
+      eyebrow="Cadastros • Motoristas"
+      title="Novo motorista"
+      description="Cadastro preparado para qualificação documental, capabilities, matching e viagens."
+      backHref="/cadastros/motoristas"
+      groups={[
+        {
+          title: 'Dados pessoais',
+          description: 'Identificação e canais de contato.',
+          fields: [
+            { name: 'name', label: 'Nome completo', required: true, wide: true },
+            { name: 'cpf', label: 'CPF', required: true },
+            { name: 'birthDate', label: 'Data de nascimento', type: 'date' },
+            { name: 'phone', label: 'Telefone', type: 'tel', required: true },
+            { name: 'email', label: 'E-mail', type: 'email' },
+          ],
+        },
+        {
+          title: 'Habilitação',
+          description: 'Dados essenciais para qualificação.',
+          fields: [
+            { name: 'cnh', label: 'CNH', required: true },
+            { name: 'category', label: 'Categoria', options: ['B', 'C', 'D', 'E'], required: true },
+            { name: 'expiry', label: 'Validade CNH', type: 'date', required: true },
+            { name: 'rntrcLink', label: 'Vínculo RNTRC' },
+          ],
+        },
+        {
+          title: 'Base e disponibilidade',
+          description: 'Informações utilizadas pelo matching.',
+          fields: [
+            { name: 'city', label: 'Cidade base', required: true },
+            { name: 'state', label: 'UF base', required: true },
+            {
+              name: 'availability',
+              label: 'Disponibilidade inicial',
+              options: ['Disponível', 'Indisponível'],
+              required: true,
+            },
+            { name: 'radius', label: 'Raio preferencial (km)', type: 'number' },
+          ],
+        },
+      ]}
+      checklist={[
+        'CPF e CNH únicos por tenant',
+        'Validade documental',
+        'Bloqueios operacionais',
+        'Capabilities por tipo de carga',
+        'Disponibilidade e histórico',
+      ]}
+    />
+  );
+}
