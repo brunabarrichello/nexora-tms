@@ -116,22 +116,9 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
-
-          admin_url="$(neon connection-string "$NEON_BRANCH_NAME" \
-            --project-id "$NEON_PROJECT_ID" \
-            --database-name nexora \
-            --role-name neondb_owner)"
-
-          if [[ -z "$admin_url" ]]; then
-            echo "Neon CLI did not return a connection string." >&2
-            exit 1
-          fi
-
-          echo "::add-mask::$admin_url"
-
-          psql "$admin_url" \
-            -v ON_ERROR_STOP=1 \
-            -f scripts/neon/verify.sql
+          node scripts/neon/direct-sql.mjs \
+            --environment "${{ inputs.environment }}" \
+            --file scripts/neon/verify.sql
 
       - name: Verification summary
         shell: bash
@@ -143,6 +130,7 @@ jobs:
             echo "- Branch: ${NEON_BRANCH_NAME}"
             echo "- Database: nexora"
             echo "- Connection: generated dynamically via Neon CLI"
+            echo "- SQL path: scripts/neon/direct-sql.mjs (MCP-independent)"
             echo "- Required roles: verified by PostgreSQL"
             echo "- Foundation schemas: verified"
           } >> "$GITHUB_STEP_SUMMARY"

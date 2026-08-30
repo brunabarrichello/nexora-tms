@@ -15,6 +15,36 @@ The workflow `.github/workflows/neon-verify.yml` verifies, without changing the 
 
 The SQL verification lives at `scripts/neon/verify.sql` and is read-only.
 
+## MCP connector compatibility
+
+The ChatGPT-hosted Neon connector can temporarily become incompatible with the Neon MCP server when the client and server expose different argument contracts. The regression tracked in `neondatabase/mcp-server-neon#333` is one example: the client exposes camelCase arguments while the hosted server expects snake_case arguments after the tool-generation migration.
+
+Nexora TMS must not depend on that connector contract for database operations. The repository therefore provides `scripts/neon/direct-sql.mjs`, which resolves a PostgreSQL connection string through the Neon CLI and invokes `psql` directly. This path does not construct or consume `fullDatabaseId` and does not pass MCP tool arguments.
+
+The fallback is read-only by default. Any mutating SQL requires the explicit `--allow-write` flag.
+
+Examples:
+
+```bash
+# Read-only verification in development
+NEON_API_KEY=... pnpm neon:sql -- \
+  --environment development \
+  --file scripts/neon/verify.sql
+
+# Read-only ad hoc query
+NEON_API_KEY=... pnpm neon:sql -- \
+  --environment staging \
+  --command 'select current_database(), current_user;'
+
+# Explicit write-enabled execution (use only with reviewed SQL)
+NEON_API_KEY=... pnpm neon:sql -- \
+  --environment development \
+  --file path/to/reviewed-migration.sql \
+  --allow-write
+```
+
+`NEON_DIRECT_DATABASE_URL` can be supplied as an explicit emergency override. When it is present, the script skips Neon CLI connection-string resolution. Do not store that URL in the repository.
+
 ## Environment mapping
 
 The workflow input is an environment selector only; it does not use GitHub Environments.
@@ -49,7 +79,7 @@ After the workflow is present on the default branch:
 4. Select `development`, `staging`, or `production`.
 5. Review the workflow summary.
 
-A successful run confirms the selected Neon environment has the expected database foundation.
+A successful run confirms the selected Neon environment has the expected database foundation through the MCP-independent direct SQL path.
 
 ## Expected database foundation
 
@@ -71,7 +101,9 @@ Required schemas:
 
 ## Security model
 
-GitHub Actions receives only `NEON_API_KEY` from repository Actions Secrets. The branch-specific administrative connection string is generated dynamically inside the runner, masked immediately, used only for the read-only verification step, and never committed.
+GitHub Actions receives only `NEON_API_KEY` from repository Actions Secrets. The branch-specific administrative connection string is generated dynamically inside the runner, masked immediately, used only for the requested SQL step, and never committed.
+
+The direct SQL wrapper enforces read-only PostgreSQL sessions unless `--allow-write` is supplied explicitly. This protects inspection and verification commands from accidental mutations while still allowing reviewed administrative procedures when required.
 
 Runtime application credentials remain separate from infrastructure verification credentials.
 
