@@ -1,8 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 
-import { TenantContext } from '../tenancy/tenant-context.js';
-import { TenantDatabaseService } from '../tenancy/tenant-database.service.js';
 import { requireUuid } from '../freight/transport-request.validation.js';
+import { TenantContext } from '../tenancy/tenant-context.js';
+import {
+  TenantDatabaseService,
+  type TenantQueryClient,
+} from '../tenancy/tenant-database.service.js';
 import {
   evaluateCapacityCompatibility,
   type CapacityMismatchReason,
@@ -95,76 +98,83 @@ export class CapacityMatchingService {
     const transportRequestId = requireUuid(requestId, 'requestId');
     const context = this.tenantContext.require();
 
-    return this.database.withTenantContext(context, async (client) => {
-      const cargoResult = await client.query<CargoRequirementRow>(
-        `SELECT cp.transport_request_id::text AS transport_request_id,
-                cp.total_weight_kg::text AS total_weight_kg,
-                cp.cubage_m3::text AS cubage_m3,
-                cp.max_length_m::text AS max_length_m,
-                cp.max_width_m::text AS max_width_m,
-                cp.max_height_m::text AS max_height_m,
-                cp.tracking_required,
-                cp.vehicle_type,
-                cp.body_type
-           FROM transport_requests tr
-           JOIN transport_request_cargo_profiles cp
-             ON cp.tenant_id=tr.tenant_id AND cp.transport_request_id=tr.id
-          WHERE tr.id=$1::uuid`,
-        [transportRequestId],
+    return this.database.withTenantContext(context, (client) =>
+      this.evaluateForRequest(transportRequestId, client),
+    );
+  }
+
+  async evaluateForRequest(
+    transportRequestId: string,
+    client: TenantQueryClient,
+  ): Promise<CapacityMatchingResult> {
+    const cargoResult = await client.query<CargoRequirementRow>(
+      `SELECT cp.transport_request_id::text AS transport_request_id,
+              cp.total_weight_kg::text AS total_weight_kg,
+              cp.cubage_m3::text AS cubage_m3,
+              cp.max_length_m::text AS max_length_m,
+              cp.max_width_m::text AS max_width_m,
+              cp.max_height_m::text AS max_height_m,
+              cp.tracking_required,
+              cp.vehicle_type,
+              cp.body_type
+         FROM transport_requests tr
+         JOIN transport_request_cargo_profiles cp
+           ON cp.tenant_id=tr.tenant_id AND cp.transport_request_id=tr.id
+        WHERE tr.id=$1::uuid`,
+      [transportRequestId],
+    );
+    const cargoRow = cargoResult.rows[0];
+    if (!cargoRow) {
+      throw new NotFoundException(
+        'Transport request with cargo profile not found in current tenant',
       );
-      const cargoRow = cargoResult.rows[0];
-      if (!cargoRow) {
-        throw new NotFoundException(
-          'Transport request with cargo profile not found in current tenant',
-        );
-      }
+    }
 
-      const requirements = mapRequirements(cargoRow);
-      const candidates = await client.query<CandidateRow>(
-        `SELECT a.id::text AS assignment_id,
-                d.id::text AS driver_id,
-                d.full_name AS driver_name,
-                d.registration_status::text AS driver_registration_status,
-                d.operational_status::text AS driver_operational_status,
-                v.id::text AS vehicle_id,
-                v.identifier AS vehicle_identifier,
-                v.plate AS vehicle_plate,
-                v.status::text AS vehicle_status,
-                v.vehicle_type,
-                v.body_type,
-                v.capacity_weight_kg::text AS capacity_weight_kg,
-                v.capacity_volume_m3::text AS capacity_volume_m3,
-                v.max_length_m::text AS max_length_m,
-                v.max_width_m::text AS max_width_m,
-                v.max_height_m::text AS max_height_m,
-                v.tracking_available,
-                p.id::text AS carrier_party_id,
-                p.legal_name AS carrier_name,
-                a.starts_at AS assignment_starts_at
-           FROM capacity_assignments a
-           JOIN drivers d ON d.tenant_id=a.tenant_id AND d.id=a.driver_id
-           JOIN capacity_assets v ON v.tenant_id=a.tenant_id AND v.id=a.vehicle_id
-           JOIN business_parties p ON p.tenant_id=a.tenant_id AND p.id=a.carrier_party_id
-          WHERE a.status='active'
-          ORDER BY d.full_name,v.identifier,a.starts_at`,
-      );
+    const requirements = mapRequirements(cargoRow);
+    const candidates = await client.query<CandidateRow>(
+      `SELECT a.id::text AS assignment_id,
+              d.id::text AS driver_id,
+              d.full_name AS driver_name,
+              d.registration_status::text AS driver_registration_status,
+              d.operational_status::text AS driver_operational_status,
+              v.id::text AS vehicle_id,
+              v.identifier AS vehicle_identifier,
+              v.plate AS vehicle_plate,
+              v.status::text AS vehicle_status,
+              v.vehicle_type,
+              v.body_type,
+              v.capacity_weight_kg::text AS capacity_weight_kg,
+              v.capacity_volume_m3::text AS capacity_volume_m3,
+              v.max_length_m::text AS max_length_m,
+              v.max_width_m::text AS max_width_m,
+              v.max_height_m::text AS max_height_m,
+              v.tracking_available,
+              p.id::text AS carrier_party_id,
+              p.legal_name AS carrier_name,
+              a.starts_at AS assignment_starts_at
+         FROM capacity_assignments a
+         JOIN drivers d ON d.tenant_id=a.tenant_id AND d.id=a.driver_id
+         JOIN capacity_assets v ON v.tenant_id=a.tenant_id AND v.id=a.vehicle_id
+         JOIN business_parties p ON p.tenant_id=a.tenant_id AND p.id=a.carrier_party_id
+        WHERE a.status='active'
+        ORDER BY d.full_name,v.identifier,a.starts_at`,
+    );
 
-      const evaluated = candidates.rows.map((row) => evaluateCandidate(requirements, row));
-      const compatible = evaluated.filter((candidate) => candidate.compatible);
-      const incompatible = evaluated.filter((candidate) => !candidate.compatible);
+    const evaluated = candidates.rows.map((row) => evaluateCandidate(requirements, row));
+    const compatible = evaluated.filter((candidate) => candidate.compatible);
+    const incompatible = evaluated.filter((candidate) => !candidate.compatible);
 
-      return {
-        transportRequestId,
-        requirements,
-        compatible,
-        incompatible,
-        summary: {
-          evaluated: evaluated.length,
-          compatible: compatible.length,
-          incompatible: incompatible.length,
-        },
-      };
-    });
+    return {
+      transportRequestId,
+      requirements,
+      compatible,
+      incompatible,
+      summary: {
+        evaluated: evaluated.length,
+        compatible: compatible.length,
+        incompatible: incompatible.length,
+      },
+    };
   }
 }
 

@@ -13,6 +13,7 @@ export * from './identity.js';
 export * from './master-data-directory.js';
 export * from './master-data-enrichment.js';
 export * from './master-data.js';
+export * from './matching-persistence.js';
 export * from './negotiation.js';
 export * from './platform.js';
 export * from './reference-data.js';

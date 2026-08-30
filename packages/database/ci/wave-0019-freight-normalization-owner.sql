@@ -29,8 +29,8 @@ BEGIN
   END IF;
 
   SELECT count(*) INTO c FROM drizzle.__drizzle_migrations;
-  IF c <> 20 THEN
-    RAISE EXCEPTION 'Expected 20 Drizzle migrations after Wave 0019, found %', c;
+  IF c < 20 THEN
+    RAISE EXCEPTION 'Expected at least 20 Drizzle migrations including Wave 0019, found %', c;
   END IF;
 
   IF EXISTS (
