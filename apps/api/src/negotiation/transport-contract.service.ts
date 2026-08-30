@@ -388,7 +388,9 @@ export class TransportContractService {
       return id;
     } catch (error) {
       if (isUniqueViolation(error)) {
-        throw new ConflictException('Reservation or selected capacity already has a contract decision');
+        throw new ConflictException(
+          'Reservation or selected capacity already has a contract decision',
+        );
       }
       throw error;
     }

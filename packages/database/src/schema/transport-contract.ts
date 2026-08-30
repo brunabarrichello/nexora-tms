@@ -198,7 +198,11 @@ export const transportContractEvents = pgTable(
       foreignColumns: [transportContracts.tenantId, transportContracts.id],
       name: 'transport_contract_events_contract_fk',
     }).onDelete('restrict'),
-    unique('transport_contract_events_type_unique').on(table.tenantId, table.contractId, table.type),
+    unique('transport_contract_events_type_unique').on(
+      table.tenantId,
+      table.contractId,
+      table.type,
+    ),
     check(
       'transport_contract_events_reason_check',
       sql`${table.type} = 'confirmed' OR length(trim(coalesce(${table.reason}, ''))) > 0`,

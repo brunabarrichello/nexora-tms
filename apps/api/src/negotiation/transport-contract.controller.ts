@@ -1,10 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 
 import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
-import {
-  TransportContractService,
-  type TransportContract,
-} from './transport-contract.service.js';
+import { TransportContractService, type TransportContract } from './transport-contract.service.js';
 
 @Controller('api/v1/negotiation')
 @UseGuards(TenantRuntimeGateGuard)

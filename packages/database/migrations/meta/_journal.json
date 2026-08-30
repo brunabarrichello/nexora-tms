@@ -99,6 +99,13 @@
       "when": 1788050633870,
       "tag": "0013_gifted_klaw",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788052256681,
+      "tag": "0014_shocking_sentry",
+      "breakpoints": true
     }
   ]
 }
