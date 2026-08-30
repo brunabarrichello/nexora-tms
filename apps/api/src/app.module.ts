@@ -11,6 +11,7 @@ import { NegotiationModule } from './negotiation/negotiation.module.js';
 import { AuthenticationModule } from './security/authentication.module.js';
 import { TenantRuntimeGateModule } from './tenant-runtime-gate.module.js';
 import { TenancyModule } from './tenancy/tenancy.module.js';
+import { TripsModule } from './trips/trips.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { TenancyModule } from './tenancy/tenancy.module.js';
     MatchingModule,
     NegotiationModule,
     DocumentsModule,
+    TripsModule,
   ],
   controllers: [ApiController, HealthController],
 })
