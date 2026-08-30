@@ -1,10 +1,31 @@
-import { Body, Controller, Get, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 
 import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
 import {
   MasterDataEnrichmentService,
   type MasterDataRecord,
 } from './master-data-enrichment.service.js';
+
+function requireLifecycleState(state: string): boolean {
+  if (state === 'active') return true;
+  if (state === 'inactive') return false;
+  throw new BadRequestException('state must be active or inactive');
+}
+
+function requireConfigurationKind(kind: string): 'module' | 'feature' {
+  if (kind === 'module' || kind === 'feature') return kind;
+  throw new BadRequestException('configuration kind must be module or feature');
+}
 
 @Controller('api/v1/master-data')
 @UseGuards(TenantRuntimeGateGuard)
@@ -26,7 +47,7 @@ export class MasterDataEnrichmentController {
     @Param('locationId') locationId: string,
     @Param('state') state: string,
   ): Promise<MasterDataRecord> {
-    return this.service.setLocationLifecycle(locationId, state === 'active');
+    return this.service.setLocationLifecycle(locationId, requireLifecycleState(state));
   }
 
   @Get('dimensions/:kind')
@@ -65,7 +86,7 @@ export class MasterDataEnrichmentController {
     @Param('partyId') partyId: string,
     @Param('state') state: string,
   ): Promise<{ readonly active: boolean }> {
-    const active = state === 'active';
+    const active = requireLifecycleState(state);
     await this.service.setPartyGroupMembership(groupId, partyId, active);
     return { active };
   }
@@ -114,7 +135,7 @@ export class MasterDataEnrichmentController {
     @Param('tagId') tagId: string,
     @Param('state') state: string,
   ): Promise<{ readonly active: boolean }> {
-    const active = state === 'active';
+    const active = requireLifecycleState(state);
     await this.service.setTag(entityType, subjectId, tagId, active);
     return { active };
   }
@@ -130,7 +151,6 @@ export class MasterDataEnrichmentController {
     @Param('key') key: string,
     @Body() body: unknown,
   ): Promise<MasterDataRecord> {
-    const kind = kindInput === 'feature' ? 'feature' : 'module';
-    return this.service.upsertTenantConfiguration(kind, key, body);
+    return this.service.upsertTenantConfiguration(requireConfigurationKind(kindInput), key, body);
   }
 }
