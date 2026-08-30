@@ -20,12 +20,15 @@ jobs:
 
       - name: Patch Neon gate for Wave 0017
         shell: bash
+        env:
+          PRIVILEGE_EXTENSION_B64: "ICAgICAgICAgICAgICBSQUlTRSBFWENFUFRJT04gJ25leG9yYV9hcHAgcnVudGltZSBwcml2aWxlZ2UgbWF0cml4IGlzIGluY29ycmVjdCc7CiAgICAgICAgICAgIEVORCBJRjsKCiAgICAgICAgICAgIElGIEVYSVNUUyAoCiAgICAgICAgICAgICAgU0VMRUNUIDEKICAgICAgICAgICAgICAgIEZST00gdW5uZXN0KEFSUkFZWwogICAgICAgICAgICAgICAgICAnZHJpdmVyX2RvY3VtZW50cycsJ2RyaXZlcl9xdWFsaWZpY2F0aW9ucycsJ2RyaXZlcl9jb3Vyc2VzJywnZHJpdmVyX2F2YWlsYWJpbGl0eScsCiAgICAgICAgICAgICAgICAgICdkcml2ZXJfdW5hdmFpbGFiaWxpdHlfcGVyaW9kcycsJ2RyaXZlcl9lbWVyZ2VuY3lfY29udGFjdHMnLCdkcml2ZXJfYmxvY2tzJywKICAgICAgICAgICAgICAgICAgJ2NhcGFjaXR5X2Fzc2V0X2NhcGFiaWxpdGllcycsJ2NhcGFjaXR5X2Fzc2V0X2RvY3VtZW50cycsJ2NhcGFjaXR5X2Fzc2V0X21haW50ZW5hbmNlX3BsYW5zJywKICAgICAgICAgICAgICAgICAgJ2NhcGFjaXR5X2Fzc2V0X21haW50ZW5hbmNlJywnY2FwYWNpdHlfYXNzZXRfbWFpbnRlbmFuY2VfaXRlbXMnLCdjYXBhY2l0eV9hc3NldF9pbnN1cmFuY2VzJywKICAgICAgICAgICAgICAgICAgJ2NhcGFjaXR5X2Fzc2V0X2luc3BlY3Rpb25zJywnY2FwYWNpdHlfYXNzZXRfYXZhaWxhYmlsaXR5JywnY2FwYWNpdHlfYXNzZXRfdW5hdmFpbGFiaWxpdHlfcGVyaW9kcycsCiAgICAgICAgICAgICAgICAgICdjYXBhY2l0eV9hc3NldF9ibG9ja3MnCiAgICAgICAgICAgICAgICBdKSBBUyB0KHRhYmxlX25hbWUpCiAgICAgICAgICAgICAgIFdIRVJFIE5PVCBoYXNfdGFibGVfcHJpdmlsZWdlKCduZXhvcmFfYXBwJywgZm9ybWF0KCdwdWJsaWMuJUknLCB0YWJsZV9uYW1lKSwgJ1NFTEVDVCcpCiAgICAgICAgICAgICAgICAgIE9SIE5PVCBoYXNfdGFibGVfcHJpdmlsZWdlKCduZXhvcmFfYXBwJywgZm9ybWF0KCdwdWJsaWMuJUknLCB0YWJsZV9uYW1lKSwgJ0lOU0VSVCcpCiAgICAgICAgICAgICAgICAgIE9SIE5PVCBoYXNfdGFibGVfcHJpdmlsZWdlKCduZXhvcmFfYXBwJywgZm9ybWF0KCdwdWJsaWMuJUknLCB0YWJsZV9uYW1lKSwgJ1VQREFURScpCiAgICAgICAgICAgICAgICAgIE9SIGhhc190YWJsZV9wcml2aWxlZ2UoJ25leG9yYV9hcHAnLCBmb3JtYXQoJ3B1YmxpYy4lSScsIHRhYmxlX25hbWUpLCAnREVMRVRFJykKICAgICAgICAgICAgKSBUSEVOCiAgICAgICAgICAgICAgUkFJU0UgRVhDRVBUSU9OICdXYXZlIDAwMTcgbXV0YWJsZSBydW50aW1lIHByaXZpbGVnZSBtYXRyaXggaXMgaW5jb3JyZWN0JzsKICAgICAgICAgICAgRU5EIElGOwoKICAgICAgICAgICAgSUYgRVhJU1RTICgKICAgICAgICAgICAgICBTRUxFQ1QgMQogICAgICAgICAgICAgICAgRlJPTSB1bm5lc3QoQVJSQVlbJ2RyaXZlcl9yYXRpbmdzJywnY2FwYWNpdHlfYXNzZXRfbG9jYXRpb25zJ10pIEFTIHQodGFibGVfbmFtZSkKICAgICAgICAgICAgICAgV0hFUkUgTk9UIGhhc190YWJsZV9wcml2aWxlZ2UoJ25leG9yYV9hcHAnLCBmb3JtYXQoJ3B1YmxpYy4lSScsIHRhYmxlX25hbWUpLCAnU0VMRUNUJykKICAgICAgICAgICAgICAgICAgT1IgTk9UIGhhc190YWJsZV9wcml2aWxlZ2UoJ25leG9yYV9hcHAnLCBmb3JtYXQoJ3B1YmxpYy4lSScsIHRhYmxlX25hbWUpLCAnSU5TRVJUJykKICAgICAgICAgICAgICAgICAgT1IgaGFzX3RhYmxlX3ByaXZpbGVnZSgnbmV4b3JhX2FwcCcsIGZvcm1hdCgncHVibGljLiVJJywgdGFibGVfbmFtZSksICdVUERBVEUnKQogICAgICAgICAgICAgICAgICBPUiBoYXNfdGFibGVfcHJpdmlsZWdlKCduZXhvcmFfYXBwJywgZm9ybWF0KCdwdWJsaWMuJUknLCB0YWJsZV9uYW1lKSwgJ0RFTEVURScpCiAgICAgICAgICAgICkgVEhFTgogICAgICAgICAgICAgIFJBSVNFIEVYQ0VQVElPTiAnV2F2ZSAwMDE3IGFwcGVuZC1vbmx5IHJ1bnRpbWUgcHJpdmlsZWdlIG1hdHJpeCBpcyBpbmNvcnJlY3QnOwogICAgICAgICAgICBFTkQgSUY7CiAgICAgICAgICBFTkQgJCQ7CiAgICAgICAgICBTUUwK"
+          WAVE_STEP_B64: "ICAgICAgLSBuYW1lOiBWYWxpZGF0ZSBXYXZlIDAwMTcgZHJpdmVyIGFuZCBhc3NldCBxdWFsaWZpY2F0aW9uCiAgICAgICAgc2hlbGw6IGJhc2gKICAgICAgICBlbnY6CiAgICAgICAgICBBUFBfREFUQUJBU0VfVVJMOiAke3sgc3RlcHMuYXBwLWNvbm5lY3Rpb24ub3V0cHV0cy5kYl91cmwgfX0KICAgICAgICBydW46IHwKICAgICAgICAgIHNldCAtZXVvIHBpcGVmYWlsCiAgICAgICAgICBlY2hvICI6OmFkZC1tYXNrOjokQVBQX0RBVEFCQVNFX1VSTCIKCiAgICAgICAgICBwc3FsICIkQVBQX0RBVEFCQVNFX1VSTCIgLXYgT05fRVJST1JfU1RPUD0xIDw8J1NRTCcKICAgICAgICAgIFNFTEVDVCBzZXRfY29uZmlnKCdhcHAudXNlcl9pZCcsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDEwMScsZmFsc2UpOwogICAgICAgICAgU0VMRUNUIHNldF9jb25maWcoJ2FwcC50ZW5hbnRfaWQnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEnLGZhbHNlKTsKCiAgICAgICAgICBJTlNFUlQgSU5UTyBkcml2ZXJfYXZhaWxhYmlsaXR5ICgKICAgICAgICAgICAgaWQsdGVuYW50X2lkLGNyZWF0ZWRfYnlfdXNlcl9pZCx1cGRhdGVkX2J5X3VzZXJfaWQsZHJpdmVyX2lkLHN0YXR1cyxhdmFpbGFibGVfZnJvbSxtYXhfZGlzdGFuY2Vfa20KICAgICAgICAgICkgVkFMVUVTICgKICAgICAgICAgICAgJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMTcwMScsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMScsCiAgICAgICAgICAgICcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAxMDEnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAxMDEnLAogICAgICAgICAgICAnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwOTAxJywnYXZhaWxhYmxlJywnMjAyNi0wOS0wMVQwNjowMDowMFonLDUwMAogICAgICAgICAgKTsKCiAgICAgICAgICBJTlNFUlQgSU5UTyBjYXBhY2l0eV9hc3NldF9jYXBhYmlsaXRpZXMgKAogICAgICAgICAgICBpZCx0ZW5hbnRfaWQsY3JlYXRlZF9ieV91c2VyX2lkLHVwZGF0ZWRfYnlfdXNlcl9pZCxhc3NldF9pZCxyZWZyaWdlcmF0ZWQsc2VhbGVkLHNpZGVfbG9hZGluZyxyZWFyX2xvYWRpbmcsZGFuZ2Vyb3VzX2dvb2RzLGZvb2RfZ3JhZGUsdHJhY2tpbmdfY2FwYWJsZSxtYXhfcGFsbGV0cwogICAgICAgICAgKSBWQUxVRVMgKAogICAgICAgICAgICAnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAxNzAyJywnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxJywKICAgICAgICAgICAgJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDEwMScsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDEwMScsCiAgICAgICAgICAgICcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDA5MDInLGZhbHNlLHRydWUsdHJ1ZSx0cnVlLGZhbHNlLGZhbHNlLHRydWUsMjgKICAgICAgICAgICk7CgogICAgICAgICAgSU5TRVJUIElOVE8gZHJpdmVyX2Jsb2NrcyAoCiAgICAgICAgICAgIGlkLHRlbmFudF9pZCxjcmVhdGVkX2J5X3VzZXJfaWQsdXBkYXRlZF9ieV91c2VyX2lkLGRyaXZlcl9pZCxyZWFzb25fY29kZSxyZWFzb24sc2V2ZXJpdHkKICAgICAgICAgICkgVkFMVUVTICgKICAgICAgICAgICAgJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMTcwMycsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMScsCiAgICAgICAgICAgICcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAxMDEnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAxMDEnLAogICAgICAgICAgICAnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwOTAxJywnRE9DLVJFVklFVycsJ1BlbmRpbmcgY29tcGxpYW5jZSBkb2N1bWVudCByZXZpZXcnLCdjb21wbGlhbmNlJwogICAgICAgICAgKTsKCiAgICAgICAgICBJTlNFUlQgSU5UTyBjYXBhY2l0eV9hc3NldF9sb2NhdGlvbnMgKAogICAgICAgICAgICBpZCx0ZW5hbnRfaWQsYXNzZXRfaWQsb2JzZXJ2ZWRfYXQsbGF0aXR1ZGUsbG9uZ2l0dWRlLHNvdXJjZSxhY2N1cmFjeV9tCiAgICAgICAgICApIFZBTFVFUyAoCiAgICAgICAgICAgICcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDE3MDQnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEnLAogICAgICAgICAgICAnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwOTAyJywnMjAyNi0wOS0wMVQwNjoxMDowMFonLC0yMy41NTA1MjAsLTQ2LjYzMzMwOCwnZ3BzJyw4LjUKICAgICAgICAgICk7CgogICAgICAgICAgSU5TRVJUIElOVE8gdmVoaWNsZV90eXBlcyAoaWQsdGVuYW50X2lkLGNvZGUsbmFtZSxpc19hY3RpdmUpCiAgICAgICAgICBWQUxVRVMgKCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDE3MDUnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEnLCdUUlVDSycsJ1RydWNrJyx0cnVlKTsKICAgICAgICAgIElOU0VSVCBJTlRPIGJvZHlfdHlwZXMgKGlkLHRlbmFudF9pZCxjb2RlLG5hbWUsaXNfY2xvc2VkLHN1cHBvcnRzX3NpZGVfbG9hZGluZyxzdXBwb3J0c19yZWFyX2xvYWRpbmcsaXNfYWN0aXZlKQogICAgICAgICAgVkFMVUVTICgnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAxNzA2JywnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxJywnU0lERVInLCdTaWRlcicsZmFsc2UsdHJ1ZSx0cnVlLHRydWUpOwogICAgICAgICAgVVBEQVRFIGNhcGFjaXR5X2Fzc2V0cwogICAgICAgICAgICAgU0VUIHZlaGljbGVfdHlwZV9pZD0nMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAxNzA1JywKICAgICAgICAgICAgICAgICBib2R5X3R5cGVfaWQ9JzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMTcwNicsIHVwZGF0ZWRfYXQ9bm93KCkKICAgICAgICAgICBXSEVSRSBpZD0nMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwOTAyJzsKCiAgICAgICAgICBETyAkJCBERUNMQVJFIGMgaW50ZWdlcjsgQkVHSU4KICAgICAgICAgICAgU0VMRUNUIGNvdW50KCopIElOVE8gYyBGUk9NIGRyaXZlcl9hdmFpbGFiaWxpdHkgV0hFUkUgZHJpdmVyX2lkPScwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDA5MDEnIEFORCBzdGF0dXM9J2F2YWlsYWJsZSc7CiAgICAgICAgICAgIElGIGMgPD4gMSBUSEVOIFJBSVNFIEVYQ0VQVElPTiAnV2F2ZSAwMDE3IGRyaXZlciBhdmFpbGFiaWxpdHkgcnVudGltZSBpbnNlcnQgZmFpbGVkJzsgRU5EIElGOwogICAgICAgICAgICBTRUxFQ1QgY291bnQoKikgSU5UTyBjIEZST00gY2FwYWNpdHlfYXNzZXRfY2FwYWJpbGl0aWVzIFdIRVJFIGFzc2V0X2lkPScwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDA5MDInIEFORCB0cmFja2luZ19jYXBhYmxlOwogICAgICAgICAgICBJRiBjIDw+IDEgVEhFTiBSQUlTRSBFWENFUFRJT04gJ1dhdmUgMDAxNyBhc3NldCBjYXBhYmlsaXR5IHJ1bnRpbWUgaW5zZXJ0IGZhaWxlZCc7IEVORCBJRjsKICAgICAgICAgICAgU0VMRUNUIGNvdW50KCopIElOVE8gYyBGUk9NIGRyaXZlcl9ibG9ja3MgV0hFUkUgZHJpdmVyX2lkPScwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDA5MDEnIEFORCByZWxlYXNlZF9hdCBJUyBOVUxMOwogICAgICAgICAgICBJRiBjIDw+IDEgVEhFTiBSQUlTRSBFWENFUFRJT04gJ1dhdmUgMDAxNyBkcml2ZXIgYmxvY2sgcnVudGltZSBpbnNlcnQgZmFpbGVkJzsgRU5EIElGOwogICAgICAgICAgICBTRUxFQ1QgY291bnQoKikgSU5UTyBjIEZST00gY2FwYWNpdHlfYXNzZXRfbG9jYXRpb25zIFdIRVJFIGFzc2V0X2lkPScwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDA5MDInOwogICAgICAgICAgICBJRiBjIDw+IDEgVEhFTiBSQUlTRSBFWENFUFRJT04gJ1dhdmUgMDAxNyBhc3NldCBsb2NhdGlvbiBhcHBlbmQgZmFpbGVkJzsgRU5EIElGOwogICAgICAgICAgRU5EICQkOwoKICAgICAgICAgIFNFTEVDVCBzZXRfY29uZmlnKCdhcHAudGVuYW50X2lkJywnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyJyxmYWxzZSk7CiAgICAgICAgICBTRUxFQ1Qgc2V0X2NvbmZpZygnYXBwLnVzZXJfaWQnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAxMDInLGZhbHNlKTsKICAgICAgICAgIERPICQkIERFQ0xBUkUgYyBpbnRlZ2VyOyBCRUdJTgogICAgICAgICAgICBTRUxFQ1QgY291bnQoKikgSU5UTyBjIEZST00gZHJpdmVyX2F2YWlsYWJpbGl0eSBXSEVSRSBpZD0nMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAxNzAxJzsKICAgICAgICAgICAgSUYgYyA8PiAwIFRIRU4gUkFJU0UgRVhDRVBUSU9OICdUZW5hbnQgQiBjYW4gc2VlIFRlbmFudCBBIGRyaXZlciBhdmFpbGFiaWxpdHknOyBFTkQgSUY7CiAgICAgICAgICAgIFNFTEVDVCBjb3VudCgqKSBJTlRPIGMgRlJPTSBjYXBhY2l0eV9hc3NldF9jYXBhYmlsaXRpZXMgV0hFUkUgaWQ9JzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMTcwMic7CiAgICAgICAgICAgIElGIGMgPD4gMCBUSEVOIFJBSVNFIEVYQ0VQVElPTiAnVGVuYW50IEIgY2FuIHNlZSBUZW5hbnQgQSBhc3NldCBjYXBhYmlsaXRpZXMnOyBFTkQgSUY7CiAgICAgICAgICAgIFNFTEVDVCBjb3VudCgqKSBJTlRPIGMgRlJPTSBkcml2ZXJfYmxvY2tzIFdIRVJFIGlkPScwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDE3MDMnOwogICAgICAgICAgICBJRiBjIDw+IDAgVEhFTiBSQUlTRSBFWENFUFRJT04gJ1RlbmFudCBCIGNhbiBzZWUgVGVuYW50IEEgZHJpdmVyIGJsb2NrJzsgRU5EIElGOwogICAgICAgICAgICBTRUxFQ1QgY291bnQoKikgSU5UTyBjIEZST00gY2FwYWNpdHlfYXNzZXRfbG9jYXRpb25zIFdIRVJFIGlkPScwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDE3MDQnOwogICAgICAgICAgICBJRiBjIDw+IDAgVEhFTiBSQUlTRSBFWENFUFRJT04gJ1RlbmFudCBCIGNhbiBzZWUgVGVuYW50IEEgYXNzZXQgbG9jYXRpb24nOyBFTkQgSUY7CiAgICAgICAgICBFTkQgJCQ7CiAgICAgICAgICBTUUwKCiAgICAgICAgICBzZXQgK2UKICAgICAgICAgIGNyb3NzX291dHB1dD0iJChwc3FsICIkQVBQX0RBVEFCQVNFX1VSTCIgLXYgT05fRVJST1JfU1RPUD0xIDI+JjEgPDwnU1FMJwogICAgICAgICAgU0VMRUNUIHNldF9jb25maWcoJ2FwcC51c2VyX2lkJywnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMTAyJyxmYWxzZSk7CiAgICAgICAgICBTRUxFQ1Qgc2V0X2NvbmZpZygnYXBwLnRlbmFudF9pZCcsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMicsZmFsc2UpOwogICAgICAgICAgSU5TRVJUIElOVE8gZHJpdmVyX2Jsb2NrcyAoCiAgICAgICAgICAgIHRlbmFudF9pZCxjcmVhdGVkX2J5X3VzZXJfaWQsdXBkYXRlZF9ieV91c2VyX2lkLGRyaXZlcl9pZCxyZWFzb25fY29kZSxyZWFzb24sc2V2ZXJpdHkKICAgICAgICAgICkgVkFMVUVTICgKICAgICAgICAgICAgJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDAwMScsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDEwMicsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDEwMicsCiAgICAgICAgICAgICcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDA5MDEnLCdDUk9TUycsJ0Nyb3NzIHRlbmFudCBibG9jaycsJ29wZXJhdGlvbmFsJwogICAgICAgICAgKTsKICAgICAgICAgIFNRTAogICAgICAgICAgKSIKICAgICAgICAgIGNyb3NzX3N0YXR1cz0kPwogICAgICAgICAgc2V0IC1lCiAgICAgICAgICBpZiBbWyAiJGNyb3NzX3N0YXR1cyIgLWVxIDAgXV0gfHwgISBncmVwIC1xaSAicm93LWxldmVsIHNlY3VyaXR5IHBvbGljeSIgPDw8IiRjcm9zc19vdXRwdXQiOyB0aGVuCiAgICAgICAgICAgIGVjaG8gIldhdmUgMDAxNyBjcm9zcy10ZW5hbnQgUkxTIHJlamVjdGlvbiBmYWlsZWQuIiA+JjIKICAgICAgICAgICAgZWNobyAiJGNyb3NzX291dHB1dCIgPiYyCiAgICAgICAgICAgIGV4aXQgMQogICAgICAgICAgZmkKCiAgICAgICAgICBzZXQgK2UKICAgICAgICAgIGFwcGVuZF91cGRhdGVfb3V0cHV0PSIkKHBzcWwgIiRBUFBfREFUQUJBU0VfVVJMIiAtdiBPTl9FUlJPUl9TVE9QPTEgMj4mMSA8PCdTUUwnCiAgICAgICAgICBTRUxFQ1Qgc2V0X2NvbmZpZygnYXBwLnVzZXJfaWQnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAxMDEnLGZhbHNlKTsKICAgICAgICAgIFNFTEVDVCBzZXRfY29uZmlnKCdhcHAudGVuYW50X2lkJywnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAxJyxmYWxzZSk7CiAgICAgICAgICBVUERBVEUgY2FwYWNpdHlfYXNzZXRfbG9jYXRpb25zIFNFVCBhY2N1cmFjeV9tPTEgV0hFUkUgaWQ9JzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMTcwNCc7CiAgICAgICAgICBTUUwKICAgICAgICAgICkiCiAgICAgICAgICBhcHBlbmRfdXBkYXRlX3N0YXR1cz0kPwogICAgICAgICAgc2V0IC1lCiAgICAgICAgICBpZiBbWyAiJGFwcGVuZF91cGRhdGVfc3RhdHVzIiAtZXEgMCBdXSB8fCAhIGdyZXAgLXFpICJwZXJtaXNzaW9uIGRlbmllZCIgPDw8IiRhcHBlbmRfdXBkYXRlX291dHB1dCI7IHRoZW4KICAgICAgICAgICAgZWNobyAiV2F2ZSAwMDE3IGFzc2V0IGxvY2F0aW9ucyBtdXN0IGJlIGFwcGVuZC1vbmx5IGZvciBuZXhvcmFfYXBwLiIgPiYyCiAgICAgICAgICAgIGVjaG8gIiRhcHBlbmRfdXBkYXRlX291dHB1dCIgPiYyCiAgICAgICAgICAgIGV4aXQgMQogICAgICAgICAgZmkKCiAgICAgICAgICBzZXQgK2UKICAgICAgICAgIGRlbGV0ZV9vdXRwdXQ9IiQocHNxbCAiJEFQUF9EQVRBQkFTRV9VUkwiIC12IE9OX0VSUk9SX1NUT1A9MSAyPiYxIDw8J1NRTCcKICAgICAgICAgIFNFTEVDVCBzZXRfY29uZmlnKCdhcHAudXNlcl9pZCcsJzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMDEwMScsZmFsc2UpOwogICAgICAgICAgU0VMRUNUIHNldF9jb25maWcoJ2FwcC50ZW5hbnRfaWQnLCcwMDAwMDAwMC0wMDAwLTQwMDAtODAwMC0wMDAwMDAwMDAwMDEnLGZhbHNlKTsKICAgICAgICAgIERFTEVURSBGUk9NIGRyaXZlcl9hdmFpbGFiaWxpdHkgV0hFUkUgaWQ9JzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMTcwMSc7CiAgICAgICAgICBTUUwKICAgICAgICAgICkiCiAgICAgICAgICBkZWxldGVfc3RhdHVzPSQ/CiAgICAgICAgICBzZXQgLWUKICAgICAgICAgIGlmIFtbICIkZGVsZXRlX3N0YXR1cyIgLWVxIDAgXV0gfHwgISBncmVwIC1xaSAicGVybWlzc2lvbiBkZW5pZWQiIDw8PCIkZGVsZXRlX291dHB1dCI7IHRoZW4KICAgICAgICAgICAgZWNobyAiV2F2ZSAwMDE3IGRyaXZlciBhdmFpbGFiaWxpdHkgbXVzdCBub3QgYmUgcGh5c2ljYWxseSBkZWxldGVkIGJ5IG5leG9yYV9hcHAuIiA+JjIKICAgICAgICAgICAgZWNobyAiJGRlbGV0ZV9vdXRwdXQiID4mMgogICAgICAgICAgICBleGl0IDEKICAgICAgICAgIGZpCgogICAgICAgICAgcHNxbCAiJE9XTkVSX0RBVEFCQVNFX1VSTCIgLXYgT05fRVJST1JfU1RPUD0xIDw8J1NRTCcKICAgICAgICAgIElOU0VSVCBJTlRPIHZlaGljbGVfdHlwZXMgKGlkLHRlbmFudF9pZCxjb2RlLG5hbWUsaXNfYWN0aXZlKQogICAgICAgICAgVkFMVUVTICgnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAxNzA3JywnMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwMDAyJywnVFJVQ0stQicsJ1RydWNrIEInLHRydWUpOwogICAgICAgICAgU1FMCiAgICAgICAgICBzZXQgK2UKICAgICAgICAgIGNhdGFsb2dfZmtfb3V0cHV0PSIkKHBzcWwgIiRPV05FUl9EQVRBQkFTRV9VUkwiIC12IE9OX0VSUk9SX1NUT1A9MSAyPiYxIDw8J1NRTCcKICAgICAgICAgIFVQREFURSBjYXBhY2l0eV9hc3NldHMKICAgICAgICAgICAgIFNFVCB2ZWhpY2xlX3R5cGVfaWQ9JzAwMDAwMDAwLTAwMDAtNDAwMC04MDAwLTAwMDAwMDAwMTcwNycKICAgICAgICAgICBXSEVSRSBpZD0nMDAwMDAwMDAtMDAwMC00MDAwLTgwMDAtMDAwMDAwMDAwOTAyJzsKICAgICAgICAgIFNRTAogICAgICAgICAgKSIKICAgICAgICAgIGNhdGFsb2dfZmtfc3RhdHVzPSQ/CiAgICAgICAgICBzZXQgLWUKICAgICAgICAgIGlmIFtbICIkY2F0YWxvZ19ma19zdGF0dXMiIC1lcSAwIF1dIHx8ICEgZ3JlcCAtcWkgImNhcGFjaXR5X2Fzc2V0c192ZWhpY2xlX3R5cGVfZmsiIDw8PCIkY2F0YWxvZ19ma19vdXRwdXQiOyB0aGVuCiAgICAgICAgICAgIGVjaG8gIldhdmUgMDAxNyBjcm9zcy10ZW5hbnQgdmVoaWNsZSBjYXRhbG9nIEZLIHJlamVjdGlvbiBmYWlsZWQuIiA+JjIKICAgICAgICAgICAgZWNobyAiJGNhdGFsb2dfZmtfb3V0cHV0IiA+JjIKICAgICAgICAgICAgZXhpdCAxCiAgICAgICAgICBmaQoK"
         run: |
           python3 - <<'PY'
+          import base64, os
           from pathlib import Path
           p = Path('.github/workflows/neon-pr-gate.yml')
           s = p.read_text()
-
           new_tables = [
               'driver_documents','driver_qualifications','driver_courses','driver_availability',
               'driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings',
@@ -36,207 +39,24 @@ jobs:
           ]
           needle = "'custom_field_values'"
           assert s.count(needle) == 3, s.count(needle)
-          suffix = needle + ",\n                 " + ','.join(repr(x) for x in new_tables)
-          s = s.replace(needle, suffix)
-          s = s.replace('IF table_count <> 65 THEN', 'IF table_count <> 84 THEN')
-          s = s.replace('Expected 65 application tables', 'Expected 84 application tables')
-          s = s.replace('IF rls_count <> 57 THEN', 'IF rls_count <> 76 THEN')
-          s = s.replace('Expected RLS on 57 tenant-scoped tables', 'Expected RLS on 76 tenant-scoped tables')
-          s = s.replace('IF migration_count <> 17 THEN', 'IF migration_count <> 18 THEN')
-          s = s.replace('Expected 17 Drizzle migration records', 'Expected 18 Drizzle migration records')
-
-          privilege_anchor = """              RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
-            END IF;
-          END $$;
-          SQL
-"""
-          assert s.count(privilege_anchor) == 1, s.count(privilege_anchor)
-          privilege_extension = """              RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-                FROM unnest(ARRAY[
-                  'driver_documents','driver_qualifications','driver_courses','driver_availability',
-                  'driver_unavailability_periods','driver_emergency_contacts','driver_blocks',
-                  'capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans',
-                  'capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances',
-                  'capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods',
-                  'capacity_asset_blocks'
-                ]) AS t(table_name)
-               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
-                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
-            ) THEN
-              RAISE EXCEPTION 'Wave 0017 mutable runtime privilege matrix is incorrect';
-            END IF;
-
-            IF EXISTS (
-              SELECT 1
-                FROM unnest(ARRAY['driver_ratings','capacity_asset_locations']) AS t(table_name)
-               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
-                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
-                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
-                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
-            ) THEN
-              RAISE EXCEPTION 'Wave 0017 append-only runtime privilege matrix is incorrect';
-            END IF;
-          END $$;
-          SQL
-"""
-          s = s.replace(privilege_anchor, privilege_extension)
-
-          step_anchor = """      - name: Validate NEX-39 capacity reservation runtime and isolation
-"""
+          s = s.replace(needle, needle + ",\n                 " + ','.join(repr(x) for x in new_tables))
+          replacements = {
+              'IF table_count <> 65 THEN':'IF table_count <> 84 THEN',
+              'Expected 65 application tables':'Expected 84 application tables',
+              'IF rls_count <> 57 THEN':'IF rls_count <> 76 THEN',
+              'Expected RLS on 57 tenant-scoped tables':'Expected RLS on 76 tenant-scoped tables',
+              'IF migration_count <> 17 THEN':'IF migration_count <> 18 THEN',
+              'Expected 17 Drizzle migration records':'Expected 18 Drizzle migration records',
+          }
+          for old,new in replacements.items():
+              assert old in s, old
+              s = s.replace(old,new)
+          anchor = "              RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';\n            END IF;\n          END $$;\n          SQL\n"
+          assert s.count(anchor) == 1, s.count(anchor)
+          s = s.replace(anchor, base64.b64decode(os.environ['PRIVILEGE_EXTENSION_B64']).decode())
+          step_anchor = '      - name: Validate NEX-39 capacity reservation runtime and isolation\n'
           assert s.count(step_anchor) == 1, s.count(step_anchor)
-          step = r'''      - name: Validate Wave 0017 driver and asset qualification
-        shell: bash
-        env:
-          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}
-        run: |
-          set -euo pipefail
-          echo "::add-mask::$APP_DATABASE_URL"
-
-          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
-
-          INSERT INTO driver_availability (
-            id,tenant_id,created_by_user_id,updated_by_user_id,driver_id,status,available_from,max_distance_km
-          ) VALUES (
-            '00000000-0000-4000-8000-000000001701','00000000-0000-4000-8000-000000000001',
-            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101',
-            '00000000-0000-4000-8000-000000000901','available','2026-09-01T06:00:00Z',500
-          );
-
-          INSERT INTO capacity_asset_capabilities (
-            id,tenant_id,created_by_user_id,updated_by_user_id,asset_id,refrigerated,sealed,side_loading,rear_loading,dangerous_goods,food_grade,tracking_capable,max_pallets
-          ) VALUES (
-            '00000000-0000-4000-8000-000000001702','00000000-0000-4000-8000-000000000001',
-            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101',
-            '00000000-0000-4000-8000-000000000902',false,true,true,true,false,false,true,28
-          );
-
-          INSERT INTO driver_blocks (
-            id,tenant_id,created_by_user_id,updated_by_user_id,driver_id,reason_code,reason,severity
-          ) VALUES (
-            '00000000-0000-4000-8000-000000001703','00000000-0000-4000-8000-000000000001',
-            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101',
-            '00000000-0000-4000-8000-000000000901','DOC-REVIEW','Pending compliance document review','compliance'
-          );
-
-          INSERT INTO capacity_asset_locations (
-            id,tenant_id,asset_id,observed_at,latitude,longitude,source,accuracy_m
-          ) VALUES (
-            '00000000-0000-4000-8000-000000001704','00000000-0000-4000-8000-000000000001',
-            '00000000-0000-4000-8000-000000000902','2026-09-01T06:10:00Z',-23.550520,-46.633308,'gps',8.5
-          );
-
-          INSERT INTO vehicle_types (id,tenant_id,code,name,is_active)
-          VALUES ('00000000-0000-4000-8000-000000001705','00000000-0000-4000-8000-000000000001','TRUCK','Truck',true);
-          INSERT INTO body_types (id,tenant_id,code,name,is_closed,supports_side_loading,supports_rear_loading,is_active)
-          VALUES ('00000000-0000-4000-8000-000000001706','00000000-0000-4000-8000-000000000001','SIDER','Sider',false,true,true,true);
-          UPDATE capacity_assets
-             SET vehicle_type_id='00000000-0000-4000-8000-000000001705',
-                 body_type_id='00000000-0000-4000-8000-000000001706', updated_at=now()
-           WHERE id='00000000-0000-4000-8000-000000000902';
-
-          DO $$ DECLARE c integer; BEGIN
-            SELECT count(*) INTO c FROM driver_availability WHERE driver_id='00000000-0000-4000-8000-000000000901' AND status='available';
-            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 driver availability runtime insert failed'; END IF;
-            SELECT count(*) INTO c FROM capacity_asset_capabilities WHERE asset_id='00000000-0000-4000-8000-000000000902' AND tracking_capable;
-            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 asset capability runtime insert failed'; END IF;
-            SELECT count(*) INTO c FROM driver_blocks WHERE driver_id='00000000-0000-4000-8000-000000000901' AND released_at IS NULL;
-            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 driver block runtime insert failed'; END IF;
-            SELECT count(*) INTO c FROM capacity_asset_locations WHERE asset_id='00000000-0000-4000-8000-000000000902';
-            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 asset location append failed'; END IF;
-          END $$;
-
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
-          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000102',false);
-          DO $$ DECLARE c integer; BEGIN
-            SELECT count(*) INTO c FROM driver_availability WHERE id='00000000-0000-4000-8000-000000001701';
-            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A driver availability'; END IF;
-            SELECT count(*) INTO c FROM capacity_asset_capabilities WHERE id='00000000-0000-4000-8000-000000001702';
-            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A asset capabilities'; END IF;
-            SELECT count(*) INTO c FROM driver_blocks WHERE id='00000000-0000-4000-8000-000000001703';
-            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A driver block'; END IF;
-            SELECT count(*) INTO c FROM capacity_asset_locations WHERE id='00000000-0000-4000-8000-000000001704';
-            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A asset location'; END IF;
-          END $$;
-          SQL
-
-          set +e
-          cross_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000102',false);
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
-          INSERT INTO driver_blocks (
-            tenant_id,created_by_user_id,updated_by_user_id,driver_id,reason_code,reason,severity
-          ) VALUES (
-            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000102','00000000-0000-4000-8000-000000000102',
-            '00000000-0000-4000-8000-000000000901','CROSS','Cross tenant block','operational'
-          );
-          SQL
-          )"
-          cross_status=$?
-          set -e
-          if [[ "$cross_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cross_output"; then
-            echo "Wave 0017 cross-tenant RLS rejection failed." >&2
-            echo "$cross_output" >&2
-            exit 1
-          fi
-
-          set +e
-          append_update_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
-          UPDATE capacity_asset_locations SET accuracy_m=1 WHERE id='00000000-0000-4000-8000-000000001704';
-          SQL
-          )"
-          append_update_status=$?
-          set -e
-          if [[ "$append_update_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$append_update_output"; then
-            echo "Wave 0017 asset locations must be append-only for nexora_app." >&2
-            echo "$append_update_output" >&2
-            exit 1
-          fi
-
-          set +e
-          delete_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
-          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
-          DELETE FROM driver_availability WHERE id='00000000-0000-4000-8000-000000001701';
-          SQL
-          )"
-          delete_status=$?
-          set -e
-          if [[ "$delete_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$delete_output"; then
-            echo "Wave 0017 driver availability must not be physically deleted by nexora_app." >&2
-            echo "$delete_output" >&2
-            exit 1
-          fi
-
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          INSERT INTO vehicle_types (id,tenant_id,code,name,is_active)
-          VALUES ('00000000-0000-4000-8000-000000001707','00000000-0000-4000-8000-000000000002','TRUCK-B','Truck B',true);
-          SQL
-          set +e
-          catalog_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
-          UPDATE capacity_assets
-             SET vehicle_type_id='00000000-0000-4000-8000-000000001707'
-           WHERE id='00000000-0000-4000-8000-000000000902';
-          SQL
-          )"
-          catalog_fk_status=$?
-          set -e
-          if [[ "$catalog_fk_status" -eq 0 ]] || ! grep -qi "capacity_assets_vehicle_type_fk" <<<"$catalog_fk_output"; then
-            echo "Wave 0017 cross-tenant vehicle catalog FK rejection failed." >&2
-            echo "$catalog_fk_output" >&2
-            exit 1
-          fi
-
-'''
+          step = base64.b64decode(os.environ['WAVE_STEP_B64']).decode()
           s = s.replace(step_anchor, step + step_anchor)
           s = s.replace(
               'Neon database gate passed through NEX-40 frozen transport contracts, refusals, cancellations and capacity release.',
