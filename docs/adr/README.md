@@ -30,6 +30,11 @@ Use sequential names: `NNNN-short-decision-title.md`.
 
 ADRs 0001–0010 form the accepted NEX-17 / NEX-64 Wave 0 baseline. ADR-0011 concretizes the managed IdP implementation while preserving ADR-0005's authorization boundary.
 
+## Accepted data-model evolution ADRs
+
+12. [`0012-master-data-catalog-and-schema-evolution.md`](./0012-master-data-catalog-and-schema-evolution.md) — canonical aggregate roots, data catalog and Wave-based schema evolution.
+13. [`0013-master-data-enrichment-controlled-extensibility.md`](./0013-master-data-enrichment-controlled-extensibility.md) — Wave 0016 locations, dimensions, typed tags, controlled custom fields, currency and lifecycle rules.
+
 ## Process
 
 1. Copy `0000-template.md` for a new decision.
