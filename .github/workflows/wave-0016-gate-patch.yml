@@ -30,11 +30,7 @@ jobs:
 
           path_anchor = "      - 'apps/api/src/negotiation/**'\n"
           if "apps/api/src/master-data/**" not in text:
-              text = text.replace(
-                  path_anchor,
-                  path_anchor + "      - 'apps/api/src/master-data/**'\n",
-                  1,
-              )
+              text = text.replace(path_anchor, path_anchor + "      - 'apps/api/src/master-data/**'\n", 1)
 
           old_global_tail = "'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'"
           new_all_tail = old_global_tail + ",'currencies','departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values'"
@@ -44,8 +40,8 @@ jobs:
 
           old_rls_block = "'vehicle_types','body_types','cargo_types','package_types','document_types','tags'\n               )\n               AND c.relrowsecurity;"
           new_rls_block = "'vehicle_types','body_types','cargo_types','package_types','document_types','tags',\n                 'departments','cost_centers','number_sequences','module_settings','feature_flags','locations','business_party_groups','business_party_group_members','business_party_requirements','business_party_document_requirements','business_party_service_areas','business_party_billing_rules','business_party_credit_limits','commodities','business_party_tags','driver_tags','capacity_asset_tags','transport_request_tags','custom_field_definitions','custom_field_values'\n               )\n               AND c.relrowsecurity;"
-          if old_rls_block not in text:
-              raise SystemExit('RLS tail anchor not found')
+          if text.count(old_rls_block) != 1:
+              raise SystemExit('RLS tail anchor not found exactly once')
           text = text.replace(old_rls_block, new_rls_block, 1)
 
           replacements = {
@@ -90,74 +86,42 @@ jobs:
           step_anchor = "      - name: Validate NEX-39 capacity reservation runtime and isolation\n"
           if text.count(step_anchor) != 1:
               raise SystemExit('NEX-39 step anchor not found exactly once')
-          wave_step = r'''      - name: Validate Wave 0016 master-data RLS and lifecycle
-        shell: bash
-        env:
-          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}
-        run: |
-          set -euo pipefail
-          echo "::add-mask::$APP_DATABASE_URL"
-          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          DO $$
-          DECLARE
-            visible_count integer;
-          BEGIN
-            PERFORM set_config('app.tenant_id','',false);
-            PERFORM set_config('app.user_id','',false);
-            SELECT count(*) INTO visible_count FROM locations;
-            IF visible_count <> 0 THEN
-              RAISE EXCEPTION 'Wave 0016 locations must be hidden without tenant context, got %', visible_count;
-            END IF;
-
-            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
-            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
-            INSERT INTO locations (
-              id, tenant_id, created_by_user_id, updated_by_user_id, party_id, address_id,
-              code, name, type, is_active
-            ) VALUES (
-              '00000000-0000-4000-8000-000000001601',
-              '00000000-0000-4000-8000-000000000001',
-              '00000000-0000-4000-8000-000000000101',
-              '00000000-0000-4000-8000-000000000101',
-              '00000000-0000-4000-8000-000000000501',
-              '00000000-0000-4000-8000-000000000701',
-              'GATE-LOC-A','Gate Location A','warehouse',true
-            );
-            SELECT count(*) INTO visible_count
-              FROM locations WHERE id='00000000-0000-4000-8000-000000001601';
-            IF visible_count <> 1 THEN
-              RAISE EXCEPTION 'Tenant A must see its Wave 0016 location, got %', visible_count;
-            END IF;
-
-            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
-            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000102',false);
-            SELECT count(*) INTO visible_count
-              FROM locations WHERE id='00000000-0000-4000-8000-000000001601';
-            IF visible_count <> 0 THEN
-              RAISE EXCEPTION 'Tenant B must not see Tenant A Wave 0016 location';
-            END IF;
-
-            BEGIN
-              INSERT INTO locations (
-                id, tenant_id, created_by_user_id, updated_by_user_id, party_id, address_id,
-                code, name, type, is_active
-              ) VALUES (
-                '00000000-0000-4000-8000-000000001602',
-                '00000000-0000-4000-8000-000000000001',
-                '00000000-0000-4000-8000-000000000101',
-                '00000000-0000-4000-8000-000000000101',
-                '00000000-0000-4000-8000-000000000501',
-                '00000000-0000-4000-8000-000000000701',
-                'GATE-CROSS','Cross Tenant Location','warehouse',true
-              );
-              RAISE EXCEPTION 'Cross-tenant Wave 0016 insert unexpectedly succeeded';
-            EXCEPTION
-              WHEN insufficient_privilege THEN NULL;
-            END;
-          END $$;
-          SQL
-
-'''
+          wave_step = (
+              "      - name: Validate Wave 0016 master-data RLS and lifecycle\n"
+              "        shell: bash\n"
+              "        env:\n"
+              "          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}\n"
+              "        run: |\n"
+              "          set -euo pipefail\n"
+              "          echo \"::add-mask::$APP_DATABASE_URL\"\n"
+              "          psql \"$APP_DATABASE_URL\" -v ON_ERROR_STOP=1 <<'SQL'\n"
+              "          DO $$\n"
+              "          DECLARE\n"
+              "            visible_count integer;\n"
+              "          BEGIN\n"
+              "            PERFORM set_config('app.tenant_id','',false);\n"
+              "            PERFORM set_config('app.user_id','',false);\n"
+              "            SELECT count(*) INTO visible_count FROM locations;\n"
+              "            IF visible_count <> 0 THEN RAISE EXCEPTION 'Wave 0016 locations visible without tenant context: %', visible_count; END IF;\n"
+              "            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);\n"
+              "            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);\n"
+              "            INSERT INTO locations (id, tenant_id, created_by_user_id, updated_by_user_id, party_id, address_id, code, name, type, is_active)\n"
+              "            VALUES ('00000000-0000-4000-8000-000000001601','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','GATE-LOC-A','Gate Location A','warehouse',true);\n"
+              "            SELECT count(*) INTO visible_count FROM locations WHERE id='00000000-0000-4000-8000-000000001601';\n"
+              "            IF visible_count <> 1 THEN RAISE EXCEPTION 'Tenant A must see its Wave 0016 location'; END IF;\n"
+              "            PERFORM set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);\n"
+              "            PERFORM set_config('app.user_id','00000000-0000-4000-8000-000000000102',false);\n"
+              "            SELECT count(*) INTO visible_count FROM locations WHERE id='00000000-0000-4000-8000-000000001601';\n"
+              "            IF visible_count <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A Wave 0016 location'; END IF;\n"
+              "            BEGIN\n"
+              "              INSERT INTO locations (id, tenant_id, created_by_user_id, updated_by_user_id, party_id, address_id, code, name, type, is_active)\n"
+              "              VALUES ('00000000-0000-4000-8000-000000001602','00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000501','00000000-0000-4000-8000-000000000701','GATE-CROSS','Cross Tenant Location','warehouse',true);\n"
+              "              RAISE EXCEPTION 'Cross-tenant Wave 0016 insert unexpectedly succeeded';\n"
+              "            EXCEPTION WHEN insufficient_privilege THEN NULL;\n"
+              "            END;\n"
+              "          END $$;\n"
+              "          SQL\n\n"
+          )
           text = text.replace(step_anchor, wave_step + step_anchor, 1)
           path.write_text(text)
           PY
