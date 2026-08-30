@@ -1,5 +1,5 @@
 {
-  "environment": "development",
+  "environment": "staging",
   "wave": "0020",
   "migration": "0020_dapper_zuras",
   "sourceMainSha": "fa88445fdb727b444cbac2a9892880ceb07f1f54"
