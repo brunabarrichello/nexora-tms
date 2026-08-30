@@ -41,6 +41,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Production dependency security audit
+        run: pnpm audit:prod
+
       - name: Lint
         run: pnpm lint
 
@@ -55,6 +58,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Validate Docker Compose model
+        run: docker compose config --quiet
 
       - name: Generate Drizzle migrations
         if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
