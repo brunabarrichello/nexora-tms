@@ -4,7 +4,6 @@ import {
   check,
   foreignKey,
   index,
-  integer,
   jsonb,
   numeric,
   pgPolicy,
