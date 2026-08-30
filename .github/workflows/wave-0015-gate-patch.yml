@@ -38,13 +38,13 @@ jobs:
                );
             IF table_count <> 34 THEN
               RAISE EXCEPTION 'Expected 34 application tables, found %', table_count;
-"""
+          """
           new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                  'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
                );
             IF table_count <> 44 THEN
               RAISE EXCEPTION 'Expected 44 application tables, found %', table_count;
-"""
+          """
           once(old, new, 'table inventory')
 
           old = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
@@ -52,23 +52,23 @@ jobs:
                AND c.relrowsecurity;
             IF rls_count <> 31 THEN
               RAISE EXCEPTION 'Expected RLS on 31 tenant-scoped tables, found %', rls_count;
-"""
+          """
           new = """                 'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                  'vehicle_types','body_types','cargo_types','package_types','document_types','tags'
                )
                AND c.relrowsecurity;
             IF rls_count <> 37 THEN
               RAISE EXCEPTION 'Expected RLS on 37 tenant-scoped tables, found %', rls_count;
-"""
+          """
           once(old, new, 'RLS inventory')
 
           once(
               """            IF migration_count <> 15 THEN
               RAISE EXCEPTION 'Expected 15 Drizzle migration records, found %', migration_count;
-""",
+              """,
               """            IF migration_count <> 16 THEN
               RAISE EXCEPTION 'Expected 16 Drizzle migration records, found %', migration_count;
-""",
+              """,
               'migration ledger',
           )
 
@@ -76,20 +76,20 @@ jobs:
                    'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events'
                  )
                  AND r.rolname='nexora_app'
-"""
+          """
           new = """                   'transport_request_stops','transport_request_cargo_profiles',
                    'transport_request_commercial_terms','transport_request_commercial_history','drivers','driver_audit','capacity_assets','capacity_asset_audit','capacity_assignments','freight_proposals','freight_proposal_events','capacity_reservations','capacity_reservation_events','transport_contracts','transport_contract_events',
                    'countries','states','cities','units_of_measure','vehicle_types','body_types','cargo_types','package_types','document_types','tags'
                  )
                  AND r.rolname='nexora_app'
-"""
+          """
           once(old, new, 'ownership inventory')
 
           old = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
                OR NOT has_table_privilege('nexora_app','public.transport_contract_events','INSERT')
                OR has_table_privilege('nexora_app','public.transport_contract_events','UPDATE')
                OR has_table_privilege('nexora_app','public.transport_contract_events','DELETE') THEN
-"""
+          """
           new = """               OR NOT has_table_privilege('nexora_app','public.transport_contract_events','SELECT')
                OR NOT has_table_privilege('nexora_app','public.transport_contract_events','INSERT')
                OR has_table_privilege('nexora_app','public.transport_contract_events','UPDATE')
@@ -134,7 +134,7 @@ jobs:
                OR NOT has_table_privilege('nexora_app','public.tags','INSERT')
                OR NOT has_table_privilege('nexora_app','public.tags','UPDATE')
                OR has_table_privilege('nexora_app','public.tags','DELETE') THEN
-"""
+          """
           once(old, new, 'privilege matrix')
 
           path.write_text(text)
