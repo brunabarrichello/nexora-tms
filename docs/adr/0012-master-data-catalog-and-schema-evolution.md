@@ -1,6 +1,6 @@
 # ADR-0012 — Canonical Master Data Catalog and Schema Evolution
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Scope:** Nexora TMS database evolution after migration 0014
 
 ## Context
@@ -11,7 +11,7 @@ The roadmap now advances through Cadastros → Cargas → Matching → Negociaç
 
 ## Decision
 
-Adopt the following files as the canonical data-model specification once this ADR is accepted:
+Adopt the following files as the canonical data-model specification:
 
 - `docs/data/master-data-catalog-v1.md` — current physical baseline, naming, type, tenancy, lifecycle, audit and migration rules;
 - `docs/data/master-data-catalog-target-v1.md` — complementary target tables and roadmap waves.
