@@ -9,6 +9,7 @@
     "pnpm": "11.24.0"
   },
   "scripts": {
+    "audit:prod": "pnpm audit --prod --audit-level=high",
     "bootstrap": "node scripts/bootstrap.mjs",
     "build": "turbo run build",
     "build:api": "pnpm --filter @nexora/api build",
@@ -28,7 +29,7 @@
     "prepare": "simple-git-hooks",
     "start:api": "pnpm --filter @nexora/api start",
     "start:web": "pnpm --filter @nexora/web start",
-    "start:worker": "pnpm build:worker && pnpm start:worker",
+    "start:worker": "pnpm --filter @nexora/worker start",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
