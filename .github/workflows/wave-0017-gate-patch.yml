@@ -1,0 +1,264 @@
+name: Wave 0017 gate patch
+
+on:
+  push:
+    branches:
+      - feat/database-wave-0017-driver-assets
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0017-driver-assets
+          fetch-depth: 0
+
+      - name: Patch Neon gate for Wave 0017
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/neon-pr-gate.yml')
+          s = p.read_text()
+
+          new_tables = [
+              'driver_documents','driver_qualifications','driver_courses','driver_availability',
+              'driver_unavailability_periods','driver_emergency_contacts','driver_blocks','driver_ratings',
+              'capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans',
+              'capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances',
+              'capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods',
+              'capacity_asset_locations','capacity_asset_blocks'
+          ]
+          needle = "'custom_field_values'"
+          assert s.count(needle) == 3, s.count(needle)
+          suffix = needle + ",\n                 " + ','.join(repr(x) for x in new_tables)
+          s = s.replace(needle, suffix)
+          s = s.replace('IF table_count <> 65 THEN', 'IF table_count <> 84 THEN')
+          s = s.replace('Expected 65 application tables', 'Expected 84 application tables')
+          s = s.replace('IF rls_count <> 57 THEN', 'IF rls_count <> 76 THEN')
+          s = s.replace('Expected RLS on 57 tenant-scoped tables', 'Expected RLS on 76 tenant-scoped tables')
+          s = s.replace('IF migration_count <> 17 THEN', 'IF migration_count <> 18 THEN')
+          s = s.replace('Expected 17 Drizzle migration records', 'Expected 18 Drizzle migration records')
+
+          privilege_anchor = """              RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
+            END IF;
+          END $$;
+          SQL
+"""
+          assert s.count(privilege_anchor) == 1, s.count(privilege_anchor)
+          privilege_extension = """              RAISE EXCEPTION 'nexora_app runtime privilege matrix is incorrect';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+                FROM unnest(ARRAY[
+                  'driver_documents','driver_qualifications','driver_courses','driver_availability',
+                  'driver_unavailability_periods','driver_emergency_contacts','driver_blocks',
+                  'capacity_asset_capabilities','capacity_asset_documents','capacity_asset_maintenance_plans',
+                  'capacity_asset_maintenance','capacity_asset_maintenance_items','capacity_asset_insurances',
+                  'capacity_asset_inspections','capacity_asset_availability','capacity_asset_unavailability_periods',
+                  'capacity_asset_blocks'
+                ]) AS t(table_name)
+               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
+                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
+                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
+                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
+            ) THEN
+              RAISE EXCEPTION 'Wave 0017 mutable runtime privilege matrix is incorrect';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+                FROM unnest(ARRAY['driver_ratings','capacity_asset_locations']) AS t(table_name)
+               WHERE NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'SELECT')
+                  OR NOT has_table_privilege('nexora_app', format('public.%I', table_name), 'INSERT')
+                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'UPDATE')
+                  OR has_table_privilege('nexora_app', format('public.%I', table_name), 'DELETE')
+            ) THEN
+              RAISE EXCEPTION 'Wave 0017 append-only runtime privilege matrix is incorrect';
+            END IF;
+          END $$;
+          SQL
+"""
+          s = s.replace(privilege_anchor, privilege_extension)
+
+          step_anchor = """      - name: Validate NEX-39 capacity reservation runtime and isolation
+"""
+          assert s.count(step_anchor) == 1, s.count(step_anchor)
+          step = r'''      - name: Validate Wave 0017 driver and asset qualification
+        shell: bash
+        env:
+          APP_DATABASE_URL: ${{ steps.app-connection.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APP_DATABASE_URL"
+
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+
+          INSERT INTO driver_availability (
+            id,tenant_id,created_by_user_id,updated_by_user_id,driver_id,status,available_from,max_distance_km
+          ) VALUES (
+            '00000000-0000-4000-8000-000000001701','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101',
+            '00000000-0000-4000-8000-000000000901','available','2026-09-01T06:00:00Z',500
+          );
+
+          INSERT INTO capacity_asset_capabilities (
+            id,tenant_id,created_by_user_id,updated_by_user_id,asset_id,refrigerated,sealed,side_loading,rear_loading,dangerous_goods,food_grade,tracking_capable,max_pallets
+          ) VALUES (
+            '00000000-0000-4000-8000-000000001702','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101',
+            '00000000-0000-4000-8000-000000000902',false,true,true,true,false,false,true,28
+          );
+
+          INSERT INTO driver_blocks (
+            id,tenant_id,created_by_user_id,updated_by_user_id,driver_id,reason_code,reason,severity
+          ) VALUES (
+            '00000000-0000-4000-8000-000000001703','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000101','00000000-0000-4000-8000-000000000101',
+            '00000000-0000-4000-8000-000000000901','DOC-REVIEW','Pending compliance document review','compliance'
+          );
+
+          INSERT INTO capacity_asset_locations (
+            id,tenant_id,asset_id,observed_at,latitude,longitude,source,accuracy_m
+          ) VALUES (
+            '00000000-0000-4000-8000-000000001704','00000000-0000-4000-8000-000000000001',
+            '00000000-0000-4000-8000-000000000902','2026-09-01T06:10:00Z',-23.550520,-46.633308,'gps',8.5
+          );
+
+          INSERT INTO vehicle_types (id,tenant_id,code,name,is_active)
+          VALUES ('00000000-0000-4000-8000-000000001705','00000000-0000-4000-8000-000000000001','TRUCK','Truck',true);
+          INSERT INTO body_types (id,tenant_id,code,name,is_closed,supports_side_loading,supports_rear_loading,is_active)
+          VALUES ('00000000-0000-4000-8000-000000001706','00000000-0000-4000-8000-000000000001','SIDER','Sider',false,true,true,true);
+          UPDATE capacity_assets
+             SET vehicle_type_id='00000000-0000-4000-8000-000000001705',
+                 body_type_id='00000000-0000-4000-8000-000000001706', updated_at=now()
+           WHERE id='00000000-0000-4000-8000-000000000902';
+
+          DO $$ DECLARE c integer; BEGIN
+            SELECT count(*) INTO c FROM driver_availability WHERE driver_id='00000000-0000-4000-8000-000000000901' AND status='available';
+            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 driver availability runtime insert failed'; END IF;
+            SELECT count(*) INTO c FROM capacity_asset_capabilities WHERE asset_id='00000000-0000-4000-8000-000000000902' AND tracking_capable;
+            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 asset capability runtime insert failed'; END IF;
+            SELECT count(*) INTO c FROM driver_blocks WHERE driver_id='00000000-0000-4000-8000-000000000901' AND released_at IS NULL;
+            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 driver block runtime insert failed'; END IF;
+            SELECT count(*) INTO c FROM capacity_asset_locations WHERE asset_id='00000000-0000-4000-8000-000000000902';
+            IF c <> 1 THEN RAISE EXCEPTION 'Wave 0017 asset location append failed'; END IF;
+          END $$;
+
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000102',false);
+          DO $$ DECLARE c integer; BEGIN
+            SELECT count(*) INTO c FROM driver_availability WHERE id='00000000-0000-4000-8000-000000001701';
+            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A driver availability'; END IF;
+            SELECT count(*) INTO c FROM capacity_asset_capabilities WHERE id='00000000-0000-4000-8000-000000001702';
+            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A asset capabilities'; END IF;
+            SELECT count(*) INTO c FROM driver_blocks WHERE id='00000000-0000-4000-8000-000000001703';
+            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A driver block'; END IF;
+            SELECT count(*) INTO c FROM capacity_asset_locations WHERE id='00000000-0000-4000-8000-000000001704';
+            IF c <> 0 THEN RAISE EXCEPTION 'Tenant B can see Tenant A asset location'; END IF;
+          END $$;
+          SQL
+
+          set +e
+          cross_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000102',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000002',false);
+          INSERT INTO driver_blocks (
+            tenant_id,created_by_user_id,updated_by_user_id,driver_id,reason_code,reason,severity
+          ) VALUES (
+            '00000000-0000-4000-8000-000000000001','00000000-0000-4000-8000-000000000102','00000000-0000-4000-8000-000000000102',
+            '00000000-0000-4000-8000-000000000901','CROSS','Cross tenant block','operational'
+          );
+          SQL
+          )"
+          cross_status=$?
+          set -e
+          if [[ "$cross_status" -eq 0 ]] || ! grep -qi "row-level security policy" <<<"$cross_output"; then
+            echo "Wave 0017 cross-tenant RLS rejection failed." >&2
+            echo "$cross_output" >&2
+            exit 1
+          fi
+
+          set +e
+          append_update_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          UPDATE capacity_asset_locations SET accuracy_m=1 WHERE id='00000000-0000-4000-8000-000000001704';
+          SQL
+          )"
+          append_update_status=$?
+          set -e
+          if [[ "$append_update_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$append_update_output"; then
+            echo "Wave 0017 asset locations must be append-only for nexora_app." >&2
+            echo "$append_update_output" >&2
+            exit 1
+          fi
+
+          set +e
+          delete_output="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          SELECT set_config('app.user_id','00000000-0000-4000-8000-000000000101',false);
+          SELECT set_config('app.tenant_id','00000000-0000-4000-8000-000000000001',false);
+          DELETE FROM driver_availability WHERE id='00000000-0000-4000-8000-000000001701';
+          SQL
+          )"
+          delete_status=$?
+          set -e
+          if [[ "$delete_status" -eq 0 ]] || ! grep -qi "permission denied" <<<"$delete_output"; then
+            echo "Wave 0017 driver availability must not be physically deleted by nexora_app." >&2
+            echo "$delete_output" >&2
+            exit 1
+          fi
+
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO vehicle_types (id,tenant_id,code,name,is_active)
+          VALUES ('00000000-0000-4000-8000-000000001707','00000000-0000-4000-8000-000000000002','TRUCK-B','Truck B',true);
+          SQL
+          set +e
+          catalog_fk_output="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 2>&1 <<'SQL'
+          UPDATE capacity_assets
+             SET vehicle_type_id='00000000-0000-4000-8000-000000001707'
+           WHERE id='00000000-0000-4000-8000-000000000902';
+          SQL
+          )"
+          catalog_fk_status=$?
+          set -e
+          if [[ "$catalog_fk_status" -eq 0 ]] || ! grep -qi "capacity_assets_vehicle_type_fk" <<<"$catalog_fk_output"; then
+            echo "Wave 0017 cross-tenant vehicle catalog FK rejection failed." >&2
+            echo "$catalog_fk_output" >&2
+            exit 1
+          fi
+
+'''
+          s = s.replace(step_anchor, step + step_anchor)
+          s = s.replace(
+              'Neon database gate passed through NEX-40 frozen transport contracts, refusals, cancellations and capacity release.',
+              'Neon database gate passed through Wave 0017 driver/asset qualification plus NEX-40 transport contracts.'
+          )
+          p.write_text(s)
+          PY
+          git diff --check
+          grep -q "Expected 84 application tables" .github/workflows/neon-pr-gate.yml
+          grep -q "Expected RLS on 76 tenant-scoped tables" .github/workflows/neon-pr-gate.yml
+          grep -q "Expected 18 Drizzle migration records" .github/workflows/neon-pr-gate.yml
+          grep -q "Validate Wave 0017 driver and asset qualification" .github/workflows/neon-pr-gate.yml
+
+      - name: Commit patched workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/neon-pr-gate.yml
+          git commit -m "ci(database): extend Neon gate through Wave 0017"
+          echo "PATCH_COMMIT=$(git rev-parse HEAD)"
+          echo "PATCH_TREE=$(git rev-parse HEAD^{tree})"
+          echo "PATCH_BLOB=$(git rev-parse HEAD:.github/workflows/neon-pr-gate.yml)"
+          git push origin HEAD:feat/database-wave-0017-driver-assets || true
