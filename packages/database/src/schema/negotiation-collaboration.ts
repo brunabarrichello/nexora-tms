@@ -121,7 +121,11 @@ export const negotiationParticipants = pgTable(
   },
   (table) => [
     unique('negotiation_participants_tenant_id_unique').on(table.tenantId, table.id),
-    unique('negotiation_participants_thread_id_unique').on(table.tenantId, table.threadId, table.id),
+    unique('negotiation_participants_thread_id_unique').on(
+      table.tenantId,
+      table.threadId,
+      table.id,
+    ),
     foreignKey({
       columns: [table.tenantId, table.threadId],
       foreignColumns: [negotiationThreads.tenantId, negotiationThreads.id],
