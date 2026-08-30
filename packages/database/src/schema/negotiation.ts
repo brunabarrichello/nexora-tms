@@ -89,10 +89,7 @@ export const freightProposals = pgTable(
     check('freight_proposals_freight_amount_check', sql`${table.freightAmount} > 0`),
     check('freight_proposals_toll_amount_check', sql`${table.tollAmount} >= 0`),
     check('freight_proposals_additional_amount_check', sql`${table.additionalAmount} >= 0`),
-    check(
-      'freight_proposals_payment_terms_check',
-      sql`length(trim(${table.paymentTerms})) > 0`,
-    ),
+    check('freight_proposals_payment_terms_check', sql`length(trim(${table.paymentTerms})) > 0`),
     check(
       'freight_proposals_parent_kind_check',
       sql`(${table.kind} = 'proposal' AND ${table.parentProposalId} IS NULL) OR (${table.kind} = 'counterproposal' AND ${table.parentProposalId} IS NOT NULL)`,

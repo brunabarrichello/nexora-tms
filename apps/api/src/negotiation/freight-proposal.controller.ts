@@ -1,10 +1,7 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 
 import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
-import {
-  FreightProposalService,
-  type FreightProposal,
-} from './freight-proposal.service.js';
+import { FreightProposalService, type FreightProposal } from './freight-proposal.service.js';
 
 @Controller('api/v1/negotiation')
 @UseGuards(TenantRuntimeGateGuard)
@@ -17,10 +14,7 @@ export class FreightProposalController {
   }
 
   @Post('requests/:requestId/proposals')
-  create(
-    @Param('requestId') requestId: string,
-    @Body() body: unknown,
-  ): Promise<FreightProposal> {
+  create(@Param('requestId') requestId: string, @Body() body: unknown): Promise<FreightProposal> {
     return this.proposals.create(requestId, body);
   }
 

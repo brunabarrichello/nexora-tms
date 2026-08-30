@@ -186,7 +186,9 @@ export class FreightProposalService {
       (item) => item.assignmentId === parentSnapshot.capacity_assignment_id,
     );
     if (!candidate) {
-      throw new ConflictException('Proposal capacity is no longer compatible with the transport request');
+      throw new ConflictException(
+        'Proposal capacity is no longer compatible with the transport request',
+      );
     }
 
     return this.database.withTenantContext(context, async (client) => {
@@ -242,7 +244,9 @@ export class FreightProposalService {
         proposal.expires_at !== null &&
         proposal.expires_at.valueOf() <= Date.now()
       ) {
-        throw new ConflictException('Proposal has passed its expiration date and can only be expired');
+        throw new ConflictException(
+          'Proposal has passed its expiration date and can only be expired',
+        );
       }
 
       await this.insertEvent(
