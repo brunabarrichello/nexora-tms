@@ -5,8 +5,8 @@ on:
     branches:
       - main
     paths:
-      - "apps/api/**"
-      - ".github/workflows/api-tenant-neon-gate.yml"
+      - 'apps/api/**'
+      - '.github/workflows/api-tenant-neon-gate.yml'
 
 permissions:
   contents: read
@@ -205,7 +205,7 @@ jobs:
         shell: bash
         env:
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
-          DATABASE_POOL_MAX: "2"
+          DATABASE_POOL_MAX: '2'
         run: |
           set -euo pipefail
           node apps/api/dist/tenancy/tenant-database.integration.js
@@ -214,7 +214,7 @@ jobs:
         shell: bash
         env:
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
-          DATABASE_POOL_MAX: "2"
+          DATABASE_POOL_MAX: '2'
         run: |
           set -euo pipefail
           node apps/api/dist/matching/capacity-matching.integration.js
@@ -223,7 +223,7 @@ jobs:
         shell: bash
         env:
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
-          DATABASE_POOL_MAX: "2"
+          DATABASE_POOL_MAX: '2'
         run: |
           set -euo pipefail
           node apps/api/dist/negotiation/freight-proposal.integration.js
@@ -232,10 +232,19 @@ jobs:
         shell: bash
         env:
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
-          DATABASE_POOL_MAX: "2"
+          DATABASE_POOL_MAX: '2'
         run: |
           set -euo pipefail
           node apps/api/dist/negotiation/capacity-reservation.integration.js
+
+      - name: Run Transport Contract integration against Neon
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          DATABASE_POOL_MAX: '2'
+        run: |
+          set -euo pipefail
+          node apps/api/dist/negotiation/transport-contract.integration.js
 
       - name: Gate summary
         shell: bash
@@ -264,6 +273,10 @@ jobs:
             echo "- Double active capacity allocation: rejected"
             echo "- Reservation cancellation with reason: verified"
             echo "- Reservation history and capacity release: verified"
+            echo "- Transport contract frozen commercial terms: verified"
+            echo "- Contract refusal with reason and capacity release: verified"
+            echo "- Contract cancellation audit and request rollback: verified"
+            echo "- Replacement confirmed contract: verified"
             echo "- IdP integration: intentionally not part of this gate"
           } >> "$GITHUB_STEP_SUMMARY"
 
