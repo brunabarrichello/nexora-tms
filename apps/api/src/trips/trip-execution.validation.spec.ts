@@ -26,18 +26,37 @@ test('trip execution check-in normalizes timestamp and coordinates', () => {
 
 test('trip execution requires coordinate pairs', () => {
   assert.throws(
-    () => parseTripCheckin({ tripStopId: STOP, checkinType: 'arrival', occurredAt: new Date().toISOString(), latitude: -23 }),
+    () =>
+      parseTripCheckin({
+        tripStopId: STOP,
+        checkinType: 'arrival',
+        occurredAt: new Date().toISOString(),
+        latitude: -23,
+      }),
     /latitude and longitude must be provided together/,
   );
 });
 
 test('integration locations require provider and valid heading', () => {
   assert.throws(
-    () => parseTripLocation({ source: 'integration', latitude: -23, longitude: -46, recordedAt: new Date().toISOString() }),
+    () =>
+      parseTripLocation({
+        source: 'integration',
+        latitude: -23,
+        longitude: -46,
+        recordedAt: new Date().toISOString(),
+      }),
     /provider is required/,
   );
   assert.throws(
-    () => parseTripLocation({ source: 'gps', latitude: -23, longitude: -46, headingDegrees: 360, recordedAt: new Date().toISOString() }),
+    () =>
+      parseTripLocation({
+        source: 'gps',
+        latitude: -23,
+        longitude: -46,
+        headingDegrees: 360,
+        recordedAt: new Date().toISOString(),
+      }),
     /headingDegrees is invalid/,
   );
 });
@@ -52,13 +71,14 @@ test('rejected or voided expense requires reason', () => {
 
 test('rejected delivery proof requires exception reason', () => {
   assert.throws(
-    () => parseTripDeliveryProof({
-      tripStopId: STOP,
-      tripProofId: '22222222-2222-4222-8222-222222222222',
-      receivedByName: 'Receiver',
-      deliveredAt: new Date().toISOString(),
-      status: 'rejected',
-    }),
+    () =>
+      parseTripDeliveryProof({
+        tripStopId: STOP,
+        tripProofId: '22222222-2222-4222-8222-222222222222',
+        receivedByName: 'Receiver',
+        deliveredAt: new Date().toISOString(),
+        status: 'rejected',
+      }),
     /exceptionReason is required/,
   );
 });

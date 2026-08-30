@@ -46,11 +46,9 @@ async function run(): Promise<void> {
     });
     assert.equal(checklist.status, 'pending');
 
-    const checklistCompleted = await executionA.setChecklistStatus(
-      TRIP_A,
-      String(checklist.id),
-      { status: 'completed' },
-    );
+    const checklistCompleted = await executionA.setChecklistStatus(TRIP_A, String(checklist.id), {
+      status: 'completed',
+    });
     assert.equal(checklistCompleted.status, 'completed');
 
     const arrival = await executionA.createCheckin(TRIP_A, {

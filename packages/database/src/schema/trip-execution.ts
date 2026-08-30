@@ -189,12 +189,18 @@ export const tripLocations = pgTable(
       'trip_locations_provider_check',
       sql`${table.source} <> 'integration' OR length(trim(coalesce(${table.provider}, ''))) > 0`,
     ),
-    check('trip_locations_latitude_check', sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`),
+    check(
+      'trip_locations_latitude_check',
+      sql`${table.latitude} >= -90 AND ${table.latitude} <= 90`,
+    ),
     check(
       'trip_locations_longitude_check',
       sql`${table.longitude} >= -180 AND ${table.longitude} <= 180`,
     ),
-    check('trip_locations_accuracy_check', sql`${table.accuracyM} IS NULL OR ${table.accuracyM} >= 0`),
+    check(
+      'trip_locations_accuracy_check',
+      sql`${table.accuracyM} IS NULL OR ${table.accuracyM} >= 0`,
+    ),
     check('trip_locations_speed_check', sql`${table.speedKmh} IS NULL OR ${table.speedKmh} >= 0`),
     check(
       'trip_locations_heading_check',
@@ -270,7 +276,11 @@ export const tripChecklists = pgTable(
       sql`${table.status} <> 'waived' OR length(trim(coalesce(${table.waiverReason}, ''))) > 0`,
     ),
     index('trip_checklists_tenant_trip_status_idx').on(table.tenantId, table.tripId, table.status),
-    index('trip_checklists_tenant_trip_stop_idx').on(table.tenantId, table.tripId, table.tripStopId),
+    index('trip_checklists_tenant_trip_stop_idx').on(
+      table.tenantId,
+      table.tripId,
+      table.tripStopId,
+    ),
     pgPolicy('trip_checklists_tenant_isolation', {
       for: 'all',
       to: 'public',
@@ -626,10 +636,7 @@ export const tripDeliveryProofs = pgTable(
       foreignColumns: [tripProofs.tenantId, tripProofs.tripId, tripProofs.id],
       name: 'trip_delivery_proofs_proof_fk',
     }).onDelete('restrict'),
-    check(
-      'trip_delivery_proofs_receiver_check',
-      sql`length(trim(${table.receivedByName})) > 0`,
-    ),
+    check('trip_delivery_proofs_receiver_check', sql`length(trim(${table.receivedByName})) > 0`),
     check(
       'trip_delivery_proofs_status_check',
       sql`${table.status} in ('recorded','accepted','rejected')`,

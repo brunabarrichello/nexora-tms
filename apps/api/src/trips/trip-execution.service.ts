@@ -122,7 +122,13 @@ export class TripExecutionService {
         ],
       );
 
-      await this.applyStopMilestone(client, stop, checkin.checkinType, checkin.occurredAt, context.userId);
+      await this.applyStopMilestone(
+        client,
+        stop,
+        checkin.checkinType,
+        checkin.occurredAt,
+        context.userId,
+      );
       await client.query(
         `INSERT INTO trip_events (
            tenant_id,trip_id,trip_stop_id,event_type,source,title,description,occurred_at,actor_user_id,metadata
@@ -195,7 +201,8 @@ export class TripExecutionService {
           ],
         );
       } catch (error) {
-        if (hasPgCode(error, '23505')) throw new ConflictException('Location event was already ingested');
+        if (hasPgCode(error, '23505'))
+          throw new ConflictException('Location event was already ingested');
         throw error;
       }
     });
@@ -270,7 +277,8 @@ export class TripExecutionService {
         `SELECT 1 FROM documents WHERE id=$1::uuid AND deleted_at IS NULL`,
         [link.documentId],
       );
-      if (document.rowCount !== 1) throw new NotFoundException('Document not found in current tenant');
+      if (document.rowCount !== 1)
+        throw new NotFoundException('Document not found in current tenant');
       try {
         return await this.insertOne(
           client,
@@ -278,10 +286,18 @@ export class TripExecutionService {
              tenant_id,trip_id,trip_stop_id,document_id,relation_type,created_by_user_id
            ) VALUES ($1::uuid,$2::uuid,$3::uuid,$4::uuid,$5,$6::uuid)
            RETURNING *`,
-          [context.tenantId, trip.id, link.tripStopId, link.documentId, link.relationType, context.userId],
+          [
+            context.tenantId,
+            trip.id,
+            link.tripStopId,
+            link.documentId,
+            link.relationType,
+            context.userId,
+          ],
         );
       } catch (error) {
-        if (hasPgCode(error, '23505')) throw new ConflictException('Document is already linked to this trip');
+        if (hasPgCode(error, '23505'))
+          throw new ConflictException('Document is already linked to this trip');
         throw error;
       }
     });
@@ -296,7 +312,12 @@ export class TripExecutionService {
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
       const trip = await this.requireNotCancelledTrip(client, tripId, false);
-      await this.requireOptionalReferences(client, trip.id, expense.tripStopId, expense.tripDocumentId);
+      await this.requireOptionalReferences(
+        client,
+        trip.id,
+        expense.tripStopId,
+        expense.tripDocumentId,
+      );
       return this.insertOne(
         client,
         `INSERT INTO trip_expenses (
@@ -462,7 +483,8 @@ export class TripExecutionService {
     return this.database.withTenantContext(context, async (client) => {
       const trip = await this.requireNonTerminalTrip(client, tripId, false);
       const stop = await this.requireStop(client, trip.id, delivery.tripStopId, false);
-      if (stop.type !== 'delivery') throw new ConflictException('Delivery proof requires a delivery stop');
+      if (stop.type !== 'delivery')
+        throw new ConflictException('Delivery proof requires a delivery stop');
       const proof = await client.query<{ proof_type: string; trip_stop_id: string | null }>(
         `SELECT proof_type,trip_stop_id::text AS trip_stop_id
            FROM trip_proofs
@@ -560,7 +582,8 @@ export class TripExecutionService {
     forUpdate: boolean,
   ): Promise<TripStateRow> {
     const trip = await this.requireTrip(client, tripId, forUpdate);
-    if (trip.status === 'cancelled') throw new ConflictException('Cancelled trip cannot receive execution data');
+    if (trip.status === 'cancelled')
+      throw new ConflictException('Cancelled trip cannot receive execution data');
     return trip;
   }
 
@@ -658,8 +681,8 @@ export class TripExecutionService {
 function hasPgCode(error: unknown, code: string): boolean {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: unknown }).code === code,
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code,
   );
 }

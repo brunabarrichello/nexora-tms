@@ -401,9 +401,11 @@ function requireRecord(input: unknown): Record<string, unknown> {
 }
 
 function requireString(value: unknown, field: string, max: number): string {
-  if (typeof value !== 'string' || !value.trim()) throw new BadRequestException(`${field} is required`);
+  if (typeof value !== 'string' || !value.trim())
+    throw new BadRequestException(`${field} is required`);
   const normalized = value.trim();
-  if (normalized.length > max) throw new BadRequestException(`${field} must not exceed ${max} characters`);
+  if (normalized.length > max)
+    throw new BadRequestException(`${field} must not exceed ${max} characters`);
   return normalized;
 }
 
