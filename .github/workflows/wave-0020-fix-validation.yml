@@ -57,7 +57,6 @@ jobs:
           apps/api/src/matching/matching-persistence.service.ts
           docs/adr/0017-persistent-explainable-matching.md
           docs/data/wave-0020-matching-persistence.md
-          packages/database/ci/wave-0019-freight-normalization-owner.sql
 
       - name: Verify fixes
         shell: bash
@@ -69,8 +68,7 @@ jobs:
             apps/api/src/matching/capacity-matching.controller.ts \
             apps/api/src/matching/matching-persistence.service.ts \
             docs/adr/0017-persistent-explainable-matching.md \
-            docs/data/wave-0020-matching-persistence.md \
-            packages/database/ci/wave-0019-freight-normalization-owner.sql
+            docs/data/wave-0020-matching-persistence.md
 
       - name: Commit validation fixes
         shell: bash
