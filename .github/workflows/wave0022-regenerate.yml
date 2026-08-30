@@ -53,6 +53,37 @@ jobs:
               text = text.replace(needle, replacement, 1)
               schema.write_text(text)
 
+          service = Path('apps/api/src/trips/trips.service.ts')
+          service_text = service.read_text()
+          import_anchor = "import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';\n\n"
+          if "transport-request.validation.js" not in service_text:
+              service_text = service_text.replace(
+                  import_anchor,
+                  import_anchor + "import { requireUuid } from '../freight/transport-request.validation.js';\n",
+                  1,
+              )
+          old = """  private async requireTrip(
+              client: TenantQueryClient,
+              tripId: string,
+              forUpdate: boolean,
+            ): Promise<TripRow> {
+              const result = await client.query<TripRow>(
+          """
+          new = """  private async requireTrip(
+              client: TenantQueryClient,
+              tripId: string,
+              forUpdate: boolean,
+            ): Promise<TripRow> {
+              const id = requireUuid(tripId, 'tripId');
+              const result = await client.query<TripRow>(
+          """
+          if "const id = requireUuid(tripId, 'tripId');" not in service_text:
+              if old not in service_text:
+                  raise SystemExit('requireTrip anchor not found')
+              service_text = service_text.replace(old, new, 1)
+              service_text = service_text.replace("      [tripId],\n    );\n    const trip = result.rows[0];", "      [id],\n    );\n    const trip = result.rows[0];", 1)
+          service.write_text(service_text)
+
           migration = Path('packages/database/migrations/0022_minor_tyrannus.sql')
           snapshot = Path('packages/database/migrations/meta/0022_snapshot.json')
           if migration.exists(): migration.unlink()
@@ -64,7 +95,14 @@ jobs:
           journal_path.write_text(json.dumps(journal, indent=2) + '\n')
           PY
 
-          pnpm exec prettier --write packages/database/src/schema/trips.ts packages/database/migrations/meta/_journal.json
+          pnpm exec prettier --write \
+            packages/database/src/schema/trips.ts \
+            packages/database/migrations/meta/_journal.json \
+            apps/api/src/trips/trips.service.ts \
+            apps/api/src/trips/trips.validation.ts \
+            apps/api/src/trips/trips.validation.spec.ts \
+            apps/api/src/trips/trips.controller.ts \
+            apps/api/src/trips/trips.module.ts
           pnpm --filter @nexora/database db:generate
 
           migration_tag="$(jq -r '.entries[-1].tag' packages/database/migrations/meta/_journal.json)"
@@ -91,6 +129,10 @@ jobs:
 
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add packages/database/src/schema/trips.ts packages/database/migrations packages/database/migrations/meta
-          git commit -m 'fix(database): enforce unique active trip assignments'
+          git add \
+            packages/database/src/schema/trips.ts \
+            packages/database/migrations \
+            packages/database/migrations/meta \
+            apps/api/src/trips
+          git commit -m 'fix(trips): harden Wave 0022 trip core'
           git push origin HEAD:feat/database-wave-0022-trips-core
