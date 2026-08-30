@@ -16,6 +16,21 @@ import type { ReferenceDocumentType } from '../_lib/document-ui';
 const initialState: DocumentSaveState = { status: 'idle' };
 
 type VersionOption = { readonly id: string; readonly label: string };
+export type DocumentLinkTargetOption = {
+  readonly kind: string;
+  readonly id: string;
+  readonly label: string;
+};
+
+const targetLabels: Readonly<Record<string, string>> = {
+  party: 'Business party',
+  driver: 'Motorista',
+  driver_document: 'Registro documental de motorista',
+  asset: 'Ativo',
+  asset_document: 'Registro documental de ativo',
+  request: 'Carga / solicitação',
+  contract: 'Contrato de transporte',
+};
 
 export function DocumentCreateForm({
   documentTypes,
@@ -202,16 +217,27 @@ export function DocumentValidationForm({
   );
 }
 
-export function DocumentLinkForm({ documentId }: Readonly<{ documentId: string }>) {
+export function DocumentLinkForm({
+  documentId,
+  subjectScope,
+  targets,
+}: Readonly<{
+  documentId: string;
+  subjectScope: string;
+  targets: readonly DocumentLinkTargetOption[];
+}>) {
   const [state, action, pending] = useActionState(createDocumentLink, initialState);
+  const manualKinds = compatibleTargetKinds(subjectScope);
+  const linkAvailable = targets.length > 0 || manualKinds.length > 0;
   return (
     <DocumentFormShell
       title="Novo vínculo"
-      description="Associe o documento a uma entidade tipada com FK real e isolamento pelo tenant."
+      description={`Associe o documento a uma entidade compatível com o escopo ${subjectScope}.`}
       backHref={`/documentos/${documentId}?view=links`}
       state={state}
       pending={pending}
       submitLabel="Criar vínculo"
+      submitDisabled={!linkAvailable}
       action={action}
       governance={[
         'Target kind sob whitelist',
@@ -221,20 +247,40 @@ export function DocumentLinkForm({ documentId }: Readonly<{ documentId: string }
       ]}
     >
       <input type="hidden" name="documentId" value={documentId} />
-      <Field label="Tipo de entidade *">
-        <select name="targetKind" defaultValue="party" required>
-          <option value="party">Business party</option>
-          <option value="driver">Motorista</option>
-          <option value="driver_document">Registro documental de motorista</option>
-          <option value="asset">Ativo</option>
-          <option value="asset_document">Registro documental de ativo</option>
-          <option value="request">Carga / solicitação</option>
-          <option value="contract">Contrato de transporte</option>
+      <Field label="Entidade disponível" wide>
+        <select name="targetChoice" defaultValue="">
+          <option value="">Selecionar manualmente / coleção ainda não disponível</option>
+          {targets.map((target) => (
+            <option key={`${target.kind}:${target.id}`} value={`${target.kind}:${target.id}`}>
+              {targetLabels[target.kind] ?? target.kind} • {target.label}
+            </option>
+          ))}
         </select>
       </Field>
-      <Field label="ID da entidade *" wide>
-        <input name="targetId" required placeholder="UUID retornado pela entidade de origem" />
-      </Field>
+      {manualKinds.length > 0 ? (
+        <>
+          <Field label="Tipo de entidade (fallback)">
+            <select name="targetKind" defaultValue={manualKinds[0]}>
+              {manualKinds.map((kind) => (
+                <option key={kind} value={kind}>
+                  {targetLabels[kind] ?? kind}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="ID da entidade (fallback)" wide>
+            <input name="targetId" placeholder="UUID para entidade sem coleção global exposta" />
+          </Field>
+        </>
+      ) : (
+        <section className="form-summary-card field-wide">
+          <strong>Vínculo aguardando o aggregate root deste módulo</strong>
+          <p>
+            O tipo documental está pronto, mas a entidade raiz correspondente ainda não existe na
+            arquitetura atual. O backend não aceita vínculo genérico sem FK.
+          </p>
+        </section>
+      )}
       <Field label="Relação *">
         <input name="relationType" defaultValue="attachment" required />
       </Field>
@@ -271,6 +317,20 @@ export function DocumentUnlinkForm({
   );
 }
 
+function compatibleTargetKinds(subjectScope: string): readonly string[] {
+  const map: Readonly<Record<string, readonly string[]>> = {
+    party: ['party'],
+    driver: ['driver', 'driver_document'],
+    asset: ['asset', 'asset_document'],
+    request: ['request'],
+    contract: ['contract'],
+    other: ['party', 'driver', 'driver_document', 'asset', 'asset_document', 'request', 'contract'],
+    trip: [],
+    financial: [],
+  };
+  return map[subjectScope] ?? [];
+}
+
 function Field({
   label,
   wide = false,
@@ -291,6 +351,7 @@ function DocumentFormShell({
   state,
   pending,
   submitLabel,
+  submitDisabled = false,
   action,
   governance,
   children,
@@ -301,6 +362,7 @@ function DocumentFormShell({
   state: DocumentSaveState;
   pending: boolean;
   submitLabel: string;
+  submitDisabled?: boolean;
   action: (formData: FormData) => void;
   governance: readonly string[];
   children: React.ReactNode;
@@ -351,7 +413,11 @@ function DocumentFormShell({
             <Link href={backHref} className="button button-secondary">
               Cancelar
             </Link>
-            <button type="submit" className="button button-primary" disabled={pending}>
+            <button
+              type="submit"
+              className="button button-primary"
+              disabled={pending || submitDisabled}
+            >
               {pending ? 'Salvando…' : submitLabel}
             </button>
           </div>
