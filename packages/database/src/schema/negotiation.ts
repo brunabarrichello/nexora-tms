@@ -59,6 +59,11 @@ export const freightProposals = pgTable(
   },
   (table) => [
     unique('freight_proposals_tenant_id_unique').on(table.tenantId, table.id),
+    unique('freight_proposals_tenant_request_id_unique').on(
+      table.tenantId,
+      table.transportRequestId,
+      table.id,
+    ),
     unique('freight_proposals_request_sequence_unique').on(
       table.tenantId,
       table.transportRequestId,
