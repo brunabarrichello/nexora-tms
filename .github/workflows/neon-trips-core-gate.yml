@@ -1,0 +1,354 @@
+name: Neon Trips Core Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/database/**'
+      - 'apps/api/src/trips/**'
+      - '.github/workflows/neon-trips-core-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-trips-core-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  trips-core:
+    name: Trips Core schema, RLS and API integration
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
+
+      - name: Set ephemeral branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-trips-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch
+        id: admin
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Bootstrap migration capability
+        shell: bash
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator connection
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply migrations
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify Trips Core schema, RLS and grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $block$
+          DECLARE
+            v_count integer;
+          BEGIN
+            SELECT count(*) INTO v_count
+              FROM information_schema.tables
+             WHERE table_schema='public'
+               AND table_name IN (
+                 'trips','trip_transport_requests','trip_stops',
+                 'trip_drivers','trip_assets','trip_status_history'
+               );
+            IF v_count <> 6 THEN
+              RAISE EXCEPTION 'Expected 6 Trips Core tables, found %', v_count;
+            END IF;
+
+            SELECT count(*) INTO v_count
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public'
+               AND c.relname IN (
+                 'trips','trip_transport_requests','trip_stops',
+                 'trip_drivers','trip_assets','trip_status_history'
+               )
+               AND c.relrowsecurity;
+            IF v_count <> 6 THEN
+              RAISE EXCEPTION 'Expected RLS on 6 Trips Core tables, found %', v_count;
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+                FROM unnest(ARRAY[
+                  'trips','trip_transport_requests','trip_stops','trip_drivers','trip_assets'
+                ]) AS t(table_name)
+               WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT')
+                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT')
+                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE')
+                  OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')
+            ) THEN
+              RAISE EXCEPTION 'Trips Core mutable-table grants are incorrect';
+            END IF;
+
+            IF NOT has_table_privilege('nexora_app','public.trip_status_history','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.trip_status_history','INSERT')
+               OR has_table_privilege('nexora_app','public.trip_status_history','UPDATE')
+               OR has_table_privilege('nexora_app','public.trip_status_history','DELETE') THEN
+              RAISE EXCEPTION 'trip_status_history must remain append-only';
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint
+               WHERE conname='transport_contracts_tenant_request_id_unique'
+            ) THEN
+              RAISE EXCEPTION 'Composite transport contract key required by Trips Core is missing';
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_constraint
+               WHERE conname='trip_transport_requests_contract_fk'
+            ) THEN
+              RAISE EXCEPTION 'Trip-to-contract tenant-aware FK is missing';
+            END IF;
+
+            IF NOT EXISTS (
+              SELECT 1 FROM pg_indexes
+               WHERE schemaname='public'
+                 AND indexname='trip_transport_requests_active_request_unique'
+            ) OR NOT EXISTS (
+              SELECT 1 FROM pg_indexes
+               WHERE schemaname='public'
+                 AND indexname='trip_transport_requests_active_contract_unique'
+            ) THEN
+              RAISE EXCEPTION 'Active request/contract uniqueness indexes are missing';
+            END IF;
+          END
+          $block$;
+          SQL
+
+      - name: Seed Trips Core integration fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO tenants (id, slug, name) VALUES
+            ('61000000-0000-4000-8000-000000000001','trips-gate-a','Trips Gate Tenant A'),
+            ('61000000-0000-4000-8000-000000000002','trips-gate-b','Trips Gate Tenant B');
+
+          INSERT INTO users (id, display_name) VALUES
+            ('61000000-0000-4000-8000-000000000101','Trips Gate User A'),
+            ('61000000-0000-4000-8000-000000000102','Trips Gate User B');
+
+          INSERT INTO business_parties (
+            id,tenant_id,tax_id,legal_name,email,status,homologation_status
+          ) VALUES
+            ('62000000-0000-4000-8000-000000000501','61000000-0000-4000-8000-000000000001','61000000000001','Trips Carrier A','trips-carrier@example.test','active','approved'),
+            ('62000000-0000-4000-8000-000000000502','61000000-0000-4000-8000-000000000001','61000000000002','Trips Shipper A','trips-shipper@example.test','active','approved'),
+            ('62000000-0000-4000-8000-000000000503','61000000-0000-4000-8000-000000000001','61000000000003','Trips Consignee A','trips-consignee@example.test','active','approved');
+
+          INSERT INTO business_party_addresses (
+            id,tenant_id,party_id,type,label,street,number,city,state,is_active
+          ) VALUES
+            ('62000000-0000-4000-8000-000000000601','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000502','pickup','Trips Origin','Rua Origem','100','São Paulo','SP',true),
+            ('62000000-0000-4000-8000-000000000602','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000503','delivery','Trips Destination','Rua Destino','200','Campinas','SP',true);
+
+          INSERT INTO transport_requests (
+            id,tenant_id,customer_party_id,shipper_party_id,consignee_party_id,
+            origin_address_id,destination_address_id,planned_pickup_at,planned_delivery_at,
+            cargo_description,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '62000000-0000-4000-8000-000000000701','61000000-0000-4000-8000-000000000001',
+            '62000000-0000-4000-8000-000000000502','62000000-0000-4000-8000-000000000502','62000000-0000-4000-8000-000000000503',
+            '62000000-0000-4000-8000-000000000601','62000000-0000-4000-8000-000000000602',
+            '2026-09-10T08:00:00Z','2026-09-11T18:00:00Z','Trips integration cargo','contracted',
+            '61000000-0000-4000-8000-000000000101','61000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO transport_request_stops (
+            id,tenant_id,transport_request_id,sequence,type,party_id,address_id,
+            window_start_at,window_end_at,instructions
+          ) VALUES
+            ('62000000-0000-4000-8000-000000000711','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000701',1,'pickup','62000000-0000-4000-8000-000000000502','62000000-0000-4000-8000-000000000601','2026-09-10T08:00:00Z','2026-09-10T10:00:00Z','Collect cargo'),
+            ('62000000-0000-4000-8000-000000000712','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000701',2,'delivery','62000000-0000-4000-8000-000000000503','62000000-0000-4000-8000-000000000602','2026-09-11T16:00:00Z','2026-09-11T18:00:00Z','Deliver cargo');
+
+          INSERT INTO drivers (
+            id,tenant_id,carrier_party_id,full_name,tax_id,phone,cnh_number,cnh_category,cnh_expires_on,
+            registration_status,operational_status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '62000000-0000-4000-8000-000000000801','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000501',
+            'Trips Driver A','61000000001','11990000001','61000000001','E','2030-12-31','qualified','active',
+            '61000000-0000-4000-8000-000000000101','61000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO capacity_assets (
+            id,tenant_id,carrier_party_id,asset_kind,identifier,plate,vehicle_type,body_type,
+            capacity_weight_kg,capacity_volume_m3,max_length_m,max_width_m,max_height_m,
+            tracking_available,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '62000000-0000-4000-8000-000000000811','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000501',
+            'vehicle','TRIPS-VEHICLE-A','TRP1A11','carreta','sider',14000,85,14.8,2.6,2.9,true,'active',
+            '61000000-0000-4000-8000-000000000101','61000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO capacity_assignments (
+            id,tenant_id,driver_id,vehicle_id,carrier_party_id,status,starts_at,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '62000000-0000-4000-8000-000000000821','61000000-0000-4000-8000-000000000001',
+            '62000000-0000-4000-8000-000000000801','62000000-0000-4000-8000-000000000811','62000000-0000-4000-8000-000000000501',
+            'active','2026-09-01T08:00:00Z','61000000-0000-4000-8000-000000000101','61000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO freight_proposals (
+            id,tenant_id,transport_request_id,capacity_assignment_id,carrier_party_id,
+            sequence,kind,currency_code,freight_amount,toll_amount,additional_amount,
+            payment_terms,commercial_notes,authored_by_user_id
+          ) VALUES (
+            '62000000-0000-4000-8000-000000000831','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000701',
+            '62000000-0000-4000-8000-000000000821','62000000-0000-4000-8000-000000000501',
+            1,'proposal','BRL',15000,300,0,'50% coleta / 50% entrega','Trips gate accepted proposal','61000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO capacity_reservations (
+            id,tenant_id,transport_request_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,
+            carrier_party_id,status,approved_by_user_id,approved_at
+          ) VALUES (
+            '62000000-0000-4000-8000-000000000841','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000701',
+            '62000000-0000-4000-8000-000000000831','62000000-0000-4000-8000-000000000821','62000000-0000-4000-8000-000000000801','62000000-0000-4000-8000-000000000811',
+            '62000000-0000-4000-8000-000000000501','active','61000000-0000-4000-8000-000000000101','2026-09-01T10:00:00Z'
+          );
+
+          INSERT INTO transport_contracts (
+            id,tenant_id,transport_request_id,reservation_id,proposal_id,capacity_assignment_id,
+            driver_id,vehicle_id,carrier_party_id,status,currency_code,freight_amount,toll_amount,
+            additional_amount,payment_terms,commercial_notes,confirmed_by_user_id,confirmed_at
+          ) VALUES (
+            '62000000-0000-4000-8000-000000000901','61000000-0000-4000-8000-000000000001','62000000-0000-4000-8000-000000000701',
+            '62000000-0000-4000-8000-000000000841','62000000-0000-4000-8000-000000000831','62000000-0000-4000-8000-000000000821',
+            '62000000-0000-4000-8000-000000000801','62000000-0000-4000-8000-000000000811','62000000-0000-4000-8000-000000000501',
+            'confirmed','BRL',15000,300,0,'50% coleta / 50% entrega','Trips gate confirmed contract',
+            '61000000-0000-4000-8000-000000000101','2026-09-01T10:30:00Z'
+          );
+          SQL
+
+      - name: Resolve nexora_app connection
+        id: app
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: main
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Build API
+        run: pnpm --filter @nexora/api build
+
+      - name: Run Trips Core integration against Neon
+        shell: bash
+        env:
+          DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_POOL_MAX: '2'
+        run: |
+          set -euo pipefail
+          node apps/api/dist/trips/trips.integration.js
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '## Wave 0022 — Trips Core'
+            echo '- schema and RLS: verified'
+            echo '- runtime grants: verified'
+            echo '- confirmed contract → trip creation: verified'
+            echo '- request stops copied: verified'
+            echo '- primary driver/vehicle assignment: verified'
+            echo '- lifecycle planned → ready → in_transit → completed: verified'
+            echo '- append-only status history: verified'
+            echo '- cross-tenant visibility: rejected by RLS'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.admin.outputs.branch_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
