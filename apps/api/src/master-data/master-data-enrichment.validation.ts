@@ -3,11 +3,7 @@ import { BadRequestException } from '@nestjs/common';
 import { requireUuid } from './business-party.validation.js';
 
 export type CustomFieldEntityType =
-  | 'business_party'
-  | 'driver'
-  | 'capacity_asset'
-  | 'transport_request'
-  | 'location';
+  'business_party' | 'driver' | 'capacity_asset' | 'transport_request' | 'location';
 export type TaggedEntityType = Exclude<CustomFieldEntityType, 'location'>;
 export type CustomFieldDataType = 'string' | 'number' | 'boolean' | 'date' | 'datetime' | 'json';
 
@@ -82,7 +78,12 @@ function optionalBoolean(value: unknown, field: string): boolean | undefined {
 
 function optionalNumber(value: unknown, field: string, min: number, max?: number): number | null {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value !== 'number' || !Number.isFinite(value) || value < min || (max !== undefined && value > max)) {
+  if (
+    typeof value !== 'number' ||
+    !Number.isFinite(value) ||
+    value < min ||
+    (max !== undefined && value > max)
+  ) {
     throw new BadRequestException(
       `${field} must be a finite number between ${min}${max === undefined ? '' : ` and ${max}`}`,
     );
@@ -111,7 +112,8 @@ export interface LocationInput {
 export function parseLocation(input: unknown): LocationInput {
   const body = requireObject(input);
   const type = text(body.type, 'type', 32);
-  if (!locationTypes.has(type)) throw new BadRequestException('type is not a supported location type');
+  if (!locationTypes.has(type))
+    throw new BadRequestException('type is not a supported location type');
   const partyId = optionalUuid(body.partyId, 'partyId');
   const addressId = optionalUuid(body.addressId, 'addressId');
   if ((partyId === null) !== (addressId === null)) {
@@ -262,8 +264,11 @@ export function parseCustomFieldDefinition(input: unknown): CustomFieldDefinitio
   if (!customFieldDataTypes.has(dataType)) {
     throw new BadRequestException('dataType is not supported');
   }
-  if (body.validation !== undefined && body.validation !== null &&
-      (typeof body.validation !== 'object' || Array.isArray(body.validation))) {
+  if (
+    body.validation !== undefined &&
+    body.validation !== null &&
+    (typeof body.validation !== 'object' || Array.isArray(body.validation))
+  ) {
     throw new BadRequestException('validation must be an object or null');
   }
   return {
@@ -294,7 +299,8 @@ export function requireTaggedEntityType(value: string): TaggedEntityType {
 export function validateCustomFieldValue(dataType: CustomFieldDataType, value: unknown): unknown {
   switch (dataType) {
     case 'string':
-      if (typeof value !== 'string') throw new BadRequestException('custom field value must be a string');
+      if (typeof value !== 'string')
+        throw new BadRequestException('custom field value must be a string');
       return value;
     case 'number':
       if (typeof value !== 'number' || !Number.isFinite(value)) {
@@ -302,7 +308,8 @@ export function validateCustomFieldValue(dataType: CustomFieldDataType, value: u
       }
       return value;
     case 'boolean':
-      if (typeof value !== 'boolean') throw new BadRequestException('custom field value must be a boolean');
+      if (typeof value !== 'boolean')
+        throw new BadRequestException('custom field value must be a boolean');
       return value;
     case 'date':
       if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {

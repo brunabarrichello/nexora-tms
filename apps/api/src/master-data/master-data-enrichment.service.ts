@@ -268,7 +268,11 @@ export class MasterDataEnrichmentService {
     });
   }
 
-  setPartyGroupMembership(groupIdInput: string, partyIdInput: string, active: boolean): Promise<void> {
+  setPartyGroupMembership(
+    groupIdInput: string,
+    partyIdInput: string,
+    active: boolean,
+  ): Promise<void> {
     const groupId = requireUuid(groupIdInput, 'groupId');
     const partyId = requireUuid(partyIdInput, 'partyId');
     return this.withTenant(async (client, tenantId, userId) => {
@@ -511,11 +515,7 @@ export class MasterDataEnrichmentService {
     );
   }
 
-  private async requireEntity(
-    client: TenantQueryClient,
-    table: string,
-    id: string,
-  ): Promise<void> {
+  private async requireEntity(client: TenantQueryClient, table: string, id: string): Promise<void> {
     const result = await client.query(`SELECT 1 FROM ${table} WHERE id=$1::uuid`, [id]);
     if (!result.rowCount) throw new NotFoundException('Referenced master-data entity not found');
   }
