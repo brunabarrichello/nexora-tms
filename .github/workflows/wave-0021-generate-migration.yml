@@ -54,3 +54,5 @@ jobs:
           git diff --cached --quiet && exit 0
           git commit -m "feat(database): generate Wave 0021 negotiation migration"
           git push origin HEAD:feat/database-wave-0021-negotiation-complement
+
+# retry after self-reference type correction
