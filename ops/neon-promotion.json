@@ -1,6 +1,6 @@
 {
-  "environment": "development",
+  "environment": "staging",
   "wave": "0021",
   "migration": "0021_dizzy_longshot",
-  "sourceMainSha": "4ff8a3b90a70b4c5ac7607dca5c1e0d52cc6ee06"
+  "sourceMainSha": "9e3d7a2b12165f1e3b687d1a73188b0a94b4a786"
 }
