@@ -54,7 +54,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          migration_blob="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" -f content="$(cat packages/database/migrations/0019_safe_human_fly.sql)" -f encoding=utf-8 --jq .sha)"
-          gate_blob="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" -f content="$(cat .github/workflows/neon-pr-gate.yml)" -f encoding=utf-8 --jq .sha)"
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          for source, target in (
+              ('packages/database/migrations/0019_safe_human_fly.sql', '/tmp/migration-blob.json'),
+              ('.github/workflows/neon-pr-gate.yml', '/tmp/gate-blob.json'),
+          ):
+              Path(target).write_text(json.dumps({
+                  'content': Path(source).read_text(),
+                  'encoding': 'utf-8',
+              }))
+          PY
+          migration_blob="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input /tmp/migration-blob.json --jq .sha)"
+          gate_blob="$(gh api --method POST "repos/${GITHUB_REPOSITORY}/git/blobs" --input /tmp/gate-blob.json --jq .sha)"
           echo "MIGRATION_BLOB=$migration_blob"
           echo "NEON_GATE_BLOB=$gate_blob"
