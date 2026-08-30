@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyPgColumn,
   check,
   foreignKey,
   index,
@@ -201,7 +202,10 @@ export const negotiationMessages = pgTable(
     kind: negotiationMessageKindEnum('kind').default('message').notNull(),
     body: text('body').notNull(),
     relatedProposalId: uuid('related_proposal_id'),
-    replyToMessageId: uuid('reply_to_message_id'),
+    replyToMessageId: uuid('reply_to_message_id').references(
+      (): AnyPgColumn => negotiationMessages.id,
+      { onDelete: 'restrict' },
+    ),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
@@ -233,15 +237,6 @@ export const negotiationMessages = pgTable(
         freightProposals.id,
       ],
       name: 'negotiation_messages_related_proposal_fk',
-    }).onDelete('restrict'),
-    foreignKey({
-      columns: [table.tenantId, table.threadId, table.replyToMessageId],
-      foreignColumns: [
-        negotiationMessages.tenantId,
-        negotiationMessages.threadId,
-        negotiationMessages.id,
-      ],
-      name: 'negotiation_messages_reply_fk',
     }).onDelete('restrict'),
     check('negotiation_messages_body_check', sql`length(trim(${table.body})) BETWEEN 1 AND 8000`),
     check(
