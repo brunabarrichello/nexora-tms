@@ -1,4 +1,4 @@
-name: Wave 0015 artifact
+name: Wave 0015 finalize
 
 on:
   push:
@@ -6,14 +6,17 @@ on:
       - feat/database-wave-0015-foundations
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   generate:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
+        with:
+          ref: feat/database-wave-0015-foundations
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -29,24 +32,70 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Format schema copy
+      - name: Format schema
         run: pnpm exec prettier --write packages/database/src/schema/reference-data.ts packages/database/src/schema/master-data.ts packages/database/src/schema/index.ts
 
       - name: Generate Drizzle migration
         run: pnpm --filter @nexora/database db:generate
 
-      - name: Validate Drizzle migration
+      - name: Harden generated migration
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          files = sorted(Path('packages/database/migrations').glob('0015_*.sql'))
+          if len(files) != 1:
+              raise SystemExit(f'Expected exactly one 0015 migration, found {len(files)}')
+          path = files[0]
+          sql = path.read_text()
+          fk = 'ALTER TABLE "business_party_audit" ADD CONSTRAINT "business_party_audit_actor_user_id_users_id_fk" FOREIGN KEY ("actor_user_id") REFERENCES "public"."users"("id") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint\n'
+          guard = '''DO $$
+          BEGIN
+          \tIF EXISTS (
+          \t\tSELECT 1
+          \t\tFROM "business_party_audit" audit
+          \t\tLEFT JOIN "users" app_user ON app_user."id" = audit."actor_user_id"
+          \t\tWHERE app_user."id" IS NULL
+          \t) THEN
+          \t\tRAISE EXCEPTION 'Wave 0015 blocked: business_party_audit.actor_user_id contains values that do not reference users.id';
+          \tEND IF;
+          END
+          $$;--> statement-breakpoint
+          '''
+          if fk not in sql:
+              raise SystemExit('Expected business_party_audit FK statement was not generated')
+          sql = sql.replace(fk, guard + fk)
+          sql = sql.rstrip() + '''
+          --> statement-breakpoint
+          GRANT SELECT ON TABLE countries, states, cities, units_of_measure TO nexora_app;
+          --> statement-breakpoint
+          GRANT SELECT, INSERT, UPDATE ON TABLE vehicle_types, body_types, cargo_types, package_types, document_types, tags TO nexora_app;
+          '''
+          path.write_text(sql)
+          PY
+
+      - name: Verify migration safety
+        shell: bash
+        run: |
+          test "$(grep -h -c '^CREATE TABLE' packages/database/migrations/0015_*.sql)" -eq 10
+          test "$(grep -h -c '^CREATE POLICY' packages/database/migrations/0015_*.sql)" -eq 6
+          if grep -E '\b(DROP|TRUNCATE|RENAME)\b' packages/database/migrations/0015_*.sql; then
+            echo 'Destructive statement detected in Wave 0015.' >&2
+            exit 1
+          fi
+
+      - name: Validate Drizzle metadata
         run: pnpm --filter @nexora/database db:check
 
-      - name: Upload generated files
-        uses: actions/upload-artifact@v4
-        with:
-          name: wave-0015-generated
-          path: |
-            packages/database/src/schema/reference-data.ts
-            packages/database/src/schema/master-data.ts
-            packages/database/src/schema/index.ts
-            packages/database/migrations/0015_*.sql
-            packages/database/migrations/meta/0015_snapshot.json
-            packages/database/migrations/meta/_journal.json
-          if-no-files-found: error
+      - name: Commit generated artifacts
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packages/database/src/schema packages/database/migrations
+          if git diff --cached --quiet; then
+            echo 'No generated changes.'
+            exit 0
+          fi
+          git commit -m "feat(database): finalize wave 0015 foundations"
+          git push origin HEAD:feat/database-wave-0015-foundations
