@@ -33,7 +33,7 @@ export async function QualificationResourcePage({
   const subjectId = values[subjectKey];
 
   let maintenanceOptions: readonly { label: string; value: string }[] = [];
-  let maintenanceId = values.maintenanceId;
+  let maintenanceId: string | undefined = values.maintenanceId;
   if (config.requiresMaintenance && subjectId) {
     const maintenanceResult = await apiGet<readonly QualificationRecord[]>(
       `/api/v1/capacity/assets/${subjectId}/maintenance`,
