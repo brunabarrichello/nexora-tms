@@ -1,17 +1,3 @@
-import { ModulePage } from '../_components/module-page';
-
-export default function DocumentosPage() {
-  return (
-    <ModulePage
-      eyebrow="Módulo 06"
-      title="Documentos"
-      description="Gestão documental transversal para arquivos, versões, validações, vencimentos e vínculos tipados com pessoas, ativos, cargas e viagens."
-      status="Planejado"
-      highlights={[
-        { title: 'Core documental', description: 'Metadados, tipos, armazenamento, versões e integridade dos arquivos.' },
-        { title: 'Validação', description: 'Status, vencimentos, análise, aprovação, rejeição e bloqueios relacionados.' },
-        { title: 'Vínculos', description: 'Associação controlada com motoristas, veículos, clientes, cargas e viagens.' },
-      ]}
-    />
-  );
-}
+import { OperationalPage } from '../_components/operational-page';
+export const metadata = { title: 'Documentos' };
+export default function Page() { return <OperationalPage eyebrow="Governança documental" title="Documentos" description="Core documental com versões, validações, vencimentos e vínculos tipados com entidades do TMS." actions={[{href:'/documentos/novo',label:'Novo documento'}]} metrics={[{label:'Válidos',helper:'Documentos ativos'},{label:'A vencer',helper:'Janela configurável'},{label:'Pendentes',helper:'Aguardando validação'},{label:'Bloqueantes',helper:'Regras operacionais'}]} filters={[{label:'Tipo',name:'type',options:['CNH','CRLV','RNTRC','Seguro','Comprovante','Fiscal','Contrato','Outro']},{label:'Validação',name:'validation',options:['Válido','Pendente','Reprovado','Vencido']},{label:'Vínculo',name:'link',options:['Motorista','Veículo','Transportadora','Carga','Viagem','Empresa'] }]} columns={[{key:'name',label:'Documento'},{key:'type',label:'Tipo'},{key:'linkedTo',label:'Vinculado a'},{key:'expiry',label:'Validade'},{key:'status',label:'Status'}]} integrationNotes={['Arquivos serão tratados como versões imutáveis com metadados; validação não sobrescreverá histórico.']} />; }

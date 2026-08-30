@@ -11,6 +11,13 @@ const primaryNavigation = [
   { href: '/documentos', label: 'Documentos', short: 'DC' },
   { href: '/ocorrencias', label: 'Ocorrências', short: 'OC' },
   { href: '/financeiro', label: 'Financeiro', short: 'FN' },
+  { href: '/relatorios', label: 'Relatórios', short: 'RL' },
+];
+
+const secondaryNavigation = [
+  { href: '/administracao', label: 'Administração' },
+  { href: '/administracao/auditoria', label: 'Auditoria' },
+  { href: '/administracao/configuracoes', label: 'Configurações' },
 ];
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
@@ -34,11 +41,16 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
           ))}
         </nav>
 
+        <div className="sidebar-section-label">Sistema</div>
+        <nav className="secondary-nav" aria-label="Navegação administrativa">
+          {secondaryNavigation.map((item) => <Link href={item.href} key={item.href}>{item.label}</Link>)}
+        </nav>
+
         <div className="sidebar-footer">
           <span className="environment-dot" aria-hidden="true" />
           <div>
             <strong>Development</strong>
-            <span>Interface inicial</span>
+            <span>Frontend foundation</span>
           </div>
         </div>
       </aside>
@@ -50,6 +62,10 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
             <strong>Central Operacional</strong>
           </div>
           <div className="topbar-actions">
+            <label className="global-search">
+              <span className="sr-only">Busca global</span>
+              <input type="search" placeholder="Buscar no Nexora" />
+            </label>
             <span className="tenant-chip">Tenant: demonstração</span>
             <div className="avatar" aria-label="Perfil do usuário">NX</div>
           </div>

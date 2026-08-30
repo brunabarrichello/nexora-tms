@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { AppShell } from './_components/app-shell';
 import './globals.css';
+import './workbench.css';
 
 export const metadata: Metadata = {
   title: {
