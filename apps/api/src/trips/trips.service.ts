@@ -155,6 +155,9 @@ export class TripsService {
     return this.database.withTenantContext(context, async (client) => {
       const current = await this.requireTrip(client, tripId, true);
       this.requireTransition(current.status, transition.status);
+      if (transition.status === 'ready') {
+        await this.requireReadyPrerequisites(client, current.id);
+      }
 
       await client.query(
         `UPDATE trips
@@ -201,13 +204,14 @@ export class TripsService {
   }
 
   async addRequest(tripId: string, transportRequestId: string, input: unknown): Promise<void> {
+    const requestId = requireUuid(transportRequestId, 'transportRequestId');
     const link = parseTripRequestLink(input);
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
       const trip = await this.requireMutableTrip(client, tripId);
       const contracts = await this.requireConfirmedContracts(client, [link.contractId]);
       const contract = contracts[0];
-      if (!contract || contract.transport_request_id !== transportRequestId) {
+      if (!contract || contract.transport_request_id !== requestId) {
         throw new ConflictException('Contract does not belong to the requested transport request');
       }
       const existing = await this.loadActiveTripCapacity(client, trip.id);
@@ -222,6 +226,7 @@ export class TripsService {
   }
 
   async removeRequest(tripId: string, transportRequestId: string, input: unknown): Promise<void> {
+    const requestId = requireUuid(transportRequestId, 'transportRequestId');
     const reason = parseTripReason(input);
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
@@ -230,7 +235,7 @@ export class TripsService {
         `UPDATE trip_transport_requests
             SET removed_at=now(),removed_by_user_id=$1::uuid,remove_reason=$2
           WHERE trip_id=$3::uuid AND transport_request_id=$4::uuid AND removed_at IS NULL`,
-        [context.userId, reason, trip.id, transportRequestId],
+        [context.userId, reason, trip.id, requestId],
       );
       if (result.rowCount === 0) throw new NotFoundException('Active trip request link not found');
     });
@@ -465,6 +470,38 @@ export class TripsService {
       );
       return result.rows;
     });
+  }
+
+  private async requireReadyPrerequisites(
+    client: TenantQueryClient,
+    tripId: string,
+  ): Promise<void> {
+    const result = await client.query<{
+      request_count: number;
+      stop_count: number;
+      primary_driver_count: number;
+      vehicle_count: number;
+    }>(
+      `SELECT
+         (SELECT count(*)::int FROM trip_transport_requests WHERE trip_id=$1::uuid AND removed_at IS NULL) AS request_count,
+         (SELECT count(*)::int FROM trip_stops WHERE trip_id=$1::uuid AND status <> 'cancelled') AS stop_count,
+         (SELECT count(*)::int FROM trip_drivers WHERE trip_id=$1::uuid AND role='primary' AND ends_at IS NULL) AS primary_driver_count,
+         (SELECT count(*)::int FROM trip_assets WHERE trip_id=$1::uuid AND role='vehicle' AND ends_at IS NULL) AS vehicle_count`,
+      [tripId],
+    );
+    const readiness = result.rows[0];
+    if (!readiness || readiness.request_count < 1) {
+      throw new ConflictException('Trip requires at least one active contracted transport request');
+    }
+    if (readiness.stop_count < 2) {
+      throw new ConflictException('Trip requires at least two active planned stops');
+    }
+    if (readiness.primary_driver_count !== 1) {
+      throw new ConflictException('Trip requires exactly one active primary driver');
+    }
+    if (readiness.vehicle_count < 1) {
+      throw new ConflictException('Trip requires at least one active vehicle');
+    }
   }
 
   private async loadActiveTripCapacity(
