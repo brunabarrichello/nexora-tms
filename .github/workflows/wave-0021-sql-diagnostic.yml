@@ -16,7 +16,7 @@ env:
 jobs:
   diagnose:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout branch
         uses: actions/checkout@v4
@@ -70,7 +70,7 @@ jobs:
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
-      - name: Apply only Wave 0021 SQL with PostgreSQL diagnostics
+      - name: Apply full SQL chain with PostgreSQL diagnostics
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
         shell: bash
@@ -83,7 +83,10 @@ jobs:
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f packages/database/migrations/0021_dizzy_longshot.sql
+          for migration in packages/database/migrations/[0-9][0-9][0-9][0-9]_*.sql; do
+            echo "===== APPLYING $migration ====="
+            psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -f "$migration"
+          done
 
       - name: Delete ephemeral Neon branch
         if: ${{ always() }}
