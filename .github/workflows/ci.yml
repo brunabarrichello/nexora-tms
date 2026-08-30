@@ -47,6 +47,13 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Show Compose formatting diff
+        run: |
+          cp compose.yaml /tmp/compose.before.yaml
+          pnpm exec prettier --write compose.yaml
+          diff -u /tmp/compose.before.yaml compose.yaml || true
+          git checkout -- compose.yaml
+
       - name: Check formatting
         run: pnpm format:check
 
