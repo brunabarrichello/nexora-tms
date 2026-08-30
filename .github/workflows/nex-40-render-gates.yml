@@ -45,6 +45,9 @@ jobs:
       - name: Validate Drizzle migration chain
         run: pnpm --filter @nexora/database db:check
 
+      - name: Align renderer validation marker
+        run: sed -i "s/transport_contracts_confirmed_request_unique/transport_contracts_confirmed_/" scripts/render-nex-40-gates.mjs
+
       - name: Render permanent gates
         run: node scripts/render-nex-40-gates.mjs
 
