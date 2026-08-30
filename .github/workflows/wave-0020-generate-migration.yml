@@ -21,41 +21,42 @@ jobs:
           ref: feat/database-wave-0020-matching-persistence
           fetch-depth: 0
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.24.0
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 24.20.0
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Format Wave 0020 schema
-        run: pnpm exec prettier --write packages/database/src/schema/matching-persistence.ts packages/database/src/schema/index.ts
-
-      - name: Generate Drizzle migration
-        run: pnpm --filter @nexora/database db:generate
-
-      - name: Verify generated artifacts
+      - name: Harden runtime privileges and migration ledger
         shell: bash
         run: |
           set -euo pipefail
-          test "$(jq '.entries | length' packages/database/migrations/meta/_journal.json)" -eq 21
-          git status --short
+          python - <<'PY'
+          from pathlib import Path
 
-      - name: Commit generated migration
+          migration = Path('packages/database/migrations/0020_dapper_zuras.sql')
+          text = migration.read_text()
+          marker = 'GRANT SELECT, INSERT, UPDATE ON TABLE matching_rules, matching_preferences, matching_runs TO nexora_app;'
+          if marker not in text:
+              text = text.rstrip() + '''\nGRANT SELECT, INSERT, UPDATE ON TABLE matching_rules, matching_preferences, matching_runs TO nexora_app;\nGRANT SELECT, INSERT ON TABLE matching_candidates, matching_candidate_scores, matching_rule_results, matching_rejections TO nexora_app;\n'''
+              migration.write_text(text)
+
+          gate = Path('.github/workflows/neon-pr-gate.yml')
+          gate_text = gate.read_text()
+          old_if = 'IF migration_count <> 20 THEN'
+          old_msg = "Expected 20 Drizzle migration records, found %"
+          if gate_text.count(old_if) != 1 or gate_text.count(old_msg) != 1:
+              raise SystemExit('Unexpected Neon gate migration baseline shape')
+          gate_text = gate_text.replace(old_if, 'IF migration_count <> 21 THEN')
+          gate_text = gate_text.replace(old_msg, 'Expected 21 Drizzle migration records, found %')
+          gate.write_text(gate_text)
+          PY
+
+          grep -q "GRANT SELECT, INSERT, UPDATE ON TABLE matching_rules, matching_preferences, matching_runs TO nexora_app" packages/database/migrations/0020_dapper_zuras.sql
+          grep -q "GRANT SELECT, INSERT ON TABLE matching_candidates, matching_candidate_scores, matching_rule_results, matching_rejections TO nexora_app" packages/database/migrations/0020_dapper_zuras.sql
+          grep -q "IF migration_count <> 21 THEN" .github/workflows/neon-pr-gate.yml
+
+      - name: Commit hardening
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "nexora-wave-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add packages/database/src/schema/matching-persistence.ts packages/database/src/schema/index.ts packages/database/migrations
+          git add packages/database/migrations/0020_dapper_zuras.sql .github/workflows/neon-pr-gate.yml
           git diff --cached --quiet && exit 0
-          git commit -m "feat(database): generate Wave 0020 matching migration"
+          git commit -m "ci(database): harden Wave 0020 matching runtime contract"
           git push origin HEAD:feat/database-wave-0020-matching-persistence
