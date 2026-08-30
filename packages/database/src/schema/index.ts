@@ -6,6 +6,7 @@ export * from './currency.js';
 export * from './documents.js';
 export * from './freight-cargo.js';
 export * from './freight-commercial.js';
+export * from './freight-normalization.js';
 export * from './freight.js';
 export * from './iam.js';
 export * from './identity.js';
