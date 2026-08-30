@@ -113,7 +113,10 @@ export const transportRequestItems = pgTable(
       'transport_request_items_temperature_check',
       sql`${table.minTemperatureC} IS NULL OR ${table.maxTemperatureC} IS NULL OR ${table.minTemperatureC} <= ${table.maxTemperatureC}`,
     ),
-    index('transport_request_items_tenant_request_idx').on(table.tenantId, table.transportRequestId),
+    index('transport_request_items_tenant_request_idx').on(
+      table.tenantId,
+      table.transportRequestId,
+    ),
     index('transport_request_items_tenant_commodity_idx').on(table.tenantId, table.commodityId),
     pgPolicy('transport_request_items_tenant_isolation', {
       for: 'all',
@@ -442,7 +445,10 @@ export const freightLanes = pgTable(
     unique('freight_lanes_tenant_code_unique').on(table.tenantId, table.code),
     check('freight_lanes_code_check', sql`length(trim(${table.code})) > 0`),
     check('freight_lanes_name_check', sql`length(trim(${table.name})) > 0`),
-    check('freight_lanes_distinct_cities_check', sql`${table.originCityId} <> ${table.destinationCityId}`),
+    check(
+      'freight_lanes_distinct_cities_check',
+      sql`${table.originCityId} <> ${table.destinationCityId}`,
+    ),
     check(
       'freight_lanes_origin_radius_check',
       sql`${table.originRadiusKm} IS NULL OR ${table.originRadiusKm} >= 0`,

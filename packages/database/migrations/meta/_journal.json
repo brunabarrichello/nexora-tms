@@ -134,6 +134,13 @@
       "when": 1788063228944,
       "tag": "0018_tired_exodus",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788067474709,
+      "tag": "0019_safe_human_fly",
+      "breakpoints": true
     }
   ]
 }
