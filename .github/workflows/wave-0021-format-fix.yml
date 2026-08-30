@@ -1,5 +1,6 @@
 name: Wave 0021 Format Fix
 
+# Temporary formatter trigger; remove after clean formatting is committed.
 on:
   push:
     branches:
