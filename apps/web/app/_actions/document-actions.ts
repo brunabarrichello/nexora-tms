@@ -9,6 +9,15 @@ export type DocumentSaveState =
   { readonly status: 'idle' } | { readonly status: 'error'; readonly message: string };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const linkTargetKinds = new Set([
+  'party',
+  'driver',
+  'driver_document',
+  'asset',
+  'asset_document',
+  'request',
+  'contract',
+]);
 
 export async function createDocument(
   _previous: DocumentSaveState,
@@ -95,9 +104,12 @@ export async function createDocumentLink(
 ): Promise<DocumentSaveState> {
   return execute(async () => {
     const documentId = requireUuid(formData.get('documentId'), 'Documento');
+    const selected = parseTargetChoice(formData.get('targetChoice'));
+    const targetKind = selected?.targetKind ?? requiredTargetKind(formData.get('targetKind'));
+    const targetId = selected?.targetId ?? requireUuid(formData.get('targetId'), 'Entidade vinculada');
     const payload = {
-      targetKind: requiredText(formData.get('targetKind'), 'Tipo de vínculo'),
-      targetId: requireUuid(formData.get('targetId'), 'Entidade vinculada'),
+      targetKind,
+      targetId,
       relationType: requiredText(formData.get('relationType'), 'Relação'),
     };
     const result = await apiSend<Record<string, unknown>>(
@@ -146,6 +158,27 @@ async function execute(work: () => Promise<DocumentSaveState | void>): Promise<D
       message: error instanceof Error ? error.message : 'Não foi possível concluir a operação.',
     };
   }
+}
+
+function parseTargetChoice(
+  value: FormDataEntryValue | null,
+): { readonly targetKind: string; readonly targetId: string } | null {
+  const choice = optionalText(value);
+  if (!choice) return null;
+  const separator = choice.indexOf(':');
+  if (separator <= 0) throw new Error('Entidade selecionada é inválida.');
+  const targetKind = choice.slice(0, separator);
+  const targetId = choice.slice(separator + 1);
+  if (!linkTargetKinds.has(targetKind) || !uuidPattern.test(targetId)) {
+    throw new Error('Entidade selecionada é inválida.');
+  }
+  return { targetKind, targetId };
+}
+
+function requiredTargetKind(value: FormDataEntryValue | null): string {
+  const kind = requiredText(value, 'Tipo de vínculo');
+  if (!linkTargetKinds.has(kind)) throw new Error('Tipo de vínculo não suportado.');
+  return kind;
 }
 
 function requireResponseId(value: Record<string, unknown>): string {
