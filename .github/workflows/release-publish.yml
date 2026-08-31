@@ -73,12 +73,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          existing_ref="$({
-            gh api \
-              -H 'Accept: application/vnd.github+json' \
-              "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_VERSION}" \
-              --jq '.object.sha' 2>/dev/null || true
-          })"
+          existing_ref=""
+          tag_error="$(mktemp)"
+
+          if tag_sha="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_VERSION}" \
+            --jq '.object.sha' 2>"$tag_error")"; then
+            existing_ref="$tag_sha"
+          elif grep -Eq 'HTTP 404|Not Found' "$tag_error"; then
+            existing_ref=""
+          else
+            cat "$tag_error" >&2
+            rm -f "$tag_error"
+            exit 1
+          fi
+
+          rm -f "$tag_error"
 
           if [[ -n "$existing_ref" && "$existing_ref" != "$RELEASE_TARGET_SHA" ]]; then
             echo "Existing tag ${RELEASE_VERSION} points to ${existing_ref}, not ${RELEASE_TARGET_SHA}." >&2
