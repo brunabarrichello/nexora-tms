@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { TripsService, type Trip } from './trips.service.js';
 
 @Controller('api/v1/trips')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('trips.read')
 export class TripsController {
   constructor(private readonly trips: TripsService) {}
 
@@ -14,6 +14,7 @@ export class TripsController {
   }
 
   @Post()
+  @TenantAuthorized('trips.write')
   create(@Body() body: unknown): Promise<Trip> {
     return this.trips.create(body);
   }
@@ -24,6 +25,7 @@ export class TripsController {
   }
 
   @Post(':tripId/status')
+  @TenantAuthorized('trips.write')
   setStatus(@Param('tripId') tripId: string, @Body() body: unknown): Promise<Trip> {
     return this.trips.setStatus(tripId, body);
   }
@@ -34,6 +36,7 @@ export class TripsController {
   }
 
   @Post(':tripId/requests/:transportRequestId')
+  @TenantAuthorized('trips.write')
   addRequest(
     @Param('tripId') tripId: string,
     @Param('transportRequestId') transportRequestId: string,
@@ -43,6 +46,7 @@ export class TripsController {
   }
 
   @Post(':tripId/requests/:transportRequestId/remove')
+  @TenantAuthorized('trips.write')
   removeRequest(
     @Param('tripId') tripId: string,
     @Param('transportRequestId') transportRequestId: string,
@@ -57,6 +61,7 @@ export class TripsController {
   }
 
   @Post(':tripId/stops')
+  @TenantAuthorized('trips.write')
   addStop(@Param('tripId') tripId: string, @Body() body: unknown): Promise<void> {
     return this.trips.addStop(tripId, body);
   }
@@ -67,6 +72,7 @@ export class TripsController {
   }
 
   @Post(':tripId/drivers')
+  @TenantAuthorized('trips.write')
   addDriver(@Param('tripId') tripId: string, @Body() body: unknown): Promise<void> {
     return this.trips.addDriver(tripId, body);
   }
@@ -77,6 +83,7 @@ export class TripsController {
   }
 
   @Post(':tripId/assets')
+  @TenantAuthorized('trips.write')
   addAsset(@Param('tripId') tripId: string, @Body() body: unknown): Promise<void> {
     return this.trips.addAsset(tripId, body);
   }
