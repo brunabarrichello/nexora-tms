@@ -86,7 +86,8 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
 
-      - name: Verify canonical production branch exists
+      - name: Resolve canonical production branch
+        id: production
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -96,28 +97,53 @@ jobs:
             echo "NEON_API_KEY is not configured for the protected production environment." >&2
             exit 1
           }
-          curl -fsS \
-            -H "Authorization: Bearer ${NEON_API_KEY}" \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
-            | jq -e '.branches[] | select(.name == "production")' >/dev/null || {
-                echo "Canonical Neon production branch does not exist. Run Neon Production Bootstrap first." >&2
-                exit 1
-              }
+
+          branch_id="$(
+            curl -fsS \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            | jq -er '[.branches[] | select(.name == "production")][0].id'
+          )" || {
+            echo "Canonical Neon production branch does not exist. Run Neon Production Bootstrap first." >&2
+            exit 1
+          }
+
+          test -n "$branch_id" || {
+            echo "Canonical Neon production branch did not resolve to a branch ID." >&2
+            exit 1
+          }
+          echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
 
       - name: Resolve production connection strings without creating branches
         id: connections
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PRODUCTION_BRANCH_ID: ${{ steps.production.outputs.branch_id }}
         run: |
           set -euo pipefail
-          admin_url="$(npx -y neonctl@latest connection-string production --project-id "$NEON_PROJECT_ID" --database-name neondb --role-name neondb_owner --api-key "$NEON_API_KEY")"
-          migrator_url="$(npx -y neonctl@latest connection-string production --project-id "$NEON_PROJECT_ID" --database-name neondb --role-name nexora_migrator --api-key "$NEON_API_KEY")"
-          app_url="$(npx -y neonctl@latest connection-string production --project-id "$NEON_PROJECT_ID" --database-name neondb --role-name nexora_app --api-key "$NEON_API_KEY")"
+
+          connection_uri() {
+            local role_name="$1"
+            curl -fsSG \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
+              --data-urlencode "database_name=neondb" \
+              --data-urlencode "role_name=${role_name}" \
+              --data-urlencode "pooled=false" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+              | jq -er '.uri'
+          }
+
+          admin_url="$(connection_uri neondb_owner)"
+          migrator_url="$(connection_uri nexora_migrator)"
+          app_url="$(connection_uri nexora_app)"
+
           for value in "$admin_url" "$migrator_url" "$app_url"; do
             test -n "$value" || { echo "Failed to resolve a required production connection string." >&2; exit 1; }
             echo "::add-mask::$value"
           done
+
           echo "admin_url=$admin_url" >> "$GITHUB_OUTPUT"
           echo "migrator_url=$migrator_url" >> "$GITHUB_OUTPUT"
           echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
