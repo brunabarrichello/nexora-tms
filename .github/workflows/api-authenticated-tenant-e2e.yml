@@ -129,6 +129,37 @@ jobs:
           INSERT INTO memberships (id, tenant_id, user_id, status) VALUES
             ('53000000-0000-4000-8000-000000000121', '53000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000101', 'active');
 
+          INSERT INTO permissions (key, description) VALUES
+            ('master-data.read', 'Auth E2E Master Data read fixture'),
+            ('master-data.write', 'Auth E2E Master Data write fixture')
+          ON CONFLICT (key) DO NOTHING;
+
+          INSERT INTO roles (tenant_id, code, name, description) VALUES
+            ('53000000-0000-4000-8000-000000000001', 'auth_e2e_master_data_operator', 'Auth E2E Master Data Operator', 'Least-privilege role for authenticated Master Data E2E')
+          ON CONFLICT (tenant_id, code) DO NOTHING;
+
+          INSERT INTO role_permissions (tenant_id, role_id, permission_id)
+          SELECT
+            '53000000-0000-4000-8000-000000000001'::uuid,
+            r.id,
+            p.id
+          FROM roles r
+          CROSS JOIN permissions p
+          WHERE r.tenant_id = '53000000-0000-4000-8000-000000000001'::uuid
+            AND r.code = 'auth_e2e_master_data_operator'
+            AND p.key IN ('master-data.read', 'master-data.write')
+          ON CONFLICT (tenant_id, role_id, permission_id) DO NOTHING;
+
+          INSERT INTO membership_roles (tenant_id, membership_id, role_id)
+          SELECT
+            '53000000-0000-4000-8000-000000000001'::uuid,
+            '53000000-0000-4000-8000-000000000121'::uuid,
+            r.id
+          FROM roles r
+          WHERE r.tenant_id = '53000000-0000-4000-8000-000000000001'::uuid
+            AND r.code = 'auth_e2e_master_data_operator'
+          ON CONFLICT (tenant_id, membership_id, role_id) DO NOTHING;
+
           INSERT INTO business_parties (
             id, tenant_id, tax_id, legal_name, email, status, homologation_status
           ) VALUES
@@ -335,7 +366,7 @@ jobs:
             echo ''
             echo '- OIDC: locally signed RS256 JWT verified through HTTPS JWKS'
             echo '- external identity: resolved through the real Neon fixture'
-            echo '- Tenant A membership: active and selected through x-nexora-tenant-id'
+            echo '- Tenant A membership: active with explicit master-data.read/write fixture role'
             echo '- unauthenticated runtime request: 401'
             echo '- authenticated Tenant A runtime gate: 200 + rlsIsolated=true'
             echo '- same principal selecting Tenant B: 403'
