@@ -1,11 +1,9 @@
-import { Body, Controller, Get, Param, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 
 import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
 import { TransportCargoService, type TransportCargoProfile } from './transport-cargo.service.js';
 
 @Controller('api/v1/freight/transport-requests/:requestId/cargo-profile')
-@UseGuards(TenantRuntimeGateGuard)
 export class TransportCargoController {
   constructor(private readonly cargo: TransportCargoService) {}
 
