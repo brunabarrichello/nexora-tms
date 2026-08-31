@@ -1,0 +1,64 @@
+import { strict as assert } from 'node:assert';
+import { test } from 'node:test';
+
+import { Reflector } from '@nestjs/core';
+
+import { REQUIRED_TENANT_PERMISSION } from '../tenancy/tenant-permission.guard.js';
+import { CapacityAssetController } from './capacity-asset.controller.js';
+import { CapacityAssignmentController } from './capacity-assignment.controller.js';
+import { CapacityQualificationController } from './capacity-qualification.controller.js';
+
+const reflector = new Reflector();
+
+function assertPermission(target: object, permission: string): void {
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, target), permission);
+}
+
+test('Capacity controllers default to capacity.read', () => {
+  assertPermission(CapacityAssetController, 'capacity.read');
+  assertPermission(CapacityAssignmentController, 'capacity.read');
+  assertPermission(CapacityQualificationController, 'capacity.read');
+});
+
+test('Capacity asset and assignment mutations require capacity.write', () => {
+  const methods = [
+    CapacityAssetController.prototype.create,
+    CapacityAssetController.prototype.update,
+    CapacityAssignmentController.prototype.create,
+    CapacityAssignmentController.prototype.close,
+  ];
+
+  for (const method of methods) {
+    assertPermission(method, 'capacity.write');
+  }
+});
+
+test('Capacity qualification mutations require capacity.write', () => {
+  const methods = [
+    CapacityQualificationController.prototype.createDriverDocument,
+    CapacityQualificationController.prototype.createDriverQualification,
+    CapacityQualificationController.prototype.createDriverCourse,
+    CapacityQualificationController.prototype.setDriverAvailability,
+    CapacityQualificationController.prototype.createDriverUnavailability,
+    CapacityQualificationController.prototype.createDriverEmergencyContact,
+    CapacityQualificationController.prototype.createDriverBlock,
+    CapacityQualificationController.prototype.releaseDriverBlock,
+    CapacityQualificationController.prototype.createDriverRating,
+    CapacityQualificationController.prototype.setAssetCapabilities,
+    CapacityQualificationController.prototype.createAssetDocument,
+    CapacityQualificationController.prototype.createMaintenancePlan,
+    CapacityQualificationController.prototype.createMaintenance,
+    CapacityQualificationController.prototype.createMaintenanceItem,
+    CapacityQualificationController.prototype.createInsurance,
+    CapacityQualificationController.prototype.createInspection,
+    CapacityQualificationController.prototype.setAssetAvailability,
+    CapacityQualificationController.prototype.createAssetUnavailability,
+    CapacityQualificationController.prototype.createAssetLocation,
+    CapacityQualificationController.prototype.createAssetBlock,
+    CapacityQualificationController.prototype.releaseAssetBlock,
+  ];
+
+  for (const method of methods) {
+    assertPermission(method, 'capacity.write');
+  }
+});
