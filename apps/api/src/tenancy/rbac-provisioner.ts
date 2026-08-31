@@ -7,6 +7,8 @@ import {
   type TenantRoleTemplate,
 } from './rbac-catalog.js';
 
+export type RbacProvisionTarget = 'development' | 'staging' | 'ephemeral';
+
 export interface RbacProvisionResult {
   readonly permissionCount: number;
   readonly roleCount: number;
@@ -14,10 +16,22 @@ export interface RbacProvisionResult {
   readonly tenantId: string;
 }
 
+export function requireRbacProvisionTarget(value: string | undefined): RbacProvisionTarget {
+  const target = value?.trim().toLowerCase();
+  if (target === 'development' || target === 'staging' || target === 'ephemeral') {
+    return target;
+  }
+
+  throw new Error('RBAC provisioning is forbidden outside development, staging or ephemeral');
+}
+
 export async function provisionTenantRbac(
   client: PoolClient,
   tenantId: string,
+  target: RbacProvisionTarget,
 ): Promise<RbacProvisionResult> {
+  requireRbacProvisionTarget(target);
+
   const permissionIds = new Map<TenantPermissionKey, string>();
 
   for (const permissionKey of Object.values(TENANT_PERMISSIONS)) {
