@@ -8,15 +8,15 @@ import { DocumentsController } from './documents.controller.js';
 
 const reflector = new Reflector();
 
-function expectHandlerPermission(
-  handler: (...args: never[]) => unknown,
-  permission: string,
-): void {
+function expectHandlerPermission(handler: (...args: never[]) => unknown, permission: string): void {
   assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, handler), permission);
 }
 
 test('Documents controller requires read permission by default', () => {
-  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, DocumentsController), 'documents.read');
+  assert.equal(
+    reflector.get(REQUIRED_TENANT_PERMISSION, DocumentsController),
+    'documents.read',
+  );
 });
 
 test('Document write handlers require write permission', () => {
