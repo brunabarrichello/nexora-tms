@@ -7,10 +7,9 @@ import {
   Patch,
   Post,
   Put,
-  UseGuards,
 } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   MasterDataEnrichmentService,
   type MasterDataRecord,
@@ -28,7 +27,7 @@ function requireConfigurationKind(kind: string): 'module' | 'feature' {
 }
 
 @Controller('api/v1/master-data')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('master-data.read')
 export class MasterDataEnrichmentController {
   constructor(private readonly service: MasterDataEnrichmentService) {}
 
@@ -38,11 +37,13 @@ export class MasterDataEnrichmentController {
   }
 
   @Post('locations')
+  @TenantAuthorized('master-data.write')
   createLocation(@Body() body: unknown): Promise<MasterDataRecord> {
     return this.service.createLocation(body);
   }
 
   @Patch('locations/:locationId/lifecycle/:state')
+  @TenantAuthorized('master-data.write')
   setLocationLifecycle(
     @Param('locationId') locationId: string,
     @Param('state') state: string,
@@ -56,6 +57,7 @@ export class MasterDataEnrichmentController {
   }
 
   @Post('dimensions/:kind')
+  @TenantAuthorized('master-data.write')
   createDimension(@Param('kind') kind: string, @Body() body: unknown): Promise<MasterDataRecord> {
     return this.service.createDimension(kind, body);
   }
@@ -66,6 +68,7 @@ export class MasterDataEnrichmentController {
   }
 
   @Post('commodities')
+  @TenantAuthorized('master-data.write')
   createCommodity(@Body() body: unknown): Promise<MasterDataRecord> {
     return this.service.createCommodity(body);
   }
@@ -76,11 +79,13 @@ export class MasterDataEnrichmentController {
   }
 
   @Post('business-party-groups')
+  @TenantAuthorized('master-data.write')
   createPartyGroup(@Body() body: unknown): Promise<MasterDataRecord> {
     return this.service.createPartyGroup(body);
   }
 
   @Put('business-party-groups/:groupId/members/:partyId/:state')
+  @TenantAuthorized('master-data.write')
   async setPartyGroupMembership(
     @Param('groupId') groupId: string,
     @Param('partyId') partyId: string,
@@ -97,6 +102,7 @@ export class MasterDataEnrichmentController {
   }
 
   @Post('business-parties/:partyId/requirements')
+  @TenantAuthorized('master-data.write')
   createPartyRequirement(
     @Param('partyId') partyId: string,
     @Body() body: unknown,
@@ -110,11 +116,13 @@ export class MasterDataEnrichmentController {
   }
 
   @Post('custom-fields/definitions')
+  @TenantAuthorized('master-data.write')
   createCustomFieldDefinition(@Body() body: unknown): Promise<MasterDataRecord> {
     return this.service.createCustomFieldDefinition(body);
   }
 
   @Put('custom-fields/:definitionId/:entityType/:subjectId')
+  @TenantAuthorized('master-data.write')
   setCustomFieldValue(
     @Param('definitionId') definitionId: string,
     @Param('entityType') entityType: string,
@@ -129,6 +137,7 @@ export class MasterDataEnrichmentController {
   }
 
   @Put('tags/:entityType/:subjectId/:tagId/:state')
+  @TenantAuthorized('master-data.write')
   async setTag(
     @Param('entityType') entityType: string,
     @Param('subjectId') subjectId: string,
@@ -141,11 +150,13 @@ export class MasterDataEnrichmentController {
   }
 
   @Post('sequences/:scope/allocate')
+  @TenantAuthorized('master-data.write')
   allocateSequence(@Param('scope') scope: string): Promise<{ readonly value: string }> {
     return this.service.allocateSequence(scope);
   }
 
   @Put('configuration/:kind/:key')
+  @TenantAuthorized('master-data.write')
   upsertTenantConfiguration(
     @Param('kind') kindInput: string,
     @Param('key') key: string,
