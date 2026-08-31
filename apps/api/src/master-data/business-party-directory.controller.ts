@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   BusinessPartyDirectoryService,
   type BusinessPartyAddress,
@@ -9,7 +9,7 @@ import {
 } from './business-party-directory.service.js';
 
 @Controller('api/v1/master-data/business-parties')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('master-data.read')
 export class BusinessPartyDirectoryController {
   constructor(private readonly directory: BusinessPartyDirectoryService) {}
 
@@ -24,6 +24,7 @@ export class BusinessPartyDirectoryController {
   }
 
   @Post(':partyId/addresses')
+  @TenantAuthorized('master-data.write')
   createAddress(
     @Param('partyId') partyId: string,
     @Body() body: unknown,
@@ -32,6 +33,7 @@ export class BusinessPartyDirectoryController {
   }
 
   @Patch(':partyId/addresses/:addressId')
+  @TenantAuthorized('master-data.write')
   updateAddress(
     @Param('partyId') partyId: string,
     @Param('addressId') addressId: string,
@@ -46,6 +48,7 @@ export class BusinessPartyDirectoryController {
   }
 
   @Post(':partyId/contacts')
+  @TenantAuthorized('master-data.write')
   createContact(
     @Param('partyId') partyId: string,
     @Body() body: unknown,
@@ -54,6 +57,7 @@ export class BusinessPartyDirectoryController {
   }
 
   @Patch(':partyId/contacts/:contactId')
+  @TenantAuthorized('master-data.write')
   updateContact(
     @Param('partyId') partyId: string,
     @Param('contactId') contactId: string,
