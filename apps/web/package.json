@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "test": "node --test",
+    "test": "node --test app/_lib/web-auth.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
