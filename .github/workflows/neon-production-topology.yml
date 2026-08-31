@@ -60,8 +60,8 @@ jobs:
             exit 1
           }
           production_parent="$(jq -er --arg id "$production_id" '.branches[] | select(.id == $id) | .parent_id // ""' <<<"$branches_json")"
-          root_default="$(jq -er --arg id "$root_main_id" '.branches[] | select(.id == $id) | .default' <<<"$branches_json")"
-          production_default="$(jq -er --arg id "$production_id" '.branches[] | select(.id == $id) | .default' <<<"$branches_json")"
+          root_default="$(jq -r --arg id "$root_main_id" '.branches[] | select(.id == $id) | .default' <<<"$branches_json")"
+          production_default="$(jq -r --arg id "$production_id" '.branches[] | select(.id == $id) | .default' <<<"$branches_json")"
           production_written="$(jq -er --arg id "$production_id" '.branches[] | select(.id == $id) | .written_data_bytes // 0' <<<"$branches_json")"
           production_children="$(jq -er --arg id "$production_id" '[.branches[] | select(.parent_id? == $id)] | length' <<<"$branches_json")"
 
