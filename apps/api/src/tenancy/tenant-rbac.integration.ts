@@ -2,7 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import { Pool, type PoolClient } from 'pg';
 
-import { TENANT_ROLE_TEMPLATES } from './rbac-catalog.js';
+import { TENANT_PERMISSIONS, TENANT_ROLE_TEMPLATES } from './rbac-catalog.js';
 import {
   provisionTenantRbac,
   requireRbacProvisionTarget,
@@ -55,16 +55,17 @@ async function run(): Promise<void> {
     assert.deepEqual(second, first, 'repeat provisioning must produce the same catalog shape');
     assert.equal(first.roleCount, Object.keys(TENANT_ROLE_TEMPLATES).length);
 
+    const managedPermissionKeys = Object.values(TENANT_PERMISSIONS);
     const counts = await admin.query<{
       permissions: number;
       role_permissions: number;
       roles: number;
     }>(
       `SELECT
-         (SELECT count(*)::int FROM permissions) AS permissions,
+         (SELECT count(*)::int FROM permissions WHERE key = ANY($2::text[])) AS permissions,
          (SELECT count(*)::int FROM roles WHERE tenant_id = $1::uuid) AS roles,
          (SELECT count(*)::int FROM role_permissions WHERE tenant_id = $1::uuid) AS role_permissions`,
-      [TENANT_A],
+      [TENANT_A, managedPermissionKeys],
     );
 
     assert.equal(counts.rows[0]?.permissions, first.permissionCount);
@@ -80,6 +81,15 @@ async function run(): Promise<void> {
        ON CONFLICT (tenant_id, membership_id, role_id) DO NOTHING`,
       [TENANT_A, MEMBERSHIP_A],
     );
+
+    const assignmentCount = await admin.query<{ count: number }>(
+      `SELECT count(*)::int AS count
+         FROM membership_roles
+        WHERE tenant_id = $1::uuid
+          AND membership_id = $2::uuid`,
+      [TENANT_A, MEMBERSHIP_A],
+    );
+    assert.equal(assignmentCount.rows[0]?.count, 1, 'fixture membership must receive one viewer role');
 
     const tenantContext = new TenantContext();
     tenantContext.establish({
