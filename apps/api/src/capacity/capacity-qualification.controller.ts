@@ -1,13 +1,13 @@
-import { Body, Controller, Get, Param, Post, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   CapacityQualificationService,
   type QualificationRecord,
 } from './capacity-qualification.service.js';
 
 @Controller('api/v1/capacity')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('capacity.read')
 export class CapacityQualificationController {
   constructor(private readonly qualification: CapacityQualificationService) {}
 
@@ -19,6 +19,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/documents')
+  @TenantAuthorized('capacity.write')
   createDriverDocument(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -34,6 +35,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/qualifications')
+  @TenantAuthorized('capacity.write')
   createDriverQualification(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -47,6 +49,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/courses')
+  @TenantAuthorized('capacity.write')
   createDriverCourse(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -60,6 +63,7 @@ export class CapacityQualificationController {
   }
 
   @Put('drivers/:driverId/availability')
+  @TenantAuthorized('capacity.write')
   setDriverAvailability(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -75,6 +79,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/unavailability')
+  @TenantAuthorized('capacity.write')
   createDriverUnavailability(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -90,6 +95,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/emergency-contacts')
+  @TenantAuthorized('capacity.write')
   createDriverEmergencyContact(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -103,6 +109,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/blocks')
+  @TenantAuthorized('capacity.write')
   createDriverBlock(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -111,6 +118,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/blocks/:blockId/release')
+  @TenantAuthorized('capacity.write')
   releaseDriverBlock(
     @Param('driverId') driverId: string,
     @Param('blockId') blockId: string,
@@ -125,6 +133,7 @@ export class CapacityQualificationController {
   }
 
   @Post('drivers/:driverId/ratings')
+  @TenantAuthorized('capacity.write')
   createDriverRating(
     @Param('driverId') driverId: string,
     @Body() body: unknown,
@@ -138,6 +147,7 @@ export class CapacityQualificationController {
   }
 
   @Put('assets/:assetId/capabilities')
+  @TenantAuthorized('capacity.write')
   setAssetCapabilities(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -151,6 +161,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/documents')
+  @TenantAuthorized('capacity.write')
   createAssetDocument(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -164,6 +175,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/maintenance-plans')
+  @TenantAuthorized('capacity.write')
   createMaintenancePlan(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -177,6 +189,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/maintenance')
+  @TenantAuthorized('capacity.write')
   createMaintenance(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -193,6 +206,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/maintenance/:maintenanceId/items')
+  @TenantAuthorized('capacity.write')
   createMaintenanceItem(
     @Param('assetId') assetId: string,
     @Param('maintenanceId') maintenanceId: string,
@@ -207,6 +221,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/insurances')
+  @TenantAuthorized('capacity.write')
   createInsurance(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -220,6 +235,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/inspections')
+  @TenantAuthorized('capacity.write')
   createInspection(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -233,6 +249,7 @@ export class CapacityQualificationController {
   }
 
   @Put('assets/:assetId/availability')
+  @TenantAuthorized('capacity.write')
   setAssetAvailability(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -248,6 +265,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/unavailability')
+  @TenantAuthorized('capacity.write')
   createAssetUnavailability(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -261,6 +279,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/locations')
+  @TenantAuthorized('capacity.write')
   createAssetLocation(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -274,6 +293,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/blocks')
+  @TenantAuthorized('capacity.write')
   createAssetBlock(
     @Param('assetId') assetId: string,
     @Body() body: unknown,
@@ -282,6 +302,7 @@ export class CapacityQualificationController {
   }
 
   @Post('assets/:assetId/blocks/:blockId/release')
+  @TenantAuthorized('capacity.write')
   releaseAssetBlock(
     @Param('assetId') assetId: string,
     @Param('blockId') blockId: string,
