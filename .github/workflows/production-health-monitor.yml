@@ -1,0 +1,231 @@
+name: Production Health Monitor
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/production-health-monitor.yml'
+      - 'docs/operations/security-observability-policy.md'
+  schedule:
+    - cron: '7,37 * * * *'
+  workflow_dispatch:
+    inputs:
+      simulate_failure:
+        description: Simulate an unhealthy operational probe to validate the incident path
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-health-monitor
+  cancel-in-progress: false
+
+env:
+  HEALTH_URL: https://nexora-tms-api-production.up.railway.app/health
+  INCIDENT_TITLE: '[monitor] Production API health unavailable'
+  QUALIFICATION_TITLE: '[monitor-test] Production health alert lifecycle qualification'
+
+jobs:
+  probe:
+    name: Probe Production API and reconcile incident
+    if: ${{ github.event_name != 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Probe Production API
+        id: probe
+        shell: bash
+        env:
+          SIMULATE_FAILURE: ${{ inputs.simulate_failure || false }}
+        run: |
+          set -u
+
+          healthy=false
+          status=000
+
+          if [[ "$SIMULATE_FAILURE" != 'true' ]]; then
+            for attempt in 1 2 3; do
+              rm -f /tmp/nexora-health.json
+              status="$(curl -sS \
+                --connect-timeout 5 \
+                --max-time 10 \
+                -o /tmp/nexora-health.json \
+                -w '%{http_code}' \
+                "$HEALTH_URL")"
+              curl_exit=$?
+
+              if [[ "$curl_exit" -eq 0 && "$status" == '200' ]] && \
+                jq -e '.status == "ok" and .service == "nexora-tms-api"' /tmp/nexora-health.json >/dev/null 2>&1; then
+                healthy=true
+                break
+              fi
+
+              sleep 5
+            done
+          else
+            echo 'Simulated failure requested; network probe intentionally skipped.'
+          fi
+
+          echo "healthy=$healthy" >> "$GITHUB_OUTPUT"
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "Production health result: healthy=${healthy}, http_status=${status}."
+
+      - name: Open incident when unhealthy
+        if: ${{ steps.probe.outputs.healthy != 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HTTP_STATUS: ${{ steps.probe.outputs.status }}
+        run: |
+          set -euo pipefail
+
+          existing="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --limit 100 \
+            --json number,title | \
+            jq -r --arg title "$INCIDENT_TITLE" '.[] | select(.title == $title) | .number' | \
+            head -n 1)"
+
+          if [[ -z "$existing" ]]; then
+            cat > /tmp/incident.md <<EOF
+          Automated Production health monitor detected an unavailable API health endpoint.
+
+          - Endpoint: \`/health\` on the configured Railway Production API
+          - HTTP status after retries: \`${HTTP_STATUS}\`
+          - Workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Detected at: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+
+          The monitor intentionally does not persist or publish the response body, credentials, cookies or request headers.
+
+          Keep this incident open until a later healthy monitor run verifies recovery.
+          EOF
+
+            gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$INCIDENT_TITLE" \
+              --body-file /tmp/incident.md
+          else
+            echo "Incident already open as #${existing}; the failed workflow run is the repeat evidence."
+          fi
+
+          echo 'Production API health monitor failed.' >&2
+          exit 1
+
+      - name: Close monitor incident after verified recovery
+        if: ${{ steps.probe.outputs.healthy == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          existing="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --limit 100 \
+            --json number,title | \
+            jq -r --arg title "$INCIDENT_TITLE" '.[] | select(.title == $title) | .number' | \
+            head -n 1)"
+
+          if [[ -n "$existing" ]]; then
+            gh issue comment "$existing" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "Automated monitor verified recovery on workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Closing the monitor incident."
+            gh issue close "$existing" \
+              --repo "$GITHUB_REPOSITORY" \
+              --reason completed
+          else
+            echo 'Production API health is healthy; no open monitor incident exists.'
+          fi
+
+  qualification:
+    name: Qualify alert issue lifecycle without a false Production incident
+    if: ${{ github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Create controlled monitor-test incident
+        id: incident
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          existing="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --limit 100 \
+            --json number,title | \
+            jq -r --arg title "$QUALIFICATION_TITLE" '.[] | select(.title == $title) | .number' | \
+            head -n 1)"
+
+          if [[ -z "$existing" ]]; then
+            issue_url="$(gh issue create \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$QUALIFICATION_TITLE" \
+              --body "Controlled NEX-82 qualification artifact. This is not a Production outage. The workflow will now verify the real Production health endpoint and close this issue only if recovery/healthy reconciliation succeeds.")"
+            issue_number="${issue_url##*/}"
+          else
+            issue_number="$existing"
+          fi
+
+          echo "issue_number=$issue_number" >> "$GITHUB_OUTPUT"
+          echo "Controlled monitor-test issue: #${issue_number}."
+
+      - name: Verify real Production health after simulated incident creation
+        shell: bash
+        run: |
+          set -u
+
+          healthy=false
+          status=000
+          for attempt in 1 2 3; do
+            rm -f /tmp/nexora-health.json
+            status="$(curl -sS \
+              --connect-timeout 5 \
+              --max-time 10 \
+              -o /tmp/nexora-health.json \
+              -w '%{http_code}' \
+              "$HEALTH_URL")"
+            curl_exit=$?
+
+            if [[ "$curl_exit" -eq 0 && "$status" == '200' ]] && \
+              jq -e '.status == "ok" and .service == "nexora-tms-api"' /tmp/nexora-health.json >/dev/null 2>&1; then
+              healthy=true
+              break
+            fi
+            sleep 5
+          done
+
+          [[ "$healthy" == 'true' ]] || {
+            echo "Production health did not recover/pass during qualification; leaving the monitor-test issue open. Last HTTP status=${status}." >&2
+            exit 1
+          }
+
+          echo "Real Production health verified with HTTP ${status}."
+
+      - name: Close controlled issue after verified recovery
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE_NUMBER: ${{ steps.incident.outputs.issue_number }}
+        run: |
+          set -euo pipefail
+
+          gh issue comment "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body "NEX-82 qualification verified the real Production /health endpoint on workflow run ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Closing the controlled monitor-test incident."
+          gh issue close "$ISSUE_NUMBER" \
+            --repo "$GITHUB_REPOSITORY" \
+            --reason completed
+
+          echo "Controlled monitor-test issue #${ISSUE_NUMBER} closed after verified Production health."
