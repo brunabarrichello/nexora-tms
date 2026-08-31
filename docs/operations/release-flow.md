@@ -1,151 +1,172 @@
-# Runbook — Release and Rollback Flow
+# Runbook — Release Management, Promotion and Rollback
 
-Jira: NEX-21 / NEX-75 / NEX-89 / NEX-92 / NEX-88
+Jira: NEX-89 / NEX-92 / NEX-88 / NEX-93
 
-## Release principle
+## Status
 
-Production is promoted only from a validated staging state. A successful build, merge or deployment alone is not sufficient evidence for a production release.
+Production Readiness baseline (NEX-88) is **Done**. The current synchronous Production release is qualified on immutable SHA:
 
-The canonical production release chain is:
+`ed52490e1872d645ae06ab402fe646a497333b7b`
+
+NEX-89 and NEX-92 are the active P0 governance phase.
+
+## Versioning policy
+
+Nexora TMS uses Semantic Versioning for named releases:
+
+`MAJOR.MINOR.PATCH`
+
+- MAJOR: incompatible product/platform contract change.
+- MINOR: backward-compatible functional capability.
+- PATCH: backward-compatible correction, hardening or operational fix.
+
+The first formal release target is `v0.1.0`.
+
+A version name is not sufficient to identify a release. Production always requires an exact immutable Git SHA and a populated Production Version Matrix.
+
+## Canonical release identity
+
+Every Production candidate must record:
+
+- release/tag or approved immutable release identifier;
+- exact Git source SHA;
+- Web SHA;
+- API SHA;
+- Worker SHA or explicit `N/A` with tracked reason;
+- migration/schema version and Drizzle ledger state;
+- source environment/promotion path;
+- release owner/operator role;
+- linked Jira items, PRs, workflow runs and deployments;
+- rollback target and recovery strategy.
+
+The canonical matrix is `docs/operations/production-version-matrix.md` and Jira NEX-92.
+
+## Standard promotion flow
 
 ```text
-validated staging
-→ release candidate identified
-→ release/version matrix recorded
-→ production readiness Go/No-Go
-→ controlled production promotion
+feature
+→ pull request
+→ main
+→ release candidate
+→ development qualification
+→ staging qualification
+→ acceptance gates
+→ Production Version Matrix
+→ explicit production approval
+→ production promotion
 → post-promotion qualification
 ```
 
-## Release identity
+The current `v0.1.0` baseline predates the final form of this canonical flow, so its matrix records the actual path used. Future releases must follow the canonical flow unless an emergency exception is documented.
 
-Every release candidate must have an unambiguous identity before production approval:
+## Required gates before production promotion
 
-- release/tag or approved immutable release identifier;
-- source `main` commit SHA;
-- Web SHA/version;
-- API SHA/version;
-- Worker SHA/version;
-- migration/schema version and Drizzle ledger state;
-- source environment for the promotion;
-- release owner;
-- linked Jira items and pull requests.
+Stop promotion unless all applicable gates are green:
 
-NEX-92 is the canonical Production Version Matrix work item. Until that matrix is established and filled for a release, production promotion remains blocked.
+1. required CI executed successfully;
+2. release SHA is immutable and unambiguous;
+3. Version Matrix is populated for the candidate;
+4. migrations are versioned and ledger expectations are known;
+5. database migration/audit/RLS/tenant-isolation gates are green when schema changes apply;
+6. API health/readiness is green;
+7. authentication and tenant runtime gates are green for auth-sensitive changes;
+8. Web/API compatibility smoke is green;
+9. security findings proportional to the release risk are resolved or explicitly accepted;
+10. rollback/forward-fix strategy is documented;
+11. required DR evidence is current for destructive/high-risk database changes;
+12. production approval is explicit.
 
-## Standard release
+NEX-88 is not reopened for every release. Its completed baseline is a prerequisite. Release-specific Go/No-Go evidence lives with NEX-89/NEX-92 and the release record.
 
-1. PR passes all executable quality/security checks.
-2. Preview is reviewed when UI/API behavior benefits from it.
-3. PR is squash-merged into `main`.
-4. Development/shared-environment qualification completes when applicable.
-5. Staging deploy is created from the merged immutable revision.
-6. Staging database migrations are applied using the migrator credential.
-7. Staging smoke/integration, RLS/isolation and relevant domain gates pass.
-8. Release owner verifies known risks, migration impact, dependency compatibility and rollback readiness.
-9. Release notes are prepared and linked to Jira/PR/migration evidence.
-10. NEX-92 Production Version Matrix is populated for the candidate.
-11. NEX-93 Restore Qualification evidence is current enough for the release risk profile when database recovery is relevant.
-12. NEX-88 Production Readiness checklist reaches an explicit Go decision.
-13. Production promotion is explicitly approved.
-14. Production migrations are applied in the documented safe order.
-15. Web/API/Worker production deployment is completed only for components qualified by the matrix.
-16. Health/readiness, authentication, critical API/Web smoke and tenant isolation checks are verified.
-17. Production Version Matrix is updated with the actually promoted revisions, timestamp and responsible operator.
-18. Release evidence and any exceptions are archived in Jira/Confluence/GitHub as appropriate.
+## Promotion mechanics
 
-## Stop conditions
+Production must deploy the exact approved source revision. Do not infer release identity from a redeploy action alone.
 
-Stop promotion when any of the following is true:
+For Railway, a redeploy may reuse an old source snapshot. Therefore verify the actual deployment `commitHash` and source branch after every production promotion.
 
-- required CI did not execute or is not green;
-- staging migration failed or produced unexpected schema diff;
-- smoke/health/RLS/isolation checks fail;
-- unresolved critical security finding exists;
-- production secret/configuration is missing or reused incorrectly;
-- destructive migration lacks recovery evidence;
-- release revision cannot be identified unambiguously;
-- Web/API/Worker/schema versions are not captured in NEX-92;
-- Worker is required by the release but NEX-91 qualification is incomplete;
-- Outbox/Durable Jobs are required by the release but NEX-90 is incomplete;
-- restore/DR evidence required by the change risk is missing;
-- NEX-88 has not produced an explicit Go decision.
+For Vercel, verify the deployment metadata contains the expected Git SHA and target `production`.
 
-## Promotion model
+For Neon migrations, use the protected production migration workflow and require an exact release SHA plus the approved Free-tier risk acknowledgement while the Free-only policy remains active.
 
-The expected environment path is:
+## Rollback policy
 
-```text
-development → staging → production
-```
+Application rollback and database recovery are separate decisions.
 
-Promotion must preserve traceability to the exact source SHA and migration/schema state. Rebuilding an unidentified revision for production is not an acceptable promotion mechanism.
+### Application rollback
 
-Production remains logically separate from shared development/staging migration automation unless an explicitly approved production workflow exists with equivalent or stronger gates.
+1. identify the last known-good qualified SHA from the Version Matrix/history;
+2. deploy that exact immutable revision;
+3. verify the runtime deployment reports the expected commit hash;
+4. rerun health, auth, tenant isolation and critical Web/API smoke;
+5. update Jira/Version Matrix with the rollback event.
 
-## Rollback strategy
+Do not treat an unverified platform "redeploy" as rollback evidence.
 
-Application rollback and database rollback are separate decisions.
+### Database recovery
 
-### Application
+Prefer forward-fix and expand/contract migrations. Do not automatically execute destructive down migrations.
 
-Prefer redeploying the last known-good immutable revision when the database remains backward-compatible. The rollback target must be present in the release/version evidence.
+For high-risk DDL:
 
-### Database
+- create an identifiable pre-change checkpoint/restore point when the platform capability allows;
+- preserve migration ledger evidence;
+- define forward-fix and recovery paths before change execution;
+- use Neon Free history/restore within its available window when applicable;
+- follow `docs/operations/disaster-recovery.md` and NEX-79/NEX-93 for formal DR qualification.
 
-Prefer forward fixes and expand/contract. Do not automatically run destructive down migrations. For data loss/corruption incidents, follow the database backup/restore runbook and verify recovery in isolation first.
+## Roles and approvals
 
-A rollback is not complete until health, authentication, tenant isolation and critical business smoke checks pass against the rollback state.
+Use operational roles rather than hard-coded personal names in the runbook:
 
-## Production Version Matrix — required fields
+- Release owner: assignee/operator responsible for the release record.
+- Database owner: operator with authorized Neon administrative access.
+- API owner: operator authorized for Railway Production.
+- Web owner: operator authorized for Vercel Production.
+- Approval owner: Jira/release owner responsible for the explicit Go decision.
 
-Record at minimum for each qualified production promotion:
+The same person may hold multiple roles in the current project, but responsibilities remain logically separate.
 
-| Field                     | Required                         |
-| ------------------------- | -------------------------------- |
-| Release/tag               | yes                              |
-| Source `main` SHA         | yes                              |
-| Web SHA/version           | yes                              |
-| API SHA/version           | yes                              |
-| Worker SHA/version        | yes, or explicit N/A with reason |
-| Migration/schema version  | yes                              |
-| Drizzle ledger state      | yes when database applies        |
-| Source environment        | yes                              |
-| Promotion timestamp       | yes                              |
-| Release owner/operator    | yes                              |
-| Jira/PR evidence          | yes                              |
-| Smoke/health/RLS result   | yes                              |
-| Rollback target/readiness | yes                              |
-| NEX-88 Go/No-Go result    | yes                              |
+## Release notes
 
-## Current production qualification status — 2026-08-30
+Every formal release records:
 
-No production release is considered formally qualified by this runbook yet.
+- version and exact SHA;
+- user-visible and platform changes;
+- migrations/schema impact;
+- known risks/accepted limitations;
+- linked Jira items and PRs;
+- deployment evidence;
+- qualification results;
+- rollback target;
+- follow-up items.
 
-- Web production version: not qualified in NEX-92;
-- API production version: not qualified in NEX-92;
-- Worker production version: not formally deployed/qualified under NEX-91;
-- schema/migration production version: not qualified by the production gate;
-- release/tag: not yet established through NEX-89;
-- production Go/No-Go: pending NEX-88.
+## Hotfix / emergency release
 
-The existence of an endpoint, deployment or successful staging migration must not be interpreted as a qualified production release.
+Emergency changes still require traceability.
 
-## Evidence
+1. create or identify the incident/issue;
+2. isolate the smallest safe fix;
+3. run required CI and risk-proportional tests;
+4. record the exact SHA;
+5. populate/update the Version Matrix;
+6. obtain explicit production approval;
+7. deploy only the approved SHA;
+8. run post-deploy health/auth/tenant/smoke gates;
+9. document any bypassed normal gate and restore it after stabilization.
 
-Record at minimum:
+Emergency status never authorizes bypassing tenant isolation, secret handling or release identity requirements.
 
-- Git commit / PR;
-- release/tag;
-- environment;
-- deployment revision for each component;
-- migration revision / schema version;
-- operator/release owner;
-- smoke/health/RLS/isolation result;
-- known exceptions;
-- rollback target/readiness;
-- links to NEX-88, NEX-89, NEX-92 and NEX-93 evidence when applicable.
+## Current qualified Production baseline — 31/08/2026
 
-## Emergency change
+- Release target: `v0.1.0`.
+- Formal Git tag: **pending publication** under NEX-89.
+- Qualified immutable SHA: `ed52490e1872d645ae06ab402fe646a497333b7b`.
+- API Production: Railway deployment `7d4ab1b0-08de-4892-bd61-32432c3c9a5a`, SUCCESS.
+- Web Production: Vercel deployment `dpl_GoNhAWJJfpSNspqGayjJBKbgjXmt`, READY.
+- Worker: not deployed; explicitly outside the synchronous baseline and tracked by NEX-91.
+- Database: Neon canonical `production` branch `br-silent-feather-a5ku7uyi`.
+- Schema: Drizzle ledger `25/25`.
+- Production Readiness baseline: NEX-88 Done.
+- Infrastructure policy: Neon Free + Railway Free with documented residual risks and compensating controls.
 
-Emergency production changes still require traceability. If an ordinary gate is bypassed because of an incident, create the corresponding PR/issue/evidence immediately, record the exception and risk acceptance, and restore normal controls after stabilization.
+See `docs/operations/production-version-matrix.md` for the canonical matrix record.
