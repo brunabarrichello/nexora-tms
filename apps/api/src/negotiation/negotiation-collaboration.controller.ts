@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   NegotiationCollaborationService,
   type NegotiationMessage,
@@ -9,7 +9,7 @@ import {
 } from './negotiation-collaboration.service.js';
 
 @Controller('api/v1/negotiation')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('negotiation.read')
 export class NegotiationCollaborationController {
   constructor(private readonly collaboration: NegotiationCollaborationService) {}
 
@@ -19,6 +19,7 @@ export class NegotiationCollaborationController {
   }
 
   @Post('requests/:requestId/threads')
+  @TenantAuthorized('negotiation.write')
   createThread(
     @Param('requestId') requestId: string,
     @Body() body: unknown,
@@ -32,6 +33,7 @@ export class NegotiationCollaborationController {
   }
 
   @Post('threads/:threadId/status')
+  @TenantAuthorized('negotiation.write')
   setThreadStatus(
     @Param('threadId') threadId: string,
     @Body() body: unknown,
@@ -47,6 +49,7 @@ export class NegotiationCollaborationController {
   }
 
   @Post('threads/:threadId/participants')
+  @TenantAuthorized('negotiation.write')
   addParticipant(
     @Param('threadId') threadId: string,
     @Body() body: unknown,
@@ -55,6 +58,7 @@ export class NegotiationCollaborationController {
   }
 
   @Post('threads/:threadId/participants/:participantId/remove')
+  @TenantAuthorized('negotiation.write')
   removeParticipant(
     @Param('threadId') threadId: string,
     @Param('participantId') participantId: string,
@@ -68,6 +72,7 @@ export class NegotiationCollaborationController {
   }
 
   @Post('threads/:threadId/messages')
+  @TenantAuthorized('negotiation.write')
   createMessage(
     @Param('threadId') threadId: string,
     @Body() body: unknown,
