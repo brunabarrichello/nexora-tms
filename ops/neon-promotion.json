@@ -1,5 +1,5 @@
 {
-  "environment": "development",
+  "environment": "staging",
   "wave": "0024",
   "migration": "0024_dry_owl",
   "sourceMainSha": "24898122e6a7939c02d24eb5ea82a98078bfc21a"
