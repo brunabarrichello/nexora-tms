@@ -35,15 +35,9 @@ export function createUuidV7(now = Date.now()): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function fingerprintExternalSubject(
-  providerKey: string,
-  subject: string,
-): string {
-  return createHash('sha256')
-    .update(providerKey)
-    .update('\0')
-    .update(subject)
-    .digest('hex');
+export function fingerprintExternalSubject(providerKey: string, subject: string): string {
+  const value = `${providerKey}\0${subject}`;
+  return createHash('sha256').update(value).digest('hex');
 }
 
 @Injectable()
@@ -54,11 +48,14 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
   async record(event: PretenantAuthEvent): Promise<void> {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
-      this.logger.error(
-        `pre-tenant auth audit unavailable: DATABASE_URL missing (${event.eventType})`,
-      );
+      this.logger.error('pre-tenant auth audit unavailable: DATABASE_URL missing');
       return;
     }
+
+    const subjectFingerprint =
+      event.providerKey && event.subject
+        ? fingerprintExternalSubject(event.providerKey, event.subject)
+        : null;
 
     try {
       await this.getPool(connectionString).query(
@@ -70,9 +67,7 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
           event.eventType,
           event.outcome,
           event.providerKey ?? null,
-          event.providerKey && event.subject
-            ? fingerprintExternalSubject(event.providerKey, event.subject)
-            : null,
+          subjectFingerprint,
           event.userId ?? null,
           event.requestId ?? null,
           event.correlationId ?? null,
@@ -81,9 +76,7 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
     } catch {
       // Authentication remains deterministic if the audit sink is unavailable.
       // Never include token, subject, credential or database errors in logs.
-      this.logger.error(
-        `pre-tenant auth audit persistence failed (${event.eventType})`,
-      );
+      this.logger.error('pre-tenant auth audit persistence failed');
     }
   }
 
@@ -95,12 +88,8 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
 
   private getPool(connectionString: string): Pool {
     if (!this.pool) {
-      const configuredMax = Number.parseInt(
-        process.env.AUTH_AUDIT_DATABASE_POOL_MAX ?? '2',
-        10,
-      );
-      const max =
-        Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 2;
+      const configuredMax = Number.parseInt(process.env.AUTH_AUDIT_DATABASE_POOL_MAX ?? '2', 10);
+      const max = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 2;
       this.pool = new Pool({
         application_name: 'nexora-tms-api-auth-audit',
         connectionString,
