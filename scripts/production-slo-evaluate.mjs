@@ -100,7 +100,9 @@ export function evaluateProductionSlo(
       run.status === 'completed' &&
       typeof run.conclusion === 'string',
   );
-  const successfulSamples = completedWindowRuns.filter((run) => run.conclusion === 'success').length;
+  const successfulSamples = completedWindowRuns.filter(
+    (run) => run.conclusion === 'success',
+  ).length;
   const sampleCount = completedWindowRuns.length;
   const failedSamples = sampleCount - successfulSamples;
   const availability = sampleCount > 0 ? successfulSamples / sampleCount : null;
@@ -157,9 +159,7 @@ function syntheticRuns({ successes, failures, now, latestAgeMinutes = 5 }) {
     event: 'schedule',
     status: 'completed',
     conclusion: index < failures ? 'failure' : 'success',
-    created_at: new Date(
-      now.getTime() - (latestAgeMinutes + index) * 60_000,
-    ).toISOString(),
+    created_at: new Date(now.getTime() - (latestAgeMinutes + index) * 60_000).toISOString(),
   }));
 }
 
