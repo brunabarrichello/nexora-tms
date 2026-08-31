@@ -60,7 +60,9 @@ test('OIDC guard rejects requests without a bearer token and audits without toke
   );
 
   await assert.rejects(
-    guard.canActivate(executionContextFor({ headers: { 'x-request-id': 'request-1' } })),
+    guard.canActivate(
+      executionContextFor({ headers: { 'x-request-id': 'request-1' } }),
+    ),
     (error: unknown) => error instanceof UnauthorizedException,
   );
   assert.deepEqual(events, [
@@ -75,11 +77,17 @@ test('OIDC guard rejects requests without a bearer token and audits without toke
 
 test('OIDC guard audits rejected bearer tokens without persisting the bearer value', async () => {
   const events: PretenantAuthEvent[] = [];
-  const guard = new OidcAuthenticationGuard(rejectedVerifier(), identities(USER_ID), audit(events));
+  const guard = new OidcAuthenticationGuard(
+    rejectedVerifier(),
+    identities(USER_ID),
+    audit(events),
+  );
 
   await assert.rejects(
     guard.canActivate(
-      executionContextFor({ headers: { authorization: 'Bearer do-not-persist-this-token' } }),
+      executionContextFor({
+        headers: { authorization: 'Bearer do-not-persist-this-token' },
+      }),
     ),
     (error: unknown) => error instanceof UnauthorizedException,
   );
@@ -133,7 +141,10 @@ test('OIDC guard rejects and audits verified identities not linked to an active 
 
 test('pre-tenant auth identifiers are UUIDv7 and subjects are one-way fingerprinted', () => {
   const id = createUuidV7(1_788_218_700_000);
-  assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  assert.match(
+    id,
+    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
+  );
 
   const fingerprint = fingerprintExternalSubject('auth0', 'private-subject');
   assert.match(fingerprint, /^[0-9a-f]{64}$/);
@@ -171,8 +182,11 @@ test('OIDC configuration preserves the canonical issuer including a trailing sla
   } finally {
     for (const name of names) {
       const value = previous[name];
-      if (value === undefined) delete process.env[name];
-      else process.env[name] = value;
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
     }
   }
 });
