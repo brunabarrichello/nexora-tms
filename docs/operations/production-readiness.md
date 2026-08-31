@@ -10,17 +10,17 @@ This document reconciles the current implementation state with Jira and Confluen
 
 ## Current reconciled state — 2026-08-30
 
-| Scope | State |
-| --- | --- |
-| Wave 0022 — Trips Core | ✅ completed and promoted through development/staging |
-| Wave 0023 — Trips Execution | ✅ completed and promoted through development/staging |
-| Wave 0024 — Audit | ✅ completed and promoted through development/staging |
-| Wave 0024 — global | 🟡 partial: Outbox/Durable Jobs still pending under NEX-90 |
-| Worker runtime | ⏳ formal deployment/qualification pending NEX-91 |
-| Release Management | ⏳ pending NEX-89 |
-| Production Version Matrix | ⏳ pending NEX-92 |
-| Restore Qualification | ⏳ pending NEX-93 |
-| Production Readiness Go/No-Go | ⏳ pending NEX-88 |
+| Scope                         | State                                                      |
+| ----------------------------- | ---------------------------------------------------------- |
+| Wave 0022 — Trips Core        | ✅ completed and promoted through development/staging      |
+| Wave 0023 — Trips Execution   | ✅ completed and promoted through development/staging      |
+| Wave 0024 — Audit             | ✅ completed and promoted through development/staging      |
+| Wave 0024 — global            | 🟡 partial: Outbox/Durable Jobs still pending under NEX-90 |
+| Worker runtime                | ⏳ formal deployment/qualification pending NEX-91          |
+| Release Management            | ⏳ pending NEX-89                                          |
+| Production Version Matrix     | ⏳ pending NEX-92                                          |
+| Restore Qualification         | ⏳ pending NEX-93                                          |
+| Production Readiness Go/No-Go | ⏳ pending NEX-88                                          |
 
 Production must remain **not formally qualified** until the applicable gates below have objective evidence.
 
@@ -47,6 +47,7 @@ A Go decision must explicitly identify each participating component.
 ### Web
 
 Required evidence:
+
 - immutable SHA/version;
 - successful production-target build;
 - environment-specific configuration verified;
@@ -58,6 +59,7 @@ Required evidence:
 ### API
 
 Required evidence:
+
 - immutable SHA/version;
 - production-target configuration and secret inventory verified;
 - health/readiness;
@@ -71,6 +73,7 @@ Required evidence:
 ### Worker
 
 Required when asynchronous processing is part of the release:
+
 - immutable SHA/version;
 - formal runtime/service from NEX-91;
 - environment-specific secrets;
@@ -84,6 +87,7 @@ Required when asynchronous processing is part of the release:
 ### Database
 
 Required evidence:
+
 - target production database/branch identified;
 - migration/schema version identified;
 - Drizzle ledger consistent with release source;
@@ -122,23 +126,23 @@ Required minimum evidence:
 
 The following fields are mandatory for a qualified promotion. Values below intentionally remain unqualified until objective promotion evidence exists.
 
-| Field | Qualified production value |
-| --- | --- |
-| Release/tag | **not qualified** |
-| Source `main` SHA | **not qualified** |
-| Web SHA/version | **not qualified** |
-| API SHA/version | **not qualified** |
-| Worker SHA/version | **not formally deployed/qualified** |
-| Migration/schema version | **not qualified for production** |
-| Drizzle ledger state | **not qualified for production** |
-| Source environment | **pending** |
-| Promotion timestamp | **pending** |
-| Release owner/operator | **pending** |
-| Production smoke result | **pending** |
-| RLS/isolation result | **pending** |
-| Restore qualification reference | **pending NEX-93** |
-| Go/No-Go result | **pending NEX-88** |
-| Rollback target/readiness | **pending** |
+| Field                           | Qualified production value          |
+| ------------------------------- | ----------------------------------- |
+| Release/tag                     | **not qualified**                   |
+| Source `main` SHA               | **not qualified**                   |
+| Web SHA/version                 | **not qualified**                   |
+| API SHA/version                 | **not qualified**                   |
+| Worker SHA/version              | **not formally deployed/qualified** |
+| Migration/schema version        | **not qualified for production**    |
+| Drizzle ledger state            | **not qualified for production**    |
+| Source environment              | **pending**                         |
+| Promotion timestamp             | **pending**                         |
+| Release owner/operator          | **pending**                         |
+| Production smoke result         | **pending**                         |
+| RLS/isolation result            | **pending**                         |
+| Restore qualification reference | **pending NEX-93**                  |
+| Go/No-Go result                 | **pending NEX-88**                  |
+| Rollback target/readiness       | **pending**                         |
 
 An existing endpoint, deploy or main-branch SHA is not a substitute for this matrix.
 
@@ -147,6 +151,7 @@ An existing endpoint, deploy or main-branch SHA is not a substitute for this mat
 Before production Go/No-Go, verify that the current release risk is covered by practical recovery evidence. The detailed procedure is in `docs/operations/disaster-recovery.md`.
 
 Required outcome:
+
 - real restore/PITR exercise in a controlled target;
 - measured RTO/RPO;
 - schema/ledger/grants/RLS validation;
@@ -162,6 +167,7 @@ NEX-79 remains the initial backup/restore policy and destructive-migration check
 The detailed release and rollback path is in `docs/operations/release-flow.md`.
 
 A production candidate requires:
+
 - version/release identity;
 - release notes;
 - Jira/PR/commit/migration traceability;
