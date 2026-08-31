@@ -1,22 +1,23 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   FreightNormalizationService,
   type FreightNormalizedRecord,
 } from './freight-normalization.service.js';
 
 @Controller('api/v1/freight')
-@UseGuards(TenantRuntimeGateGuard)
 export class FreightNormalizationController {
   constructor(private readonly normalization: FreightNormalizationService) {}
 
   @Get('transport-requests/:requestId/items')
+  @TenantAuthorized('freight.read')
   listItems(@Param('requestId') requestId: string): Promise<readonly FreightNormalizedRecord[]> {
     return this.normalization.listItems(requestId);
   }
 
   @Post('transport-requests/:requestId/items')
+  @TenantAuthorized('freight.write')
   createItem(
     @Param('requestId') requestId: string,
     @Body() body: unknown,
@@ -25,6 +26,7 @@ export class FreightNormalizationController {
   }
 
   @Patch('transport-requests/:requestId/items/:itemId')
+  @TenantAuthorized('freight.write')
   updateItem(
     @Param('requestId') requestId: string,
     @Param('itemId') itemId: string,
@@ -34,6 +36,7 @@ export class FreightNormalizationController {
   }
 
   @Delete('transport-requests/:requestId/items/:itemId')
+  @TenantAuthorized('freight.write')
   deleteItem(
     @Param('requestId') requestId: string,
     @Param('itemId') itemId: string,
@@ -42,11 +45,13 @@ export class FreightNormalizationController {
   }
 
   @Get('transport-requests/:requestId/packages')
+  @TenantAuthorized('freight.read')
   listPackages(@Param('requestId') requestId: string): Promise<readonly FreightNormalizedRecord[]> {
     return this.normalization.listPackages(requestId);
   }
 
   @Post('transport-requests/:requestId/packages')
+  @TenantAuthorized('freight.write')
   createPackage(
     @Param('requestId') requestId: string,
     @Body() body: unknown,
@@ -55,6 +60,7 @@ export class FreightNormalizationController {
   }
 
   @Patch('transport-requests/:requestId/packages/:packageId')
+  @TenantAuthorized('freight.write')
   updatePackage(
     @Param('requestId') requestId: string,
     @Param('packageId') packageId: string,
@@ -64,6 +70,7 @@ export class FreightNormalizationController {
   }
 
   @Delete('transport-requests/:requestId/packages/:packageId')
+  @TenantAuthorized('freight.write')
   deletePackage(
     @Param('requestId') requestId: string,
     @Param('packageId') packageId: string,
@@ -72,6 +79,7 @@ export class FreightNormalizationController {
   }
 
   @Get('transport-requests/:requestId/requirements')
+  @TenantAuthorized('freight.read')
   listRequirements(
     @Param('requestId') requestId: string,
   ): Promise<readonly FreightNormalizedRecord[]> {
@@ -79,6 +87,7 @@ export class FreightNormalizationController {
   }
 
   @Post('transport-requests/:requestId/requirements')
+  @TenantAuthorized('freight.write')
   createRequirement(
     @Param('requestId') requestId: string,
     @Body() body: unknown,
@@ -87,6 +96,7 @@ export class FreightNormalizationController {
   }
 
   @Patch('transport-requests/:requestId/requirements/:requirementId')
+  @TenantAuthorized('freight.write')
   updateRequirement(
     @Param('requestId') requestId: string,
     @Param('requirementId') requirementId: string,
@@ -96,6 +106,7 @@ export class FreightNormalizationController {
   }
 
   @Delete('transport-requests/:requestId/requirements/:requirementId')
+  @TenantAuthorized('freight.write')
   deleteRequirement(
     @Param('requestId') requestId: string,
     @Param('requirementId') requirementId: string,
@@ -104,6 +115,7 @@ export class FreightNormalizationController {
   }
 
   @Get('transport-requests/:requestId/references')
+  @TenantAuthorized('freight.read')
   listReferences(
     @Param('requestId') requestId: string,
   ): Promise<readonly FreightNormalizedRecord[]> {
@@ -111,6 +123,7 @@ export class FreightNormalizationController {
   }
 
   @Post('transport-requests/:requestId/references')
+  @TenantAuthorized('freight.write')
   createReference(
     @Param('requestId') requestId: string,
     @Body() body: unknown,
@@ -119,6 +132,7 @@ export class FreightNormalizationController {
   }
 
   @Patch('transport-requests/:requestId/references/:referenceId')
+  @TenantAuthorized('freight.write')
   updateReference(
     @Param('requestId') requestId: string,
     @Param('referenceId') referenceId: string,
@@ -128,6 +142,7 @@ export class FreightNormalizationController {
   }
 
   @Delete('transport-requests/:requestId/references/:referenceId')
+  @TenantAuthorized('freight.write')
   deleteReference(
     @Param('requestId') requestId: string,
     @Param('referenceId') referenceId: string,
@@ -136,6 +151,7 @@ export class FreightNormalizationController {
   }
 
   @Get('transport-requests/:requestId/status-history')
+  @TenantAuthorized('freight.read')
   listStatusHistory(
     @Param('requestId') requestId: string,
   ): Promise<readonly FreightNormalizedRecord[]> {
@@ -143,11 +159,13 @@ export class FreightNormalizationController {
   }
 
   @Get('transport-requests/:requestId/events')
+  @TenantAuthorized('freight.read')
   listEvents(@Param('requestId') requestId: string): Promise<readonly FreightNormalizedRecord[]> {
     return this.normalization.listEvents(requestId);
   }
 
   @Post('transport-requests/:requestId/events')
+  @TenantAuthorized('freight.write')
   createEvent(
     @Param('requestId') requestId: string,
     @Body() body: unknown,
@@ -156,16 +174,19 @@ export class FreightNormalizationController {
   }
 
   @Get('freight-lanes')
+  @TenantAuthorized('freight.read')
   listLanes(): Promise<readonly FreightNormalizedRecord[]> {
     return this.normalization.listLanes();
   }
 
   @Post('freight-lanes')
+  @TenantAuthorized('freight.write')
   createLane(@Body() body: unknown): Promise<FreightNormalizedRecord> {
     return this.normalization.createLane(body);
   }
 
   @Patch('freight-lanes/:laneId')
+  @TenantAuthorized('freight.write')
   updateLane(
     @Param('laneId') laneId: string,
     @Body() body: unknown,

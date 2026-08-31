@@ -1,29 +1,32 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { TransportRequestService, type TransportRequest } from './transport-request.service.js';
 
 @Controller('api/v1/freight/transport-requests')
-@UseGuards(TenantRuntimeGateGuard)
 export class TransportRequestController {
   constructor(private readonly transportRequests: TransportRequestService) {}
 
   @Get()
+  @TenantAuthorized('freight.read')
   list(): Promise<readonly TransportRequest[]> {
     return this.transportRequests.list();
   }
 
   @Post()
+  @TenantAuthorized('freight.write')
   create(@Body() body: unknown): Promise<TransportRequest> {
     return this.transportRequests.create(body);
   }
 
   @Get(':id')
+  @TenantAuthorized('freight.read')
   getById(@Param('id') id: string): Promise<TransportRequest> {
     return this.transportRequests.getById(id);
   }
 
   @Patch(':id')
+  @TenantAuthorized('freight.write')
   update(@Param('id') id: string, @Body() body: unknown): Promise<TransportRequest> {
     return this.transportRequests.update(id, body);
   }
