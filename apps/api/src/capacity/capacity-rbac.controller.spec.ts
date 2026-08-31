@@ -10,15 +10,15 @@ import { CapacityQualificationController } from './capacity-qualification.contro
 
 const reflector = new Reflector();
 
-function assertHandlerPermission(
-  method: (...args: never[]) => unknown,
-  permission: string,
-): void {
+function assertHandlerPermission(method: (...args: never[]) => unknown, permission: string): void {
   assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, method), permission);
 }
 
 test('Capacity controllers default to capacity.read', () => {
-  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssetController), 'capacity.read');
+  assert.equal(
+    reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssetController),
+    'capacity.read',
+  );
   assert.equal(
     reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssignmentController),
     'capacity.read',
