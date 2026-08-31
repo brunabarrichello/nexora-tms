@@ -1,6 +1,6 @@
 {
-  "environment": "staging",
-  "wave": "0023",
-  "migration": "0023_moaning_iron_fist",
-  "sourceMainSha": "561261832c452f98fe45d1c83b80508558f9f476"
+  "environment": "development",
+  "wave": "0024",
+  "migration": "0024_dry_owl",
+  "sourceMainSha": "24898122e6a7939c02d24eb5ea82a98078bfc21a"
 }
