@@ -1,4 +1,12 @@
-import { headers } from 'next/headers';
+import { cookies, headers } from 'next/headers';
+
+import {
+  WEB_SESSION_COOKIE,
+  type WebSession,
+  isWebSessionActive,
+  openAuthValue,
+  readWebAuthConfig,
+} from './web-auth';
 
 export type ApiResult<T> =
   | { readonly kind: 'ready'; readonly data: T }
@@ -30,22 +38,40 @@ async function apiRequest<T>(
   init: RequestInit,
   query?: Readonly<Record<string, string | undefined>>,
 ): Promise<ApiResult<T>> {
-  const baseUrl = process.env.NEXORA_API_BASE_URL?.trim();
-  if (!baseUrl) {
+  if (!path.startsWith('/') || path.startsWith('//')) {
+    return { kind: 'error', message: 'O caminho solicitado para a API é inválido.' };
+  }
+
+  let authConfig;
+  try {
+    authConfig = readWebAuthConfig();
+  } catch {
     return {
       kind: 'unconfigured',
-      message: 'NEXORA_API_BASE_URL ainda não foi configurada para este ambiente web.',
+      message: 'A autenticação Web/API ainda não foi configurada para este ambiente.',
+    };
+  }
+
+  const cookieStore = await cookies();
+  const session = openAuthValue<WebSession>(
+    cookieStore.get(WEB_SESSION_COOKIE)?.value,
+    authConfig.sessionSecret,
+  );
+  if (!session || !isWebSessionActive(session)) {
+    return {
+      kind: 'unauthorized',
+      message: 'A sessão Web expirou ou não está autenticada. Entre novamente no Nexora.',
     };
   }
 
   const incomingHeaders = await headers();
   const outgoingHeaders = new Headers(init.headers);
   outgoingHeaders.set('Accept', 'application/json');
-  for (const headerName of ['authorization', 'x-correlation-id']) {
-    const value = incomingHeaders.get(headerName);
-    if (value) outgoingHeaders.set(headerName, value);
-  }
+  outgoingHeaders.set('Authorization', `Bearer ${session.accessToken}`);
+  const correlationId = incomingHeaders.get('x-correlation-id');
+  if (correlationId) outgoingHeaders.set('x-correlation-id', correlationId);
 
+  const baseUrl = authConfig.apiBaseUrl.toString();
   const url = new URL(path, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined && value !== '') url.searchParams.set(key, value);
@@ -61,7 +87,7 @@ async function apiRequest<T>(
     if (response.status === 401 || response.status === 403) {
       return {
         kind: 'unauthorized',
-        message: 'A API está configurada, mas a sessão atual ainda não possui autorização válida.',
+        message: 'A sessão existe, mas a API recusou a identidade ou a autorização atual.',
       };
     }
 
