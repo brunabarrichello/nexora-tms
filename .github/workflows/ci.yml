@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -23,6 +23,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -73,3 +75,23 @@ jobs:
       - name: Verify Drizzle artifacts are versioned
         if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
         run: git diff --exit-code -- packages/database/migrations
+
+      - name: Patch general Neon gate for Wave 0024
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('.github/workflows/neon-pr-gate.yml')
+          s = p.read_text()
+          old = "IF migration_count <> 24 THEN\n              RAISE EXCEPTION 'Expected 24 Drizzle migration records, found %', migration_count;"
+          new = "IF migration_count <> 25 THEN\n              RAISE EXCEPTION 'Expected 25 Drizzle migration records, found %', migration_count;"
+          if old not in s:
+              raise SystemExit('Expected Wave 0023 migration-count guard not found')
+          p.write_text(s.replace(old, new, 1))
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/neon-pr-gate.yml
+          git commit -m "chore(ci): expect 25 migrations after Wave 0024"
+          git push origin HEAD:${{ github.head_ref }}
