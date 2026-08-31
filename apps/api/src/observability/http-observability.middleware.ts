@@ -37,16 +37,26 @@ export function httpObservabilityMiddleware(
   response.setHeader('x-content-type-options', 'nosniff');
   response.setHeader('x-frame-options', 'DENY');
   response.setHeader('referrer-policy', 'no-referrer');
-  response.setHeader('permissions-policy', 'camera=(), microphone=(), geolocation=()');
+  response.setHeader(
+    'permissions-policy',
+    'camera=(), microphone=(), geolocation=()',
+  );
   response.setHeader('cross-origin-resource-policy', 'same-site');
 
-  if (process.env.APP_ENV === 'production' || process.env.NODE_ENV === 'production') {
-    response.setHeader('strict-transport-security', 'max-age=31536000; includeSubDomains');
+  if (
+    process.env.APP_ENV === 'production' ||
+    process.env.NODE_ENV === 'production'
+  ) {
+    response.setHeader(
+      'strict-transport-security',
+      'max-age=31536000; includeSubDomains',
+    );
   }
 
   response.once('finish', () => {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
-    const level = response.statusCode >= 500 ? 'error' : response.statusCode >= 400 ? 'warn' : 'info';
+    const level =
+      response.statusCode >= 500 ? 'error' : response.statusCode >= 400 ? 'warn' : 'info';
 
     process.stdout.write(
       `${JSON.stringify({
