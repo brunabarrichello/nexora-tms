@@ -47,7 +47,9 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
   async record(event: PretenantAuthEvent): Promise<void> {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
-      this.logger.error(`pre-tenant auth audit unavailable: DATABASE_URL missing (${event.eventType})`);
+      this.logger.error(
+        `pre-tenant auth audit unavailable: DATABASE_URL missing (${event.eventType})`,
+      );
       return;
     }
 
@@ -84,7 +86,10 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
 
   private getPool(connectionString: string): Pool {
     if (!this.pool) {
-      const configuredMax = Number.parseInt(process.env.AUTH_AUDIT_DATABASE_POOL_MAX ?? '2', 10);
+      const configuredMax = Number.parseInt(
+        process.env.AUTH_AUDIT_DATABASE_POOL_MAX ?? '2',
+        10,
+      );
       const max = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 2;
       this.pool = new Pool({
         application_name: 'nexora-tms-api-auth-audit',
