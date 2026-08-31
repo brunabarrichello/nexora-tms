@@ -41,7 +41,10 @@ test('state comparison fails closed for mismatch and expired transaction', () =>
   const transaction = createAuthTransaction('/', 10_000);
   assert.equal(transactionStateMatches(transaction, transaction.state, 11_000), true);
   assert.equal(transactionStateMatches(transaction, `${transaction.state}x`, 11_000), false);
-  assert.equal(transactionStateMatches(transaction, transaction.state, transaction.expiresAt), false);
+  assert.equal(
+    transactionStateMatches(transaction, transaction.state, transaction.expiresAt),
+    false,
+  );
 });
 
 test('sealed values decrypt only with integrity intact', () => {
