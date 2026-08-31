@@ -19,6 +19,8 @@ env:
   NEON_PROJECT_ID: raspy-river-76339604
   MIN_FREE_HISTORY_SECONDS: 21600
   FREE_BRANCH_LIMIT: 10
+  PGSSLMODE: verify-full
+  PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
 
 jobs:
   qualify:
@@ -45,6 +47,10 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y postgresql-client
           fi
+          test -r "$PGSSLROOTCERT" || {
+            echo "System CA bundle is unavailable at $PGSSLROOTCERT." >&2
+            exit 1
+          }
 
       - name: Verify canonical root/default Production and free-tier capacity
         id: production
@@ -103,7 +109,7 @@ jobs:
           echo "block_public=$block_public" >> "$GITHUB_OUTPUT"
           echo "allowed_ip_count=$allowed_ip_count" >> "$GITHUB_OUTPUT"
 
-      - name: Resolve Production admin and runtime connections
+      - name: Resolve hardened Production admin and runtime connections
         id: connections
         shell: bash
         env:
@@ -112,28 +118,52 @@ jobs:
         run: |
           set -euo pipefail
 
+          harden_connection_uri() {
+            local raw_uri="$1"
+            python3 - "$raw_uri" <<'PY'
+          import sys
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          uri = urlsplit(sys.argv[1])
+          query = [
+              (key, value)
+              for key, value in parse_qsl(uri.query, keep_blank_values=True)
+              if key.lower() not in {"sslmode", "sslrootcert"}
+          ]
+          query.append(("sslmode", "verify-full"))
+          print(urlunsplit((uri.scheme, uri.netloc, uri.path, urlencode(query), uri.fragment)))
+          PY
+          }
+
           connection_uri() {
             local role_name="$1"
-            curl -fsSG \
+            local raw_uri
+            raw_uri="$(curl -fsSG \
               -H "Authorization: Bearer ${NEON_API_KEY}" \
               --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
               --data-urlencode "database_name=neondb" \
               --data-urlencode "role_name=${role_name}" \
               --data-urlencode "pooled=false" \
               "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
-              | jq -er '.uri'
+              | jq -er '.uri')"
+            echo "::add-mask::$raw_uri" >&2
+            harden_connection_uri "$raw_uri"
           }
 
           admin_url="$(connection_uri neondb_owner)"
           app_url="$(connection_uri nexora_app)"
           for value in "$admin_url" "$app_url"; do
             test -n "$value" || { echo "Failed to resolve a required Production connection string." >&2; exit 1; }
+            [[ "$value" == *"sslmode=verify-full"* ]] || {
+              echo "Production connection string is not hardened with sslmode=verify-full." >&2
+              exit 1
+            }
             echo "::add-mask::$value"
           done
           echo "admin_url=$admin_url" >> "$GITHUB_OUTPUT"
           echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify TLS and minimum-privilege role posture
+      - name: Verify client TLS and minimum-privilege role posture
         shell: bash
         env:
           ADMIN_DATABASE_URL: ${{ steps.connections.outputs.admin_url }}
@@ -141,12 +171,28 @@ jobs:
         run: |
           set -euo pipefail
 
-          admin_ssl="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false')")"
-          app_ssl="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false')")"
-          [[ "$admin_ssl" == "true" && "$app_ssl" == "true" ]] || {
-            echo "Production qualification is blocked: TLS must be active for admin and application database sessions." >&2
-            exit 1
+          verify_client_tls() {
+            local connection_name="$1"
+            local url="$2"
+            local conninfo
+
+            # Neon terminates client TLS at its proxy layer, so server-side pg_stat_ssl
+            # is not authoritative for the GitHub-runner-to-Neon transport. libpq is.
+            # With sslmode=verify-full + the system CA bundle, a successful connection
+            # proves encryption, CA validation and hostname verification.
+            conninfo="$(psql "$url" -X -v ON_ERROR_STOP=1 -c '\conninfo' 2>&1)" || {
+              echo "Production qualification is blocked: ${connection_name} failed verified TLS connection." >&2
+              exit 1
+            }
+
+            grep -Eq 'SSL connection \(protocol: TLSv1\.[23], cipher: [^,)]+' <<<"$conninfo" || {
+              echo "Production qualification is blocked: ${connection_name} did not report TLSv1.2/TLSv1.3 with a cipher from the libpq client." >&2
+              exit 1
+            }
           }
+
+          verify_client_tls ADMIN_DATABASE_URL "$ADMIN_DATABASE_URL"
+          verify_client_tls APP_DATABASE_URL "$APP_DATABASE_URL"
 
           posture="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
             select count(*)
@@ -172,7 +218,8 @@ jobs:
             echo "- Branch usage: ${{ steps.production.outputs.branch_count }}/${FREE_BRANCH_LIMIT}"
             echo "- Public database connectivity blocked: ${{ steps.production.outputs.block_public }}"
             echo "- IP allowlist entries: ${{ steps.production.outputs.allowed_ip_count }}"
-            echo "- TLS: verified for admin and application sessions"
+            echo "- TLS: verified client-side for admin and application connections"
+            echo "- TLS policy: TLSv1.2/TLSv1.3, CA + hostname verification (sslmode=verify-full)"
             echo "- Minimum-privilege roles: verified"
             echo "- Paid-plan perimeter/protection: not required by this Free-tier profile"
             echo "- Database mutation performed: no"
