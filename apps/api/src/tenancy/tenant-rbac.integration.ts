@@ -2,10 +2,7 @@ import { strict as assert } from 'node:assert';
 
 import { Pool, type PoolClient } from 'pg';
 
-import {
-  TENANT_PERMISSIONS,
-  TENANT_ROLE_TEMPLATES,
-} from './rbac-catalog.js';
+import { TENANT_PERMISSIONS, TENANT_ROLE_TEMPLATES } from './rbac-catalog.js';
 import {
   provisionTenantRbac,
   requireRbacProvisionTarget,
@@ -37,8 +34,7 @@ async function provisionInTransaction(
 }
 
 async function run(): Promise<void> {
-  const provisionDatabaseUrl =
-    process.env.RBAC_PROVISION_DATABASE_URL?.trim();
+  const provisionDatabaseUrl = process.env.RBAC_PROVISION_DATABASE_URL?.trim();
   if (!provisionDatabaseUrl) {
     throw new Error('RBAC_PROVISION_DATABASE_URL is required');
   }
@@ -58,11 +54,7 @@ async function run(): Promise<void> {
     const second = await provisionInTransaction(admin, TENANT_A, target);
     await provisionInTransaction(admin, TENANT_B, target);
 
-    assert.deepEqual(
-      second,
-      first,
-      'repeat provisioning must produce the same catalog shape',
-    );
+    assert.deepEqual(second, first, 'repeat provisioning must produce the same catalog shape');
     assert.equal(first.roleCount, Object.keys(TENANT_ROLE_TEMPLATES).length);
 
     const managedPermissionKeys = Object.values(TENANT_PERMISSIONS);
@@ -111,10 +103,7 @@ async function run(): Promise<void> {
       tenantId: TENANT_A,
       userId: USER_A,
     });
-    const permissions = new TenantPermissionService(
-      tenantContext,
-      runtimeDatabase,
-    );
+    const permissions = new TenantPermissionService(tenantContext, runtimeDatabase);
 
     assert.equal(await permissions.hasPermission('freight.read'), true);
     assert.equal(await permissions.hasPermission('freight.write'), false);
@@ -130,11 +119,7 @@ async function run(): Promise<void> {
         return result.rows[0]?.count ?? -1;
       },
     );
-    assert.equal(
-      tenantBLeakCount,
-      0,
-      'tenant A runtime must not see tenant B roles',
-    );
+    assert.equal(tenantBLeakCount, 0, 'tenant A runtime must not see tenant B roles');
 
     const tenantBContext = new TenantContext();
     tenantBContext.establish({
@@ -142,10 +127,7 @@ async function run(): Promise<void> {
       tenantId: TENANT_B,
       userId: USER_A,
     });
-    const tenantBPermissions = new TenantPermissionService(
-      tenantBContext,
-      runtimeDatabase,
-    );
+    const tenantBPermissions = new TenantPermissionService(tenantBContext, runtimeDatabase);
     assert.equal(
       await tenantBPermissions.hasPermission('freight.read'),
       false,
