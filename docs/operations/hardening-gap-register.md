@@ -11,6 +11,7 @@ This register distinguishes controls already implemented from the next executabl
 - **NEX-79 — Feito:** backup/restore policy, destructive-change expand/contract checklist and real recovery exercise completed.
 - **NEX-93 — Feito:** controlled Production PITR Restore Qualification passed in run `33396554407`.
 - **NEX-85 — Feito:** required CI and merge-blocking quality gates reconciled and verified.
+- **NEX-82 — closure-qualified:** audit, minimum metrics/alerting and vulnerability-management baseline implemented; controlled monitor lifecycle passed after PR #124.
 
 ## NEX-80 — logs, correlation and health
 
@@ -66,39 +67,37 @@ This register distinguishes controls already implemented from the next executabl
 
 ## NEX-82 — audit, metrics and vulnerability management
 
-### Already qualified
+**Status recommendation: closure-ready / Feito after Jira reconciliation.**
+
+### Qualified controls
 
 - Wave 0024 durable database Audit schema and immutability;
 - Production dependency audit (`pnpm audit:prod`) in required CI;
 - restored-database Audit/immutability and runtime RLS qualification in DR run `33396554407`;
 - weekly Dependabot review for npm and GitHub Actions;
-- Railway Production CPU/memory/network metrics confirmed available over a 24-hour window.
+- Railway Production CPU/memory/network metrics confirmed available over a 24-hour window;
+- scheduled external Production `/health` monitor twice per hour;
+- three bounded retries before operational alerting;
+- durable GitHub incident issue creation while unhealthy and automatic closure after verified recovery;
+- alert workflow failure state as durable evidence while an incident is active;
+- health-monitor incident evidence excludes response body, credentials, cookies and request headers;
+- critical security/operational event taxonomy, evidence-retention classes, vulnerability triage workflow, remediation targets and finding ownership documented in `docs/operations/security-observability-policy.md`.
 
-### Added in the NEX-82 tranche
+### Objective monitor qualification
 
-- `.github/workflows/production-health-monitor.yml`:
-  - probes Railway Production `/health` twice per hour;
-  - retries three times with bounded timeouts;
-  - opens one durable GitHub incident issue when unhealthy;
-  - marks the monitor workflow failed during the incident;
-  - automatically comments/closes the incident after a later verified recovery;
-  - never stores the health response body, credentials, cookies or request headers in the incident;
-  - supports an explicit manual `simulate_failure` input for controlled alert-path qualification;
-- `docs/operations/security-observability-policy.md`:
-  - critical security/operational event taxonomy;
-  - evidence/retention classes;
-  - minimum metrics review baseline;
-  - vulnerability triage process and remediation targets;
-  - alert/finding ownership.
+PR #124 merged as `30fb440c10cd7df7b51a8f69120c8457c706985a` after required PR CI `33398199634` succeeded.
 
-### Gate before closure
+Post-merge evidence on the same SHA:
 
-- merge this tranche after required CI;
-- manually exercise `simulate_failure=true` to create the monitor incident;
-- execute a normal monitor run to prove recovery detection and automatic issue closure;
-- record run/issue evidence in Jira.
+- Production Health Monitor run `33401498707` — success;
+- qualification job `99518637088` — success;
+- controlled issue `#125` (`[monitor-test] Production health alert lifecycle qualification`) created automatically;
+- real Railway Production `/health` verified with HTTP 200;
+- issue #125 received recovery evidence and was automatically closed as `completed` by GitHub Actions;
+- post-merge CI run `33401498734` — success;
+- `pnpm audit:prod` reported no known high/critical Production vulnerabilities in that CI run.
 
-**Status recommendation:** NEX-82 becomes closure-ready only after the failure/recovery monitor lifecycle is objectively exercised.
+The controlled `monitor-test` validates issue creation, real-health verification and automatic closure without falsely asserting that Production was actually unavailable. Scheduled/manual operational monitor executions remain responsible for opening `[monitor] Production API health unavailable` only when the real probe fails or an explicit manual failure simulation is invoked.
 
 ## NEX-84 — critical IAM, multi-tenant and E2E tests
 
@@ -129,7 +128,7 @@ The repository ruleset `main-protection` is active and requires `Build, typechec
 
 The required workflow covers frozen-lockfile install, Production dependency security audit, lint, formatting, typecheck, tests, build, Docker Compose validation, Drizzle generation/check and versioned migration artifacts.
 
-Recent objective evidence includes PR and post-merge CI runs `33395048908`, `33395933222`, `33396432314`, `33396554367`, `33397235412` and `33397375771`, all successful.
+Recent objective evidence includes PR and post-merge CI runs `33395048908`, `33395933222`, `33396432314`, `33396554367`, `33397235412`, `33397375771`, `33398199634` and `33401498734`, all successful.
 
 ## DR qualification
 
@@ -148,7 +147,7 @@ NEX-79/NEX-93 are **Feito** for the current synchronous topology:
 
 ## Next execution order
 
-1. Complete NEX-82 failure/recovery alert lifecycle and close it if all gates pass.
+1. Reconcile NEX-82 to Feito against PR #124 + monitor-test + post-merge CI evidence.
 2. NEX-81: implement rate limiting, global validation policy and credential-rotation drill.
 3. NEX-84: add controlled authenticated API-layer two-tenant E2E in CI.
 4. NEX-80: formalize SLO/error-budget policy and later extend correlation/readiness to Worker when NEX-91 enters Production.
