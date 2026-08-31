@@ -13,20 +13,13 @@ import { verifyOidcJwt } from './oidc-token-verifier.service.js';
 import {
   createUuidV7,
   fingerprintExternalSubject,
-  type PretenantAuthEvent,
   type PretenantAuthAuditService,
+  type PretenantAuthEvent,
 } from './pretenant-auth-audit.service.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
-type VerifiedIdentity = {
-  providerKey: string;
-  subject: string;
-};
-
-function executionContextFor(
-  request: AuthenticatedHttpRequest,
-): ExecutionContext {
+function executionContextFor(request: AuthenticatedHttpRequest): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => request,
@@ -34,8 +27,10 @@ function executionContextFor(
   } as unknown as ExecutionContext;
 }
 
-function verifier(result: VerifiedIdentity): OidcTokenVerifierService {
-  return { verify: async () => result } as unknown as OidcTokenVerifierService;
+function verifier(result: { providerKey: string; subject: string }): OidcTokenVerifierService {
+  return {
+    verify: async () => result,
+  } as unknown as OidcTokenVerifierService;
 }
 
 function rejectedVerifier(): OidcTokenVerifierService {
@@ -60,7 +55,7 @@ function audit(events: PretenantAuthEvent[]): PretenantAuthAuditService {
   } as unknown as PretenantAuthAuditService;
 }
 
-test('missing bearer is audited without token data', async () => {
+test('OIDC guard rejects requests without a bearer token and audits the denial', async () => {
   const events: PretenantAuthEvent[] = [];
   const guard = new OidcAuthenticationGuard(
     verifier({ providerKey: 'test-idp', subject: 'subject-1' }),
@@ -69,9 +64,7 @@ test('missing bearer is audited without token data', async () => {
   );
 
   await assert.rejects(
-    guard.canActivate(
-      executionContextFor({ headers: { 'x-request-id': 'request-1' } }),
-    ),
+    guard.canActivate(executionContextFor({ headers: { 'x-request-id': 'request-1' } })),
     (error: unknown) => error instanceof UnauthorizedException,
   );
   assert.deepEqual(events, [
@@ -84,13 +77,9 @@ test('missing bearer is audited without token data', async () => {
   ]);
 });
 
-test('rejected bearer is audited without the bearer value', async () => {
+test('OIDC guard audits rejected bearer tokens without storing the bearer value', async () => {
   const events: PretenantAuthEvent[] = [];
-  const guard = new OidcAuthenticationGuard(
-    rejectedVerifier(),
-    identities(USER_ID),
-    audit(events),
-  );
+  const guard = new OidcAuthenticationGuard(rejectedVerifier(), identities(USER_ID), audit(events));
 
   await assert.rejects(
     guard.canActivate(
@@ -108,13 +97,10 @@ test('rejected bearer is audited without the bearer value', async () => {
       correlationId: undefined,
     },
   ]);
-  assert.equal(
-    JSON.stringify(events).includes('do-not-persist-this-token'),
-    false,
-  );
+  assert.equal(JSON.stringify(events).includes('do-not-persist-this-token'), false);
 });
 
-test('verified identity maps to principal and audits success', async () => {
+test('OIDC guard maps a verified identity to the trusted internal principal', async () => {
   const events: PretenantAuthEvent[] = [];
   const request: AuthenticatedHttpRequest = {
     headers: { authorization: 'Bearer signed-token' },
@@ -134,7 +120,7 @@ test('verified identity maps to principal and audits success', async () => {
   assert.equal(events[0]?.userId, USER_ID);
 });
 
-test('unlinked identity is rejected and audited', async () => {
+test('OIDC guard rejects verified identities that are not linked to an active user', async () => {
   const events: PretenantAuthEvent[] = [];
   const guard = new OidcAuthenticationGuard(
     verifier({ providerKey: 'test-idp', subject: 'unknown-subject' }),
@@ -144,26 +130,25 @@ test('unlinked identity is rejected and audited', async () => {
 
   await assert.rejects(
     guard.canActivate(
-      executionContextFor({ headers: { authorization: 'Bearer signed-token' } }),
+      executionContextFor({
+        headers: { authorization: 'Bearer signed-token' },
+      }),
     ),
     (error: unknown) => error instanceof UnauthorizedException,
   );
   assert.equal(events[0]?.eventType, 'auth.identity.unlinked');
 });
 
-test('pre-tenant ids are UUIDv7 and subjects are fingerprinted', () => {
+test('pre-tenant auth identifiers use UUIDv7 and one-way subject fingerprints', () => {
   const id = createUuidV7(1_788_218_700_000);
-  assert.match(
-    id,
-    /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/,
-  );
+  assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 
   const fingerprint = fingerprintExternalSubject('auth0', 'private-subject');
   assert.match(fingerprint, /^[0-9a-f]{64}$/);
   assert.equal(fingerprint.includes('private-subject'), false);
 });
 
-test('OIDC config preserves an issuer trailing slash', () => {
+test('OIDC configuration preserves the canonical issuer including a trailing slash', () => {
   const names = [
     'OIDC_PROVIDER_KEY',
     'OIDC_ISSUER_URL',
@@ -171,15 +156,15 @@ test('OIDC config preserves an issuer trailing slash', () => {
     'OIDC_AUDIENCE',
     'OIDC_ALLOWED_ALGORITHMS',
   ] as const;
-  const previous = Object.fromEntries(
-    names.map((name) => [name, process.env[name]]),
-  ) as Record<(typeof names)[number], string | undefined>;
+  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]])) as Record<
+    (typeof names)[number],
+    string | undefined
+  >;
 
   try {
     process.env.OIDC_PROVIDER_KEY = 'auth0';
     process.env.OIDC_ISSUER_URL = 'https://nexora-dev.us.auth0.com/';
-    process.env.OIDC_JWKS_URL =
-      'https://nexora-dev.us.auth0.com/.well-known/jwks.json';
+    process.env.OIDC_JWKS_URL = 'https://nexora-dev.us.auth0.com/.well-known/jwks.json';
     process.env.OIDC_AUDIENCE = 'urn:nexora:tms:api:development';
     process.env.OIDC_ALLOWED_ALGORITHMS = 'RS256';
 
@@ -203,7 +188,7 @@ test('OIDC config preserves an issuer trailing slash', () => {
   }
 });
 
-test('OIDC JWT verification enforces issuer and audience', async () => {
+test('OIDC JWT verification enforces signature, exact issuer and audience', async () => {
   const { privateKey, publicKey } = await generateKeyPair('RS256');
   const issuer = 'https://nexora-dev.us.auth0.com/';
   const audience = 'urn:nexora:tms:api:development';
