@@ -22,6 +22,8 @@ const secondaryNavigation = [
 ];
 
 export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
+  const environment = process.env.NEXORA_ENVIRONMENT?.trim() || 'Development';
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -58,8 +60,8 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
         <div className="sidebar-footer">
           <span className="environment-dot" aria-hidden="true" />
           <div>
-            <strong>Development</strong>
-            <span>Frontend foundation</span>
+            <strong>{environment}</strong>
+            <span>Auth0 + sessão Web segura</span>
           </div>
         </div>
       </aside>
@@ -75,8 +77,11 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               <span className="sr-only">Busca global</span>
               <input type="search" placeholder="Buscar no Nexora" />
             </label>
-            <span className="tenant-chip">Tenant: demonstração</span>
-            <div className="avatar" aria-label="Perfil do usuário">
+            <span className="tenant-chip">Tenant: contexto autenticado</span>
+            <Link className="button" href="/auth/logout">
+              Sair
+            </Link>
+            <div className="avatar" aria-label="Sessão autenticada">
               NX
             </div>
           </div>
