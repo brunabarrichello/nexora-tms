@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   CapacityAssetService,
   type CapacityAsset,
@@ -8,7 +8,7 @@ import {
 } from './capacity-asset.service.js';
 
 @Controller('api/v1/capacity/assets')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('capacity.read')
 export class CapacityAssetController {
   constructor(private readonly assets: CapacityAssetService) {}
 
@@ -18,6 +18,7 @@ export class CapacityAssetController {
   }
 
   @Post()
+  @TenantAuthorized('capacity.write')
   create(@Body() body: unknown): Promise<CapacityAsset> {
     return this.assets.create(body);
   }
@@ -33,6 +34,7 @@ export class CapacityAssetController {
   }
 
   @Patch(':id')
+  @TenantAuthorized('capacity.write')
   update(@Param('id') id: string, @Body() body: unknown): Promise<CapacityAsset> {
     return this.assets.update(id, body);
   }

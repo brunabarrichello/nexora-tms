@@ -1,13 +1,13 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   CapacityAssignmentService,
   type CapacityComposition,
 } from './capacity-assignment.service.js';
 
 @Controller('api/v1/capacity/assignments')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('capacity.read')
 export class CapacityAssignmentController {
   constructor(private readonly assignments: CapacityAssignmentService) {}
 
@@ -22,6 +22,7 @@ export class CapacityAssignmentController {
   }
 
   @Post()
+  @TenantAuthorized('capacity.write')
   create(@Body() body: unknown): Promise<CapacityComposition> {
     return this.assignments.create(body);
   }
@@ -32,6 +33,7 @@ export class CapacityAssignmentController {
   }
 
   @Patch(':id/close')
+  @TenantAuthorized('capacity.write')
   close(@Param('id') id: string, @Body() body: unknown): Promise<CapacityComposition> {
     return this.assignments.close(id, body);
   }
