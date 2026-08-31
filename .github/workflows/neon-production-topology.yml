@@ -1,0 +1,177 @@
+name: Neon Production Topology
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type NORMALIZE-PRODUCTION-ROOT to make the Neon root/default branch canonical production
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-production-topology
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  normalize:
+    name: Normalize canonical Neon production root topology
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Validate explicit topology confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.confirmation }}" == "NORMALIZE-PRODUCTION-ROOT" ]] || {
+            echo "Explicit confirmation NORMALIZE-PRODUCTION-ROOT is required." >&2
+            exit 1
+          }
+
+      - name: Validate current topology is safe to normalize
+        id: topology
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || {
+            echo "NEON_API_KEY is not configured for the protected production environment." >&2
+            exit 1
+          }
+
+          branches_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
+
+          root_main_id="$(jq -er '[.branches[] | select(.name == "main" and (.parent_id? == null))][0].id' <<<"$branches_json")" || {
+            echo "Expected exactly one root branch named main before normalization." >&2
+            exit 1
+          }
+          production_id="$(jq -er '[.branches[] | select(.name == "production")][0].id' <<<"$branches_json")" || {
+            echo "Expected the bootstrap-created production branch to exist." >&2
+            exit 1
+          }
+          production_parent="$(jq -er --arg id "$production_id" '.branches[] | select(.id == $id) | .parent_id // ""' <<<"$branches_json")"
+          root_default="$(jq -er --arg id "$root_main_id" '.branches[] | select(.id == $id) | .default' <<<"$branches_json")"
+          production_default="$(jq -er --arg id "$production_id" '.branches[] | select(.id == $id) | .default' <<<"$branches_json")"
+          production_written="$(jq -er --arg id "$production_id" '.branches[] | select(.id == $id) | .written_data_bytes // 0' <<<"$branches_json")"
+          production_children="$(jq -er --arg id "$production_id" '[.branches[] | select(.parent_id? == $id)] | length' <<<"$branches_json")"
+
+          [[ "$production_id" != "$root_main_id" ]] || {
+            echo "production is already the root branch; normalization is unnecessary." >&2
+            exit 1
+          }
+          [[ "$production_parent" == "$root_main_id" ]] || {
+            echo "Bootstrap production branch is not a direct child of root main; refusing to normalize." >&2
+            exit 1
+          }
+          [[ "$root_default" == "true" && "$production_default" == "false" ]] || {
+            echo "Unexpected default-branch state; refusing to normalize." >&2
+            exit 1
+          }
+          [[ "$production_written" == "0" ]] || {
+            echo "Bootstrap production branch has recorded writes; manual review is required before topology changes." >&2
+            exit 1
+          }
+          [[ "$production_children" == "0" ]] || {
+            echo "Bootstrap production branch has child branches; manual review is required." >&2
+            exit 1
+          }
+
+          legacy_name="production-bootstrap-legacy-${GITHUB_RUN_ID}"
+          echo "root_main_id=$root_main_id" >> "$GITHUB_OUTPUT"
+          echo "production_id=$production_id" >> "$GITHUB_OUTPUT"
+          echo "legacy_name=$legacy_name" >> "$GITHUB_OUTPUT"
+
+      - name: Preserve bootstrap child and rename root main to production
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          ROOT_MAIN_ID: ${{ steps.topology.outputs.root_main_id }}
+          BOOTSTRAP_PRODUCTION_ID: ${{ steps.topology.outputs.production_id }}
+          LEGACY_NAME: ${{ steps.topology.outputs.legacy_name }}
+        run: |
+          set -euo pipefail
+
+          child_renamed=false
+          root_renamed=false
+          rollback_on_error() {
+            if [[ "$child_renamed" == "true" && "$root_renamed" != "true" ]]; then
+              curl -fsS -X PATCH \
+                -H "Authorization: Bearer ${NEON_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d '{"branch":{"name":"production"}}' \
+                "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BOOTSTRAP_PRODUCTION_ID}" >/dev/null || true
+            fi
+          }
+          trap rollback_on_error ERR
+
+          curl -fsS -X PATCH \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$(jq -cn --arg name "$LEGACY_NAME" '{branch:{name:$name}}')" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BOOTSTRAP_PRODUCTION_ID}" >/dev/null
+          child_renamed=true
+
+          curl -fsS -X PATCH \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d '{"branch":{"name":"production"}}' \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${ROOT_MAIN_ID}" >/dev/null
+          root_renamed=true
+
+          curl -fsS -X POST \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${ROOT_MAIN_ID}/set_as_default" >/dev/null
+
+          trap - ERR
+
+      - name: Verify canonical root/default production topology
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          ROOT_MAIN_ID: ${{ steps.topology.outputs.root_main_id }}
+          BOOTSTRAP_PRODUCTION_ID: ${{ steps.topology.outputs.production_id }}
+          LEGACY_NAME: ${{ steps.topology.outputs.legacy_name }}
+        run: |
+          set -euo pipefail
+          branches_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
+
+          canonical_id="$(jq -er '[.branches[] | select(.name == "production" and (.parent_id? == null) and .default == true)][0].id' <<<"$branches_json")"
+          [[ "$canonical_id" == "$ROOT_MAIN_ID" ]] || {
+            echo "Canonical root/default production branch verification failed." >&2
+            exit 1
+          }
+
+          legacy_id="$(jq -er --arg name "$LEGACY_NAME" '[.branches[] | select(.name == $name)][0].id' <<<"$branches_json")"
+          [[ "$legacy_id" == "$BOOTSTRAP_PRODUCTION_ID" ]] || {
+            echo "Preserved bootstrap child verification failed." >&2
+            exit 1
+          }
+
+      - name: Topology normalization summary
+        shell: bash
+        run: |
+          {
+            echo "## Neon Production topology normalized"
+            echo ""
+            echo "- Canonical production: former root/default main"
+            echo "- Production branch type: root"
+            echo "- Production default: yes"
+            echo "- Bootstrap child preserved as: ${{ steps.topology.outputs.legacy_name }}"
+            echo "- Data deleted: no"
+            echo "- Migrations applied: no"
+            echo "- Railway variables changed: no"
+            echo "- API redeployed: no"
+            echo "- Next gate: paid plan, >=7-day history, branch protection and restricted perimeter"
+          } >> "$GITHUB_STEP_SUMMARY"
