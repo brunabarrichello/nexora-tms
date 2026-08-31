@@ -7,6 +7,11 @@ on:
         description: Type NORMALIZE-PRODUCTION-ROOT to make the Neon root/default branch canonical production
         required: true
         type: string
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/neon-production-topology.yml
 
 permissions:
   contents: read
@@ -30,7 +35,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "${{ inputs.confirmation }}" == "NORMALIZE-PRODUCTION-ROOT" ]] || {
+          confirmation="${{ inputs.confirmation }}"
+          if [[ "${GITHUB_EVENT_NAME}" == "push" ]]; then
+            confirmation="${{ github.event.head_commit.message }}"
+            confirmation="${confirmation%%$'\n'*}"
+          fi
+          [[ "$confirmation" == "NORMALIZE-PRODUCTION-ROOT" ]] || {
             echo "Explicit confirmation NORMALIZE-PRODUCTION-ROOT is required." >&2
             exit 1
           }
