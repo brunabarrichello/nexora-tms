@@ -1,0 +1,226 @@
+name: Neon Production Migrate
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type MIGRATE-PRODUCTION to apply versioned migrations to the canonical production branch
+        required: true
+        type: string
+      release_sha:
+        description: Exact 40-character Git commit SHA to qualify and migrate
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-production-migrate
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  migrate:
+    name: Migrate canonical Neon production branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production
+
+    steps:
+      - name: Validate explicit production migration confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.confirmation }}" == "MIGRATE-PRODUCTION" ]] || {
+            echo "Explicit confirmation MIGRATE-PRODUCTION is required." >&2
+            exit 1
+          }
+          [[ "${{ inputs.release_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || {
+            echo "release_sha must be an exact 40-character Git SHA." >&2
+            exit 1
+          }
+
+      - name: Checkout pinned release SHA
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Verify release SHA belongs to main history
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor "${{ inputs.release_sha }}" origin/main || {
+            echo "release_sha is not contained in main history." >&2
+            exit 1
+          }
+          [[ "$(git rev-parse HEAD)" == "${{ inputs.release_sha }}" ]] || {
+            echo "Checked out SHA does not match the requested release SHA." >&2
+            exit 1
+          }
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Resolve canonical production branch
+        id: production
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || {
+            echo "NEON_API_KEY is not configured for the protected production environment." >&2
+            exit 1
+          }
+
+          branch_id="$(
+            curl -fsS \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            | jq -er '[.branches[] | select(.name == "production")][0].id'
+          )" || {
+            echo "Canonical Neon production branch does not exist. Run Neon Production Bootstrap first." >&2
+            exit 1
+          }
+
+          test -n "$branch_id" || {
+            echo "Canonical Neon production branch did not resolve to a branch ID." >&2
+            exit 1
+          }
+          echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve production connection strings without creating branches
+        id: connections
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PRODUCTION_BRANCH_ID: ${{ steps.production.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+
+          connection_uri() {
+            local role_name="$1"
+            curl -fsSG \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
+              --data-urlencode "database_name=neondb" \
+              --data-urlencode "role_name=${role_name}" \
+              --data-urlencode "pooled=false" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+              | jq -er '.uri'
+          }
+
+          admin_url="$(connection_uri neondb_owner)"
+          migrator_url="$(connection_uri nexora_migrator)"
+          app_url="$(connection_uri nexora_app)"
+
+          for value in "$admin_url" "$migrator_url" "$app_url"; do
+            test -n "$value" || { echo "Failed to resolve a required production connection string." >&2; exit 1; }
+            echo "::add-mask::$value"
+          done
+
+          echo "admin_url=$admin_url" >> "$GITHUB_OUTPUT"
+          echo "migrator_url=$migrator_url" >> "$GITHUB_OUTPUT"
+          echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
+
+      - name: Validate production roles and migration capability
+        shell: bash
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.connections.outputs.admin_url }}
+        run: |
+          set -euo pipefail
+          missing_roles="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            with required(role_name) as (
+              values ('nexora_owner'), ('nexora_migrator'), ('nexora_app'), ('nexora_worker')
+            )
+            select coalesce(string_agg(role_name, ',' order by role_name), '')
+              from required r
+             where not exists (select 1 from pg_roles p where p.rolname = r.role_name);
+          ")"
+          [[ -z "$missing_roles" ]] || {
+            echo "Missing required production roles: $missing_roles" >&2
+            exit 1
+          }
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Apply pinned versioned Drizzle migrations
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.connections.outputs.migrator_url }}
+        run: |
+          set -euo pipefail
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          pnpm --filter @nexora/database db:check
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          expected="$(jq '.entries | length' packages/database/migrations/meta/_journal.json)"
+          actual="$(psql "$OWNER_DATABASE_URL" -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
+          [[ "$actual" == "$expected" ]] || {
+            echo "Production migration ledger mismatch: expected $expected, found $actual" >&2
+            exit 1
+          }
+          echo "EXPECTED_MIGRATIONS=$expected" >> "$GITHUB_ENV"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Verify Wave 0024 schema and audit invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-immutability.sql
+
+      - name: Verify runtime RLS and tenant isolation
+        shell: bash
+        env:
+          APP_DATABASE_URL: ${{ steps.connections.outputs.app_url }}
+        run: |
+          set -euo pipefail
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-runtime.sql
+
+      - name: Production migration summary
+        shell: bash
+        run: |
+          {
+            echo "## Neon Production migration passed"
+            echo ""
+            echo "- Branch: production"
+            echo "- Release SHA: ${{ inputs.release_sha }}"
+            echo "- Versioned migrations: ${EXPECTED_MIGRATIONS}"
+            echo "- Migration ledger: verified"
+            echo "- Wave 0024 schema/audit invariants: verified"
+            echo "- Runtime RLS and tenant isolation: verified"
+            echo "- Railway variables changed: no"
+            echo "- API redeployed: no"
+          } >> "$GITHUB_STEP_SUMMARY"

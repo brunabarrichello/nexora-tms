@@ -54,17 +54,84 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
 
-      - name: Verify production connection read-only
+      - name: Verify production connection and required role posture read-only
         shell: bash
         env:
           PRODUCTION_ADMIN_DATABASE_URL: ${{ steps.production.outputs.db_url }}
         run: |
           set -euo pipefail
           echo "::add-mask::$PRODUCTION_ADMIN_DATABASE_URL"
+
           psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
             "select current_database(), current_user, current_setting('server_version_num');"
-          psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
-            "select count(*) from pg_roles where rolname in ('nexora_owner','nexora_migrator','nexora_app','nexora_worker');"
+
+          missing_roles="$(psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            with required(role_name) as (
+              values ('nexora_owner'), ('nexora_migrator'), ('nexora_app'), ('nexora_worker')
+            )
+            select coalesce(string_agg(role_name, ',' order by role_name), '')
+              from required r
+             where not exists (
+               select 1 from pg_roles p where p.rolname = r.role_name
+             );
+          ")"
+
+          if [[ -n "$missing_roles" ]]; then
+            echo "Missing required production roles: $missing_roles" >&2
+            exit 1
+          fi
+
+          role_count="$(psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
+            "select count(*) from pg_roles where rolname in ('nexora_owner','nexora_migrator','nexora_app','nexora_worker');")"
+          [[ "$role_count" == "4" ]] || {
+            echo "Expected 4 required Nexora roles, found $role_count." >&2
+            exit 1
+          }
+
+          invalid_role_posture="$(psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            select count(*)
+              from pg_roles
+             where (
+               rolname = 'nexora_owner'
+               and (rolcanlogin or rolsuper or rolbypassrls or rolcreatedb or rolcreaterole)
+             ) or (
+               rolname in ('nexora_migrator','nexora_app','nexora_worker')
+               and (not rolcanlogin or rolsuper or rolbypassrls or rolcreatedb or rolcreaterole)
+             );
+          ")"
+          [[ "$invalid_role_posture" == "0" ]] || {
+            echo "One or more Nexora production roles violate the minimum-privilege posture." >&2
+            exit 1
+          }
+
+          migrator_owner_membership="$(psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            select count(*)
+              from pg_auth_members m
+              join pg_roles granted_role on granted_role.oid = m.roleid
+              join pg_roles member_role on member_role.oid = m.member
+             where granted_role.rolname = 'nexora_owner'
+               and member_role.rolname = 'nexora_migrator'
+               and m.set_option
+               and not m.inherit_option
+               and not m.admin_option;
+          ")"
+          [[ "$migrator_owner_membership" == "1" ]] || {
+            echo "nexora_migrator must have SET ROLE membership in nexora_owner without INHERIT or ADMIN OPTION." >&2
+            exit 1
+          }
+
+          runtime_owner_memberships="$(psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            select count(*)
+              from pg_auth_members m
+              join pg_roles granted_role on granted_role.oid = m.roleid
+              join pg_roles member_role on member_role.oid = m.member
+             where granted_role.rolname = 'nexora_owner'
+               and member_role.rolname in ('nexora_app','nexora_worker');
+          ")"
+          [[ "$runtime_owner_memberships" == "0" ]] || {
+            echo "Runtime roles must not inherit or SET ROLE to nexora_owner." >&2
+            exit 1
+          }
 
       - name: Bootstrap summary
         shell: bash
@@ -76,7 +143,7 @@ jobs:
             echo "- Branch: production"
             echo "- Parent branch: main"
             echo "- Database: neondb"
-            echo "- Verification: read-only connectivity and Nexora role presence"
+            echo "- Verification: connectivity, required roles, minimum-privilege attributes and migrator membership"
             echo "- Migrations applied: no"
             echo "- Railway variables changed: no"
             echo "- API redeployed: no"
