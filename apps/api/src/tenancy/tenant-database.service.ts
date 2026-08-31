@@ -9,6 +9,15 @@ export type TenantQueryClient = PoolClient;
 export class TenantDatabaseService implements OnModuleDestroy {
   private pool?: Pool;
 
+  async checkReadiness(): Promise<void> {
+    const client = await this.getPool().connect();
+    try {
+      await client.query('SELECT 1');
+    } finally {
+      client.release();
+    }
+  }
+
   async withUserDiscoveryContext<T>(
     userId: string,
     work: (client: TenantQueryClient) => Promise<T>,
