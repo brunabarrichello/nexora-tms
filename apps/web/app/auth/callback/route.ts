@@ -13,10 +13,10 @@ import {
   transactionStateMatches,
 } from '../../_lib/web-auth';
 
-function clearTransaction(response: NextResponse): void {
+function clearTransaction(response: NextResponse, secure: boolean): void {
   response.cookies.set(AUTH_TRANSACTION_COOKIE, '', {
     httpOnly: true,
-    secure: true,
+    secure,
     sameSite: 'lax',
     path: '/',
     maxAge: 0,
@@ -31,6 +31,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return NextResponse.redirect(new URL('/login?error=configuration', request.url));
   }
 
+  const secure = config.appBaseUrl.protocol === 'https:';
   const code = request.nextUrl.searchParams.get('code');
   const state = request.nextUrl.searchParams.get('state');
   const sealedTransaction = request.cookies.get(AUTH_TRANSACTION_COOKIE)?.value;
@@ -38,7 +39,7 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   if (!code || !state || !transaction || !transactionStateMatches(transaction, state)) {
     const response = NextResponse.redirect(new URL('/login?error=invalid_callback', request.url));
-    clearTransaction(response);
+    clearTransaction(response, secure);
     return response;
   }
 
@@ -48,10 +49,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     const session = createWebSession(token.accessToken, token.expiresIn, userId);
     const response = NextResponse.redirect(new URL(transaction.returnTo, config.appBaseUrl));
 
-    clearTransaction(response);
+    clearTransaction(response, secure);
     response.cookies.set(WEB_SESSION_COOKIE, sealAuthValue(session, config.sessionSecret), {
       httpOnly: true,
-      secure: config.appBaseUrl.protocol === 'https:',
+      secure,
       sameSite: 'lax',
       path: '/',
       expires: new Date(session.expiresAt),
@@ -60,10 +61,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     return response;
   } catch {
     const response = NextResponse.redirect(new URL('/login?error=authentication', config.appBaseUrl));
-    clearTransaction(response);
+    clearTransaction(response, secure);
     response.cookies.set(WEB_SESSION_COOKIE, '', {
       httpOnly: true,
-      secure: config.appBaseUrl.protocol === 'https:',
+      secure,
       sameSite: 'lax',
       path: '/',
       maxAge: 0,
