@@ -1,0 +1,161 @@
+name: Neon Environment Audit Smoke
+
+on:
+  workflow_run:
+    workflows:
+      - Neon Migrate
+    types:
+      - completed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-environment-audit-smoke
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  audit-smoke:
+    name: Audit smoke on promoted Neon environment
+    if: ${{ github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Resolve promoted environment
+        id: target
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="$(jq -r '.environment' ops/neon-promotion.json)"
+          wave="$(jq -r '.wave' ops/neon-promotion.json)"
+          source_sha="$(jq -r '.sourceMainSha' ops/neon-promotion.json)"
+          case "$target" in
+            development|staging) ;;
+            *) echo "Only development and staging are allowed." >&2; exit 1 ;;
+          esac
+          [[ "$wave" == "0024" ]] || {
+            echo "Expected Wave 0024 promotion marker, found $wave" >&2
+            exit 1
+          }
+          echo "environment=$target" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || {
+            echo "NEON_API_KEY repository secret is not configured." >&2
+            exit 1
+          }
+
+      - name: Set isolated smoke branch
+        id: smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          branch="smoke-${{ steps.target.outputs.environment }}-${{ github.run_id }}"
+          expires="$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "expires=$expires" >> "$GITHUB_OUTPUT"
+
+      - name: Create child branch from promoted environment
+        id: admin
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: ${{ steps.target.outputs.environment }}
+          branch_name: ${{ steps.smoke.outputs.branch }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ steps.smoke.outputs.expires }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Verify migration ledger and Wave 0024 schema
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          expected="$(jq '.entries | length' packages/database/migrations/meta/_journal.json)"
+          actual="$(psql "$ADMIN_DATABASE_URL" -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
+          [[ "$actual" == "$expected" ]] || {
+            echo "Migration ledger mismatch in ${{ steps.target.outputs.environment }}: expected $expected, found $actual" >&2
+            exit 1
+          }
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
+
+      - name: Resolve nexora_app connection on smoke branch
+        id: app
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: ${{ steps.target.outputs.environment }}
+          branch_name: ${{ steps.smoke.outputs.branch }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Verify runtime RLS, sensitive payload guard and tenant isolation
+        env:
+          APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APP_DATABASE_URL"
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-runtime.sql
+
+      - name: Verify audit immutability under owner
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-immutability.sql
+
+      - name: Smoke summary
+        shell: bash
+        run: |
+          {
+            echo '## Neon environment audit smoke passed'
+            echo ''
+            echo '- Environment: ${{ steps.target.outputs.environment }}'
+            echo '- Source main SHA: ${{ steps.target.outputs.source_sha }}'
+            echo '- Migration ledger: verified'
+            echo '- Wave 0024 schema/grants/RLS: verified'
+            echo '- Tenant read/write isolation: verified'
+            echo '- Sensitive audit payload guard: verified'
+            echo '- Owner UPDATE/DELETE immutability: verified'
+            echo '- Production: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated smoke branch
+        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.smoke.outputs.branch }}
+          api_key: ${{ secrets.NEON_API_KEY }}
