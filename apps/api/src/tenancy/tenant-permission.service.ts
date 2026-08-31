@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import type { TenantPermissionKey } from './rbac-catalog.js';
 import { TenantContext } from './tenant-context.js';
 import { TenantDatabaseService } from './tenant-database.service.js';
 
@@ -10,7 +11,7 @@ export class TenantPermissionService {
     private readonly database: TenantDatabaseService,
   ) {}
 
-  async hasPermission(permissionKey: string): Promise<boolean> {
+  async hasPermission(permissionKey: TenantPermissionKey): Promise<boolean> {
     const context = this.tenantContext.require();
 
     return this.database.withTenantContext(context, async (client) => {
