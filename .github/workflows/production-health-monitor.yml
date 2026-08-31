@@ -8,7 +8,7 @@ on:
       - '.github/workflows/production-health-monitor.yml'
       - 'docs/operations/security-observability-policy.md'
   schedule:
-    - cron: '7,37 * * * *'
+    - cron: '13,43 * * * *'
   workflow_dispatch:
     inputs:
       simulate_failure:
