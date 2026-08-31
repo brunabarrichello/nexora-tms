@@ -1,0 +1,87 @@
+name: Normalize Neon Root References
+
+on:
+  push:
+    branches:
+      - chore/production-root-topology
+    paths:
+      - '.github/workflows/normalize-neon-root-references.yml'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: normalize-neon-root-references
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    name: Normalize legacy Neon root references on PR branch
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout feature branch
+        uses: actions/checkout@v7
+        with:
+          ref: chore/production-root-topology
+          fetch-depth: 0
+
+      - name: Replace only approved Neon parent references
+        shell: python
+        run: |
+          from pathlib import Path
+
+          old = "parent_branch: main"
+          new = "parent_branch: production"
+          expected = {
+              ".github/workflows/api-negotiation-collaboration-neon-gate.yml": 3,
+              ".github/workflows/neon-migrate.yml": 2,
+              ".github/workflows/neon-negotiation-gate.yml": 3,
+              ".github/workflows/neon-trip-execution-gate.yml": 3,
+              ".github/workflows/neon-trips-core-gate.yml": 3,
+          }
+
+          for filename, expected_count in expected.items():
+              path = Path(filename)
+              text = path.read_text(encoding="utf-8")
+              actual_count = text.count(old)
+              if actual_count != expected_count:
+                  raise SystemExit(
+                      f"{filename}: expected {expected_count} legacy Neon parent references, found {actual_count}"
+                  )
+              path.write_text(text.replace(old, new), encoding="utf-8")
+
+          leftovers = []
+          for path in Path(".github/workflows").glob("*.yml"):
+              if path.name == "normalize-neon-root-references.yml":
+                  continue
+              for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
+                  if old in line:
+                      leftovers.append(f"{path}:{number}:{line.strip()}")
+
+          if leftovers:
+              raise SystemExit("Unresolved Neon parent references:\n" + "\n".join(leftovers))
+
+          direct_sql = Path("scripts/neon/direct-sql.mjs").read_text(encoding="utf-8")
+          if "production: 'main'" in direct_sql:
+              raise SystemExit("scripts/neon/direct-sql.mjs still maps production to Neon main")
+
+          verify = Path(".github/workflows/neon-verify.yml").read_text(encoding="utf-8")
+          if 'production) branch_name="main"' in verify:
+              raise SystemExit("neon-verify.yml still maps production to Neon main")
+
+      - name: Remove one-shot normalizer
+        run: git rm .github/workflows/normalize-neon-root-references.yml
+
+      - name: Commit normalized references
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows scripts/neon/direct-sql.mjs
+          git diff --cached --check
+          git diff --cached --quiet && { echo "No normalization changes found." >&2; exit 1; }
+          git commit -m "ci: align Neon root references with production"
+          git push origin HEAD:chore/production-root-topology
