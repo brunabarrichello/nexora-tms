@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { TransportContractService, type TransportContract } from './transport-contract.service.js';
 
 @Controller('api/v1/negotiation')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('negotiation.read')
 export class TransportContractController {
   constructor(private readonly contracts: TransportContractService) {}
 
@@ -14,11 +14,13 @@ export class TransportContractController {
   }
 
   @Post('reservations/:reservationId/contracts/confirm')
+  @TenantAuthorized('negotiation.write')
   confirm(@Param('reservationId') reservationId: string): Promise<TransportContract> {
     return this.contracts.confirm(reservationId);
   }
 
   @Post('reservations/:reservationId/contracts/refuse')
+  @TenantAuthorized('negotiation.write')
   refuse(
     @Param('reservationId') reservationId: string,
     @Body() body: unknown,
@@ -27,6 +29,7 @@ export class TransportContractController {
   }
 
   @Post('contracts/:contractId/cancel')
+  @TenantAuthorized('negotiation.write')
   cancel(
     @Param('contractId') contractId: string,
     @Body() body: unknown,
