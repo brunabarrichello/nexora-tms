@@ -1,10 +1,14 @@
 # Nexora TMS — Disaster Recovery and Failover Runbook
 
+Jira: NEX-79 / NEX-93 / NEX-88
+
 ## 1. Objective
 
-Define a repeatable recovery process for severe failures affecting database, API, Web, DNS, cloud region or privileged infrastructure credentials.
+Define a repeatable recovery process for severe failures affecting database, API, Web, Worker, DNS, cloud region or privileged infrastructure credentials.
 
-This runbook is a **pre-production gate**. It must not be interpreted as evidence that a recovery capability exists until the corresponding drill has been executed and timed.
+This runbook is a **pre-production gate**. It must not be interpreted as evidence that a recovery capability exists until the corresponding drill has been executed, timed and approved under NEX-93.
+
+NEX-79 covers the initial backup/restore policy and destructive-change checklist. NEX-93 is the formal Restore Qualification item that requires objective restore/DR evidence, measured RTO/RPO and approval before production readiness can be completed.
 
 ## 2. Provisional targets
 
@@ -15,7 +19,9 @@ Until production capacity planning establishes stricter values, use these engine
 - **configuration RPO:** zero unversioned infrastructure/application configuration changes;
 - **credential containment:** begin revocation/rotation within 15 minutes of confirmed compromise.
 
-If the selected infrastructure plan cannot demonstrate these targets, production readiness remains blocked or the targets must be explicitly renegotiated and documented.
+These are provisional engineering targets, not measured production guarantees. NEX-93 must record the values actually demonstrated by the restore qualification exercise.
+
+If the selected infrastructure plan cannot demonstrate the approved targets, production readiness remains blocked or the targets must be explicitly renegotiated and documented.
 
 ## 3. Recovery principles
 
@@ -27,6 +33,8 @@ If the selected infrastructure plan cannot demonstrate these targets, production
 6. Validate tenant RLS and authentication after every database restore.
 7. Never use a deploy returning HTTP 200 as the only recovery criterion.
 8. Record actual RTO/RPO from every exercise.
+9. Validate API, Web and Worker compatibility with the restored schema when those components are part of the qualified release.
+10. Link every drill result and remediation gap to NEX-93 or a child/follow-up Jira item.
 
 ## 4. Required inventory before a drill
 
@@ -35,12 +43,14 @@ Record and verify:
 - production database project/branch and PostgreSQL version;
 - actual restore/history retention available on the subscribed plan;
 - protected/critical database branches;
-- API and Web deployment regions/providers;
+- API, Web and Worker deployment regions/providers;
 - DNS provider and TTLs;
 - secret stores and emergency credential owners;
 - GitHub default-branch protection and release workflow;
 - latest successful migration ledger;
-- monitoring/alert routes and incident contacts.
+- Production Version Matrix candidate/current state from NEX-92;
+- monitoring/alert routes and incident contacts;
+- rollback targets for application components.
 
 Do not assume a read replica, cross-region database replica, automatic failover or a backup retention period unless it is objectively verified in the active provider configuration.
 
@@ -52,7 +62,7 @@ Containment: stop or limit writes and confirm provider incident scope.
 
 Recovery: recover the database service or restore/fail over to an approved database target.
 
-Validation: migrations, RLS, tenant isolation and critical CRUD.
+Validation: migrations, RLS, tenant isolation, critical CRUD and application compatibility.
 
 ### Logical data corruption
 
@@ -60,7 +70,7 @@ Containment: freeze affected writes and capture the suspected timestamp/scope.
 
 Recovery: restore an isolated point before corruption, validate it, then perform controlled cutover or repair.
 
-Validation: row counts, invariants, tenant ownership and audit trail.
+Validation: row counts, invariants, tenant ownership, audit trail and application smoke.
 
 ### Cloud-region outage
 
@@ -68,7 +78,7 @@ Containment: declare a regional incident and prevent uncontrolled retries or con
 
 Recovery: activate the documented alternate deployment/region when one actually exists.
 
-Validation: health, dependencies, latency, DNS and authentication.
+Validation: health, dependencies, latency, DNS, authentication, database connectivity and Worker processing when applicable.
 
 ### API outage
 
@@ -86,6 +96,16 @@ Recovery: rollback or redeploy the known-good Web build.
 
 Validation: login flow, navigation and Web-to-API connectivity.
 
+### Worker / asynchronous processing outage
+
+Containment: stop unsafe consumers when duplicate processing, poison jobs or schema incompatibility is suspected.
+
+Recovery: restore the known-good Worker revision, validate database compatibility and resume processing in a controlled manner.
+
+Validation: health/observability, Outbox/Durable Jobs state, idempotency, retry/dead-letter behavior and absence of cross-tenant processing.
+
+This scenario becomes a required executable drill once NEX-90 and NEX-91 are implemented.
+
 ### DNS loss or misconfiguration
 
 Containment: preserve current records and restrict edits.
@@ -102,21 +122,26 @@ Recovery: rotate secrets/tokens/keys, audit usage and redeploy consumers as requ
 
 Validation: old credential rejected, new credential works and usage audit reviewed.
 
-## 6. Database restore drill
+## 6. Database restore qualification drill — NEX-93
 
-Minimum quarterly pre-production exercise:
+Minimum qualification sequence:
 
-1. Select a known timestamp and record expected recovery point.
-2. Create an isolated recovery target using provider-supported restore/PITR capability.
-3. Keep the original environment untouched during validation.
-4. Verify PostgreSQL version and database identity.
-5. Compare the Drizzle migration ledger with repository `main`.
-6. Run schema baseline checks.
-7. Connect with the real runtime role, not an owner/superuser.
-8. Validate tenant A cannot read/write tenant B data.
-9. Run critical Cadastros/Cargas/Documents read-write smoke tests appropriate to the restored wave.
-10. Record restore start/end, recovered timestamp and measured RPO.
-11. Destroy the temporary recovery target only after evidence is captured.
+1. Select a known timestamp and record the expected recovery point.
+2. Record the release/version candidate being qualified through NEX-92.
+3. Create an isolated recovery target using provider-supported restore/PITR capability.
+4. Keep the original environment untouched during validation.
+5. Verify PostgreSQL version and database identity.
+6. Compare the Drizzle migration ledger with the exact repository/release revision being qualified.
+7. Run schema baseline and grant checks.
+8. Connect with the real runtime role, not an owner/superuser.
+9. Validate tenant A cannot read/write tenant B data.
+10. Run critical domain read/write smoke tests appropriate to the restored wave/release.
+11. Validate API compatibility against the restored target.
+12. Validate Worker compatibility and asynchronous state when NEX-90/NEX-91 are part of the release.
+13. Record restore start/end, recovered timestamp and measured RTO/RPO.
+14. Capture objective evidence without storing secrets or raw credentials.
+15. Create Jira follow-up items for every failed criterion or risk exception.
+16. Destroy the temporary recovery target only after evidence is captured and approved.
 
 ## 7. API rollback drill
 
@@ -129,21 +154,33 @@ Minimum quarterly pre-production exercise:
 
 A rollback must not silently roll database migrations backward. Database rollback requires a separate data/schema plan.
 
-## 8. DNS/region failover drill
+## 8. Web and Worker rollback drill
+
+For each component included in the qualified production topology:
+
+1. identify current and previous known-good immutable revision;
+2. verify schema/API compatibility;
+3. perform rollback in the controlled environment;
+4. verify health/readiness and critical behavior;
+5. for Worker, verify idempotency and that no job is duplicated/lost by the restart or rollback path;
+6. record measured RTO and evidence.
+
+## 9. DNS/region failover drill
 
 A true failover test is valid only after a secondary runnable target exists. Until then, execute a tabletop exercise and mark regional failover **not verified**.
 
 When an alternate target exists:
 
-1. verify it is built from an approved commit;
+1. verify it is built from an approved commit/release;
 2. verify secrets and environment-specific OIDC audience;
 3. verify database connectivity and tenant isolation;
-4. shift a controlled portion of traffic or use a test hostname;
-5. validate externally;
-6. restore the primary routing path;
-7. record DNS propagation and total RTO.
+4. verify Worker/asynchronous processing topology when applicable;
+5. shift a controlled portion of traffic or use a test hostname;
+6. validate externally;
+7. restore the primary routing path;
+8. record DNS propagation and total RTO.
 
-## 9. Credential-compromise drill
+## 10. Credential-compromise drill
 
 Test at least one non-production credential per quarter:
 
@@ -158,27 +195,54 @@ Test at least one non-production credential per quarter:
 
 Never place the credential value itself in the drill report.
 
-## 10. Exit criteria
+## 11. Required evidence package
+
+NEX-93 is only complete when the evidence package records at minimum:
+
+- drill date/time and responsible operator;
+- source release/version matrix context;
+- backup/PITR source and recovered point;
+- measured RTO and RPO;
+- migration/schema/ledger validation;
+- grants and RLS validation;
+- negative cross-tenant isolation result;
+- API/Web/Worker smoke results as applicable;
+- failover/failback or explicit unavailable status;
+- monitoring/observability evidence;
+- rollback targets and results;
+- findings, severity, owners and Jira links;
+- explicit qualification result: pass, conditional pass or fail.
+
+## 12. Exit criteria
 
 A DR capability is considered verified only when:
 
 - the drill has objective timestamps/evidence;
-- recovery stayed inside approved RTO/RPO or a remediation item exists;
+- recovery stayed inside approved RTO/RPO or a remediation item exists and risk is explicitly accepted;
 - runtime-role access and RLS isolation passed;
 - authentication/environment audience passed;
 - migration/schema compatibility passed;
 - monitoring detected or confirmed recovery;
 - rollback/failback path was exercised or explicitly documented as unavailable;
-- findings have owners and priority.
+- findings have owners and priority;
+- NEX-93 has an explicit approval outcome;
+- NEX-88 references the current Restore Qualification result before a production Go decision.
 
-## 11. Production readiness blockers
+## 13. Production readiness blockers
 
-Treat these as blockers until resolved or risk-accepted:
+Treat these as blockers until resolved or explicitly risk-accepted through the production readiness process:
 
 - no verified restore procedure;
+- NEX-93 has not produced objective restore evidence;
 - retention shorter than the required business RPO window;
 - no protection for critical database branches;
 - no known-good deployment rollback;
 - no independent DNS recovery path;
 - no tested secret-revocation procedure;
-- claimed regional failover without an actually provisioned alternate target.
+- claimed regional failover without an actually provisioned alternate target;
+- required Worker/Outbox recovery path is unqualified after NEX-90/NEX-91 enter the release topology;
+- production release/version cannot be identified unambiguously through NEX-92.
+
+## 14. Current qualification status — 2026-08-30
+
+This runbook exists, but the formal Restore Qualification required by NEX-93 is **pending**. Therefore it must not be represented as a completed production DR qualification yet.
