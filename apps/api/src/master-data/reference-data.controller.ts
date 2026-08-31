@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   ReferenceDataService,
   type ReferenceDataItem,
@@ -9,7 +9,7 @@ import {
 import { parseCatalogSlug } from './reference-data.validation.js';
 
 @Controller('api/v1/reference-data')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('master-data.read')
 export class ReferenceDataController {
   constructor(private readonly referenceData: ReferenceDataService) {}
 
@@ -27,11 +27,13 @@ export class ReferenceDataController {
   }
 
   @Post(':catalog')
+  @TenantAuthorized('master-data.write')
   create(@Param('catalog') catalog: string, @Body() body: unknown): Promise<ReferenceDataItem> {
     return this.referenceData.create(parseCatalogSlug(catalog), body);
   }
 
   @Patch(':catalog/:id')
+  @TenantAuthorized('master-data.write')
   update(
     @Param('catalog') catalog: string,
     @Param('id') id: string,
