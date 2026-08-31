@@ -6,6 +6,7 @@ import type { AuthenticatedHttpRequest } from './authenticated-principal.js';
 import { ExternalIdentityService } from './external-identity.service.js';
 import { OidcAuthenticationGuard } from './oidc-authentication.guard.js';
 import type { OidcTokenVerifierService } from './oidc-token-verifier.service.js';
+import type { PretenantAuthAuditService } from './pretenant-auth-audit.service.js';
 
 const ACTIVE_USER_ID = '52000000-0000-4000-8000-000000000101';
 const PROVIDER_KEY = 'ci-oidc';
@@ -22,6 +23,12 @@ function verifier(subject: string): OidcTokenVerifierService {
   return {
     verify: async () => ({ providerKey: PROVIDER_KEY, subject }),
   } as unknown as OidcTokenVerifierService;
+}
+
+function audit(): PretenantAuthAuditService {
+  return {
+    record: async () => undefined,
+  } as unknown as PretenantAuthAuditService;
 }
 
 async function run(): Promise<void> {
@@ -47,7 +54,7 @@ async function run(): Promise<void> {
     const request: AuthenticatedHttpRequest = {
       headers: { authorization: 'Bearer integration-token' },
     };
-    const guard = new OidcAuthenticationGuard(verifier('subject-active'), identities);
+    const guard = new OidcAuthenticationGuard(verifier('subject-active'), identities, audit());
 
     assert.equal(await guard.canActivate(executionContextFor(request)), true);
     assert.deepEqual(request.authenticatedPrincipal, {
@@ -55,7 +62,11 @@ async function run(): Promise<void> {
       userId: ACTIVE_USER_ID,
     });
 
-    const suspendedGuard = new OidcAuthenticationGuard(verifier('subject-suspended'), identities);
+    const suspendedGuard = new OidcAuthenticationGuard(
+      verifier('subject-suspended'),
+      identities,
+      audit(),
+    );
     await assert.rejects(
       suspendedGuard.canActivate(
         executionContextFor({
