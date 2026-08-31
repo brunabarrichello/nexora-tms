@@ -169,6 +169,13 @@
       "when": 1788129243081,
       "tag": "0023_moaning_iron_fist",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788135474185,
+      "tag": "0024_dry_owl",
+      "breakpoints": true
     }
   ]
 }

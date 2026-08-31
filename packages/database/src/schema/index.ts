@@ -1,3 +1,4 @@
+export * from './audit.js';
 export * from './capacity-assignment.js';
 export * from './capacity-qualification.js';
 export * from './capacity-reservation.js';
