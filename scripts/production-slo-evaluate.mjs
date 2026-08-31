@@ -25,6 +25,17 @@ function parseTimestamp(value) {
   return Number.isFinite(timestamp) ? timestamp : undefined;
 }
 
+function parseOptionalDate(name) {
+  const raw = process.env[name]?.trim();
+  if (!raw) return undefined;
+
+  const timestamp = parseTimestamp(raw);
+  if (timestamp === undefined) {
+    throw new Error(`${name} must be a valid ISO-8601 timestamp`);
+  }
+  return new Date(timestamp);
+}
+
 function flattenRuns(value) {
   if (Array.isArray(value)) {
     return value.flatMap((entry) => {
@@ -50,6 +61,7 @@ export function evaluateProductionSlo(
     targetAvailability = parseTargetAvailability(),
     minimumSamples = parsePositiveNumber('SLO_MINIMUM_SAMPLES', 12),
     staleAfterMinutes = parsePositiveNumber('SLO_STALE_AFTER_MINUTES', 90),
+    monitorActivatedAt = parseOptionalDate('SLO_MONITOR_ACTIVATED_AT'),
   } = {},
 ) {
   if (!(now instanceof Date) || Number.isNaN(now.getTime())) {
@@ -57,6 +69,12 @@ export function evaluateProductionSlo(
   }
   if (!Number.isInteger(minimumSamples)) {
     throw new Error('minimumSamples must be an integer');
+  }
+  if (
+    monitorActivatedAt !== undefined &&
+    (!(monitorActivatedAt instanceof Date) || Number.isNaN(monitorActivatedAt.getTime()))
+  ) {
+    throw new Error('monitorActivatedAt must be a valid Date when provided');
   }
 
   const runs = flattenRuns(input).filter((run) => run && typeof run === 'object');
@@ -70,9 +88,9 @@ export function evaluateProductionSlo(
     .sort((left, right) => right.createdAtMs - left.createdAtMs);
 
   const latestScheduledRun = scheduledRuns[0];
-  const latestScheduledAgeMinutes = latestScheduledRun
-    ? (nowMs - latestScheduledRun.createdAtMs) / 60_000
-    : null;
+  const monitorReferenceAt = latestScheduledRun?.createdAtMs ?? monitorActivatedAt?.getTime();
+  const latestScheduledAgeMinutes =
+    monitorReferenceAt === undefined ? null : (nowMs - monitorReferenceAt) / 60_000;
   const monitorStale =
     latestScheduledAgeMinutes !== null && latestScheduledAgeMinutes > staleAfterMinutes;
 
@@ -113,6 +131,7 @@ export function evaluateProductionSlo(
     targetAvailability,
     minimumSamples,
     staleAfterMinutes,
+    monitorActivatedAt: monitorActivatedAt?.toISOString() ?? null,
     sampleCount,
     successfulSamples,
     failedSamples,
@@ -152,6 +171,7 @@ function selfTest() {
     targetAvailability: 0.99,
     minimumSamples: 12,
     staleAfterMinutes: 90,
+    monitorActivatedAt: new Date('2026-08-31T08:00:00.000Z'),
   };
 
   const healthy = evaluateProductionSlo(
@@ -178,6 +198,15 @@ function selfTest() {
     options,
   );
   assert.equal(stale.state, 'monitor_stale');
+
+  const neverStartedStale = evaluateProductionSlo([], options);
+  assert.equal(neverStartedStale.state, 'monitor_stale');
+
+  const recentActivation = evaluateProductionSlo([], {
+    ...options,
+    monitorActivatedAt: new Date('2026-08-31T11:30:00.000Z'),
+  });
+  assert.equal(recentActivation.state, 'insufficient_data');
 
   process.stdout.write('Production SLO evaluator self-test passed.\n');
 }
