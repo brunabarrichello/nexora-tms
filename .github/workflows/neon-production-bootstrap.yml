@@ -17,6 +17,8 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  PGSSLMODE: verify-full
+  PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
 
 jobs:
   bootstrap:
@@ -43,6 +45,10 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y postgresql-client
           fi
+          test -r "$PGSSLROOTCERT" || {
+            echo "System CA bundle is unavailable at $PGSSLROOTCERT." >&2
+            exit 1
+          }
 
       - name: Resolve canonical root/default production branch
         id: production
@@ -75,7 +81,25 @@ jobs:
           PRODUCTION_BRANCH_ID: ${{ steps.production.outputs.branch_id }}
         run: |
           set -euo pipefail
-          admin_url="$(curl -fsSG \
+
+          harden_connection_uri() {
+            local raw_uri="$1"
+            python3 - "$raw_uri" <<'PY'
+          import sys
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          uri = urlsplit(sys.argv[1])
+          query = [
+              (key, value)
+              for key, value in parse_qsl(uri.query, keep_blank_values=True)
+              if key.lower() not in {"sslmode", "sslrootcert"}
+          ]
+          query.append(("sslmode", "verify-full"))
+          print(urlunsplit((uri.scheme, uri.netloc, uri.path, urlencode(query), uri.fragment)))
+          PY
+          }
+
+          raw_admin_url="$(curl -fsSG \
             -H "Authorization: Bearer ${NEON_API_KEY}" \
             --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
             --data-urlencode "database_name=neondb" \
@@ -83,20 +107,48 @@ jobs:
             --data-urlencode "pooled=false" \
             "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
             | jq -er '.uri')"
-          test -n "$admin_url" || {
+          test -n "$raw_admin_url" || {
             echo "Failed to resolve production admin connection URI." >&2
             exit 1
           }
+
+          admin_url="$(harden_connection_uri "$raw_admin_url")"
+          [[ "$admin_url" == *"sslmode=verify-full"* ]] || {
+            echo "Production admin connection URI is not hardened with sslmode=verify-full." >&2
+            exit 1
+          }
+
+          echo "::add-mask::$raw_admin_url"
           echo "::add-mask::$admin_url"
           echo "admin_url=$admin_url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify production connection and required role posture read-only
+      - name: Verify TLS and required role posture read-only
         shell: bash
         env:
           PRODUCTION_ADMIN_DATABASE_URL: ${{ steps.connection.outputs.admin_url }}
         run: |
           set -euo pipefail
           echo "::add-mask::$PRODUCTION_ADMIN_DATABASE_URL"
+
+          tls_posture="$(psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -F '|' -Atqc \
+            "select ssl::text, coalesce(version, ''), coalesce(cipher, '') from pg_stat_ssl where pid = pg_backend_pid();")"
+          IFS='|' read -r tls_active tls_version tls_cipher <<< "$tls_posture"
+
+          [[ "$tls_active" == "true" ]] || {
+            echo "Production bootstrap is blocked: database session must use TLS." >&2
+            exit 1
+          }
+          case "$tls_version" in
+            TLSv1.2|TLSv1.3) ;;
+            *)
+              echo "Production bootstrap is blocked: TLS protocol must be TLSv1.2 or TLSv1.3; found '${tls_version:-unknown}'." >&2
+              exit 1
+              ;;
+          esac
+          [[ -n "$tls_cipher" ]] || {
+            echo "Production bootstrap is blocked: TLS cipher was not reported." >&2
+            exit 1
+          }
 
           psql "$PRODUCTION_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
             "select current_database(), current_user, current_setting('server_version_num');"
@@ -168,6 +220,9 @@ jobs:
             exit 1
           }
 
+          echo "TLS_VERSION=$tls_version" >> "$GITHUB_ENV"
+          echo "TLS_CIPHER=$tls_cipher" >> "$GITHUB_ENV"
+
       - name: Bootstrap verification summary
         shell: bash
         run: |
@@ -179,6 +234,10 @@ jobs:
             echo "- Branch type: root"
             echo "- Default branch: yes"
             echo "- Database: neondb"
+            echo "- TLS required: yes"
+            echo "- TLS protocol: ${TLS_VERSION}"
+            echo "- TLS cipher reported: yes"
+            echo "- Server authentication: CA + hostname verification (sslmode=verify-full)"
             echo "- Verification: connectivity, required roles, minimum-privilege attributes and migrator membership"
             echo "- Migrations applied: no"
             echo "- Railway variables changed: no"
