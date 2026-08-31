@@ -1,6 +1,6 @@
-import { Controller, Get, InternalServerErrorException, UseGuards } from '@nestjs/common';
+import { Controller, Get, InternalServerErrorException } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { TenantContext } from './tenant-context.js';
 import { TenantDatabaseService } from './tenant-database.service.js';
 
@@ -12,7 +12,7 @@ interface VisibleTenant {
 }
 
 @Controller('api/v1/tenant')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('tenant.read')
 export class TenantRuntimeGateController {
   constructor(
     private readonly tenantContext: TenantContext,
