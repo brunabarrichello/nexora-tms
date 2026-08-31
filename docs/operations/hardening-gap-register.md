@@ -11,7 +11,7 @@ This register distinguishes controls already implemented from the next executabl
 - **NEX-79 — Feito:** backup/restore policy, destructive-change expand/contract checklist and real recovery exercise completed.
 - **NEX-93 — Feito:** controlled Production PITR Restore Qualification passed in run `33396554407`.
 - **NEX-85 — Feito:** required CI and merge-blocking quality gates reconciled and verified.
-- **NEX-82 — closure-qualified:** audit, minimum metrics/alerting and vulnerability-management baseline implemented; controlled monitor lifecycle passed after PR #124.
+- **NEX-82 — Feito:** audit, minimum metrics/alerting and vulnerability-management baseline implemented; controlled monitor lifecycle passed in run `33401498707` and issue #125 closed after real Production HTTP 200.
 
 ## NEX-80 — logs, correlation and health
 
@@ -40,64 +40,66 @@ This register distinguishes controls already implemented from the next executabl
 
 ## NEX-81 — API and secrets security
 
-### Implemented
+### Already qualified before this tranche
 
 - OIDC JWT verification and fail-closed authentication;
 - separate environment audiences;
 - minimum-privilege Neon runtime/migration roles;
 - Production TLS `sslmode=verify-full`;
 - GitHub/Railway/Vercel secret stores instead of committed credentials;
-- `X-Content-Type-Options: nosniff`;
-- `X-Frame-Options: DENY`;
-- `Referrer-Policy: no-referrer`;
-- restrictive `Permissions-Policy`;
-- `Cross-Origin-Resource-Policy: same-site`;
-- HSTS in Production;
-- bounded correlation IDs;
-- sanitized readiness errors.
+- defensive response headers including HSTS in Production;
+- bounded correlation IDs and sanitized readiness errors.
 
-### Remaining executable gaps
+### Implemented in `hardening/nex-81-api-security`
 
-- distributed or provider-backed rate limiting;
-- formal global request-validation strategy for endpoints not already covered by domain validators;
-- documented credential rotation/revocation cadence plus an executed drill;
-- explicit CORS policy if browser-direct API access is introduced.
+- bounded fixed-window rate limiting for the current single-replica API topology;
+- stricter limits for `/api/v1/auth/*` and `/api/v1/tenant/runtime-gate`;
+- HTTP 429 + `Retry-After` and rate-limit response metadata;
+- bounded active-client map to prevent unbounded in-process state;
+- forwarded-client identity is ignored by default and can only be enabled after proxy-chain validation;
+- global rejection of HTTP TRACE;
+- malformed `Content-Length` rejection;
+- early global declared-body-size limit with HTTP 413;
+- protocol-level Content-Type policy for body-bearing write requests;
+- JSON, multipart and octet-stream compatibility retained for domain/upload flows;
+- stable generic security error responses with `Cache-Control: no-store`;
+- layered validation policy: protocol → auth/tenant → typed domain validators → PostgreSQL constraints/RLS;
+- credential rotation/revocation cadence and operational procedure documented in `docs/operations/api-security-and-secret-rotation.md`;
+- non-destructive rotation/revocation tabletop drill executed without reading or changing any live secret value.
 
-**Status recommendation:** keep NEX-81 in progress. Rate limiting remains an explicit acceptance-scope gap.
+### Scaling constraint
+
+The current Railway Production API has one replica. The in-process limiter is valid only for this topology. Before scaling above one replica, Production must move rate-limit state to a shared/provider-backed control or equivalent trusted edge enforcement. This is an explicit release gate, not a hidden limitation.
+
+### Closure gates for implementation
+
+- required PR CI green including rate-limit/protocol negative tests;
+- post-merge CI green;
+- no implicit Production redeploy from this PR;
+- Jira records the topology constraint and credential drill.
+
+### Production application gate
+
+Production remains pinned to the qualified `v0.1.0` SHA. The new middleware is not considered active in Production until a deliberate release/deployment promotes a SHA containing this tranche and reruns health/auth/tenant gates.
+
+**Status recommendation:** implementation becomes complete after PR/CI; keep NEX-81 in progress until Production application is explicitly promoted or split into a release qualification successor.
 
 ## NEX-82 — audit, metrics and vulnerability management
 
-**Status recommendation: closure-ready / Feito after Jira reconciliation.**
+**Status: Feito.**
 
-### Qualified controls
+Qualified controls include Wave 0024 Audit/immutability, Production dependency audit, Dependabot, Railway resource metrics, scheduled external Production health monitoring, durable incident lifecycle, critical-event taxonomy, evidence retention and vulnerability triage/remediation policy.
 
-- Wave 0024 durable database Audit schema and immutability;
-- Production dependency audit (`pnpm audit:prod`) in required CI;
-- restored-database Audit/immutability and runtime RLS qualification in DR run `33396554407`;
-- weekly Dependabot review for npm and GitHub Actions;
-- Railway Production CPU/memory/network metrics confirmed available over a 24-hour window;
-- scheduled external Production `/health` monitor twice per hour;
-- three bounded retries before operational alerting;
-- durable GitHub incident issue creation while unhealthy and automatic closure after verified recovery;
-- alert workflow failure state as durable evidence while an incident is active;
-- health-monitor incident evidence excludes response body, credentials, cookies and request headers;
-- critical security/operational event taxonomy, evidence-retention classes, vulnerability triage workflow, remediation targets and finding ownership documented in `docs/operations/security-observability-policy.md`.
+Objective closure evidence:
 
-### Objective monitor qualification
-
-PR #124 merged as `30fb440c10cd7df7b51a8f69120c8457c706985a` after required PR CI `33398199634` succeeded.
-
-Post-merge evidence on the same SHA:
-
-- Production Health Monitor run `33401498707` — success;
-- qualification job `99518637088` — success;
-- controlled issue `#125` (`[monitor-test] Production health alert lifecycle qualification`) created automatically;
-- real Railway Production `/health` verified with HTTP 200;
-- issue #125 received recovery evidence and was automatically closed as `completed` by GitHub Actions;
-- post-merge CI run `33401498734` — success;
-- `pnpm audit:prod` reported no known high/critical Production vulnerabilities in that CI run.
-
-The controlled `monitor-test` validates issue creation, real-health verification and automatic closure without falsely asserting that Production was actually unavailable. Scheduled/manual operational monitor executions remain responsible for opening `[monitor] Production API health unavailable` only when the real probe fails or an explicit manual failure simulation is invoked.
+- PR #124 head CI `33398199634` — success;
+- merge SHA `30fb440c10cd7df7b51a8f69120c8457c706985a`;
+- Production Health Monitor run `33401498707` / qualification job `99518637088` — success;
+- controlled issue #125 created, real Production `/health` HTTP 200 verified, issue automatically closed as completed;
+- post-merge CI `33401498734` — success;
+- PR #126 documentation reconciliation merged as `a61fba0825863b9a5b59db447ba9c5c08a11da6a`;
+- post-merge CI `33402097894` — success;
+- Jira NEX-82 transitioned to Feito with comment 10232.
 
 ## NEX-84 — critical IAM, multi-tenant and E2E tests
 
@@ -110,7 +112,7 @@ The controlled `monitor-test` validates issue creation, real-health verification
 - liveness/readiness success and fail-closed tests;
 - HTTP correlation/security-header tests;
 - DR workflow starts the API against a real restored database and verifies liveness, DB readiness and fail-closed unauthenticated access;
-- PR #121 head validation passed `OIDC identity mapping against nexora_app` and `TenantContext against nexora_app` on isolated Neon branches.
+- isolated Neon OIDC identity mapping and TenantContext integration gates have passed.
 
 ### Remaining executable gaps
 
@@ -124,11 +126,7 @@ The controlled `monitor-test` validates issue creation, real-health verification
 
 **Status: Feito.**
 
-The repository ruleset `main-protection` is active and requires `Build, typecheck and test` with no bypass actor. Pull requests cannot be integrated while that required check is red.
-
-The required workflow covers frozen-lockfile install, Production dependency security audit, lint, formatting, typecheck, tests, build, Docker Compose validation, Drizzle generation/check and versioned migration artifacts.
-
-Recent objective evidence includes PR and post-merge CI runs `33395048908`, `33395933222`, `33396432314`, `33396554367`, `33397235412`, `33397375771`, `33398199634` and `33401498734`, all successful.
+The repository ruleset `main-protection` requires `Build, typecheck and test` with no bypass. The workflow covers frozen-lockfile install, Production dependency security audit, lint, formatting, typecheck, tests, build, Docker Compose validation, Drizzle generation/check and versioned migration artifacts.
 
 ## DR qualification
 
@@ -142,12 +140,11 @@ NEX-79/NEX-93 are **Feito** for the current synchronous topology:
 - minimum-privilege roles, TLS, Audit immutability and runtime RLS: PASS;
 - restored API liveness/readiness, correlation/security headers and negative auth 401: PASS;
 - exact temporary restore-branch cleanup: PASS;
-- no residual `dr-pitr` branch found after the run;
-- Neon `compare_schema` HTTP 413 is recorded as a provider response-size limitation; byte-for-byte provider diff equality is not claimed.
+- no residual `dr-pitr` branch found after the run.
 
 ## Next execution order
 
-1. Reconcile NEX-82 to Feito against PR #124 + monitor-test + post-merge CI evidence.
-2. NEX-81: implement rate limiting, global validation policy and credential-rotation drill.
-3. NEX-84: add controlled authenticated API-layer two-tenant E2E in CI.
-4. NEX-80: formalize SLO/error-budget policy and later extend correlation/readiness to Worker when NEX-91 enters Production.
+1. NEX-81: validate and merge the API-security implementation; keep Production promotion as an explicit release gate.
+2. NEX-84: add controlled authenticated API-layer two-tenant E2E in CI.
+3. NEX-80: formalize SLO/error-budget policy and later extend correlation/readiness to Worker when NEX-91 enters Production.
+4. After the hardening block is reconciled, continue IAM/Tenant/RBAC → NEX-90 → NEX-91 → Trips residual → Tracking/ETA → Wave 0025+.
