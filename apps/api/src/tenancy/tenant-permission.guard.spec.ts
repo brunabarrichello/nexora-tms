@@ -32,20 +32,20 @@ test('permission guard denies by default when no permission metadata exists', as
   await assert.rejects(() => guard.canActivate(context()), ForbiddenException);
 });
 
-test('permission guard denies when the active membership lacks the required permission', async () => {
-  const guard = new TenantPermissionGuard(
-    reflector('freight.read'),
-    permissionService(false),
-  );
+test(
+  'permission guard denies when the active membership lacks the required permission',
+  async () => {
+    const guard = new TenantPermissionGuard(
+      reflector('freight.read'),
+      permissionService(false),
+    );
 
-  await assert.rejects(() => guard.canActivate(context()), ForbiddenException);
-});
+    await assert.rejects(() => guard.canActivate(context()), ForbiddenException);
+  },
+);
 
 test('permission guard allows when the active membership has the required permission', async () => {
-  const guard = new TenantPermissionGuard(
-    reflector('freight.read'),
-    permissionService(true),
-  );
+  const guard = new TenantPermissionGuard(reflector('freight.read'), permissionService(true));
 
   assert.equal(await guard.canActivate(context()), true);
 });
