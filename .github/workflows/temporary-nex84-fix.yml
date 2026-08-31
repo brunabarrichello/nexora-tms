@@ -1,0 +1,41 @@
+name: Temporary NEX-84 Assertion Fix
+
+on:
+  push:
+    branches:
+      - hardening/nex-84-authenticated-tenant-e2e
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[skip-nex84-fix]') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: hardening/nex-84-authenticated-tenant-e2e
+      - name: Apply type-safe JSON unwrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/api-authenticated-tenant-e2e.yml')
+          text = path.read_text()
+          old = '            (.data // .) as $items |\n'
+          new = '            (if type == "object" and has("data") then .data else . end) as $items |\n'
+          if old not in text:
+              raise SystemExit('target assertion not found')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - name: Commit assertion fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows/api-authenticated-tenant-e2e.yml
+          git commit -m 'fix(test): unwrap list responses safely [skip-nex84-fix]'
+          git push origin HEAD:hardening/nex-84-authenticated-tenant-e2e
