@@ -10,14 +10,23 @@ import { CapacityQualificationController } from './capacity-qualification.contro
 
 const reflector = new Reflector();
 
-function assertPermission(target: object, permission: string): void {
-  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, target), permission);
+function assertHandlerPermission(
+  method: (...args: never[]) => unknown,
+  permission: string,
+): void {
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, method), permission);
 }
 
 test('Capacity controllers default to capacity.read', () => {
-  assertPermission(CapacityAssetController, 'capacity.read');
-  assertPermission(CapacityAssignmentController, 'capacity.read');
-  assertPermission(CapacityQualificationController, 'capacity.read');
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssetController), 'capacity.read');
+  assert.equal(
+    reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssignmentController),
+    'capacity.read',
+  );
+  assert.equal(
+    reflector.get(REQUIRED_TENANT_PERMISSION, CapacityQualificationController),
+    'capacity.read',
+  );
 });
 
 test('Capacity asset and assignment mutations require capacity.write', () => {
@@ -29,7 +38,7 @@ test('Capacity asset and assignment mutations require capacity.write', () => {
   ];
 
   for (const method of methods) {
-    assertPermission(method, 'capacity.write');
+    assertHandlerPermission(method, 'capacity.write');
   }
 });
 
@@ -59,6 +68,6 @@ test('Capacity qualification mutations require capacity.write', () => {
   ];
 
   for (const method of methods) {
-    assertPermission(method, 'capacity.write');
+    assertHandlerPermission(method, 'capacity.write');
   }
 });
