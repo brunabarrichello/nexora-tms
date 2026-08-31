@@ -21,6 +21,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  MIN_PRODUCTION_HISTORY_SECONDS: 604800
 
 jobs:
   migrate:
@@ -86,7 +87,7 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
 
-      - name: Resolve canonical production branch
+      - name: Resolve canonical root/default/protected production branch
         id: production
         shell: bash
         env:
@@ -98,21 +99,58 @@ jobs:
             exit 1
           }
 
-          branch_id="$(
-            curl -fsS \
-              -H "Authorization: Bearer ${NEON_API_KEY}" \
-              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
-            | jq -er '[.branches[] | select(.name == "production")][0].id'
-          )" || {
-            echo "Canonical Neon production branch does not exist. Run Neon Production Bootstrap first." >&2
+          branches_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
+
+          production_json="$(jq -ec '[.branches[] | select(.name == "production")][0]' <<<"$branches_json")" || {
+            echo "Canonical Neon production branch does not exist." >&2
             exit 1
           }
 
-          test -n "$branch_id" || {
-            echo "Canonical Neon production branch did not resolve to a branch ID." >&2
+          branch_id="$(jq -er '.id' <<<"$production_json")"
+          parent_id="$(jq -r '.parent_id // ""' <<<"$production_json")"
+          is_default="$(jq -er '.default' <<<"$production_json")"
+          is_protected="$(jq -er '.protected' <<<"$production_json")"
+
+          [[ -z "$parent_id" ]] || {
+            echo "Production migration is blocked: production must be a root branch." >&2
             exit 1
           }
+          [[ "$is_default" == "true" ]] || {
+            echo "Production migration is blocked: production must be the default branch." >&2
+            exit 1
+          }
+          [[ "$is_protected" == "true" ]] || {
+            echo "Production migration is blocked: production branch protection is required." >&2
+            exit 1
+          }
+
           echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
+
+      - name: Verify production retention and network perimeter
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          project_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
+
+          history_seconds="$(jq -er '.project.history_retention_seconds' <<<"$project_json")"
+          block_public="$(jq -er '.project.settings.block_public_connections' <<<"$project_json")"
+          allowed_ip_count="$(jq -er '.project.settings.allowed_ips.ips | length' <<<"$project_json")"
+
+          [[ "$history_seconds" -ge "$MIN_PRODUCTION_HISTORY_SECONDS" ]] || {
+            echo "Production migration is blocked: history window must be at least 7 days (${MIN_PRODUCTION_HISTORY_SECONDS}s), found ${history_seconds}s." >&2
+            exit 1
+          }
+
+          if [[ "$block_public" != "true" && "$allowed_ip_count" -eq 0 ]]; then
+            echo "Production migration is blocked: configure a restricted network perimeter using IP Allow or private networking before migration." >&2
+            exit 1
+          fi
 
       - name: Resolve production connection strings without creating branches
         id: connections
@@ -216,6 +254,9 @@ jobs:
             echo "## Neon Production migration passed"
             echo ""
             echo "- Branch: production"
+            echo "- Branch type: root/default/protected"
+            echo "- Minimum history window: >= 7 days"
+            echo "- Network perimeter: restricted"
             echo "- Release SHA: ${{ inputs.release_sha }}"
             echo "- Versioned migrations: ${EXPECTED_MIGRATIONS}"
             echo "- Migration ledger: verified"
