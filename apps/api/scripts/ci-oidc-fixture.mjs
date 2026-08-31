@@ -69,7 +69,9 @@ const server = createServer({ cert, key }, (request, response) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  process.stdout.write(`OIDC CI fixture listening on https://127.0.0.1:${port}\n`);
+  process.stdout.write(
+    `OIDC CI fixture listening on https://127.0.0.1:${port}\n`,
+  );
 });
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
