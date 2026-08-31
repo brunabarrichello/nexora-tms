@@ -1,0 +1,182 @@
+name: API RBAC Neon Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/api/src/tenancy/rbac-*.ts'
+      - 'apps/api/src/tenancy/tenant-rbac.integration.ts'
+      - 'apps/api/src/tenancy/tenant-permission*.ts'
+      - 'apps/api/src/security/tenant-authorized.decorator.ts'
+      - '.github/workflows/api-rbac-neon-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-rbac-neon-gate-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: neondb
+
+jobs:
+  rbac-neon:
+    name: RBAC provisioning and isolation against Neon
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
+
+      - name: Set ephemeral branch name and expiry
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-rbac-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated branch from staging
+        id: create-neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: staging
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Migrate and seed RBAC fixtures
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+
+          roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
+          [[ "$roles" == "nexora_migrator:nexora_owner" ]] || { echo "Unexpected migration role chain: $roles" >&2; exit 1; }
+
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO tenants (id, slug, name) VALUES
+            ('51000000-0000-4000-8000-000000000001', 'rbac-gate-tenant-a', 'RBAC Gate Tenant A'),
+            ('51000000-0000-4000-8000-000000000002', 'rbac-gate-tenant-b', 'RBAC Gate Tenant B')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO users (id, display_name) VALUES
+            ('51000000-0000-4000-8000-000000000101', 'RBAC Gate User A')
+          ON CONFLICT (id) DO NOTHING;
+
+          INSERT INTO memberships (id, tenant_id, user_id, status) VALUES
+            ('51000000-0000-4000-8000-000000000301', '51000000-0000-4000-8000-000000000001', '51000000-0000-4000-8000-000000000101', 'active')
+          ON CONFLICT (id) DO UPDATE SET status = EXCLUDED.status;
+          SQL
+
+          echo "RBAC_PROVISION_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Resolve nexora_app connection
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name nexora_app)"
+          test -n "$APP_DATABASE_URL"
+          echo "::add-mask::$APP_DATABASE_URL"
+
+          identity="$(psql "$APP_DATABASE_URL" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
+          [[ "$identity" == "nexora_app|nexora_app|f" ]] || { echo "Unexpected API runtime identity: $identity" >&2; exit 1; }
+
+          echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Build API
+        run: pnpm --filter @nexora/api build
+
+      - name: Run RBAC provisioning and isolation integration
+        shell: bash
+        env:
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          DATABASE_POOL_MAX: '2'
+          RBAC_PROVISION_DATABASE_URL: ${{ env.RBAC_PROVISION_DATABASE_URL }}
+          RBAC_PROVISION_TARGET: ephemeral
+        run: |
+          set -euo pipefail
+          node apps/api/dist/tenancy/tenant-rbac.integration.js
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo "## API RBAC ↔ Neon gate passed"
+            echo ""
+            echo "- Parent branch: staging"
+            echo "- Ephemeral branch: ${NEON_TEST_BRANCH}"
+            echo "- Provisioning role chain: nexora_migrator -> nexora_owner"
+            echo "- Runtime role: nexora_app"
+            echo "- Production target: forbidden by code"
+            echo "- Catalog provisioning: idempotent"
+            echo "- Viewer read permission: allowed"
+            echo "- Viewer write permission: denied"
+            echo "- Viewer audit permission: denied"
+            echo "- Cross-tenant role visibility: 0"
+            echo "- Cross-tenant permission inheritance without membership: denied"
+            echo "- Membership assignment: fixture-only on ephemeral branch"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.create-neon.outputs.branch_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
