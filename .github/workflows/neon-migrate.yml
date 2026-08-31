@@ -56,7 +56,7 @@ jobs:
           echo "TARGET_ENVIRONMENT=$target" >> "$GITHUB_ENV"
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 11.24.0
           run_install: false
