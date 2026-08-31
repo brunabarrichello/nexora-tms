@@ -43,10 +43,7 @@ const token = await new SignJWT({ scope: 'openid profile' })
 
 await writeFile(tokenFile, `${token}\n`, { mode: 0o600 });
 
-const [cert, key] = await Promise.all([
-  readFile(certificateFile),
-  readFile(privateKeyFile),
-]);
+const [cert, key] = await Promise.all([readFile(certificateFile), readFile(privateKeyFile)]);
 
 const server = createServer({ cert, key }, (request, response) => {
   if (request.url === '/.well-known/jwks.json') {
@@ -69,9 +66,7 @@ const server = createServer({ cert, key }, (request, response) => {
 });
 
 server.listen(port, '127.0.0.1', () => {
-  process.stdout.write(
-    `OIDC CI fixture listening on https://127.0.0.1:${port}\n`,
-  );
+  process.stdout.write(`OIDC CI fixture listening on https://127.0.0.1:${port}\n`);
 });
 
 for (const signal of ['SIGTERM', 'SIGINT']) {
