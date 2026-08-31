@@ -76,7 +76,10 @@ export function readWebAuthConfig(
   };
 }
 
-export function createAuthTransaction(returnTo: string, now = Date.now()): AuthTransaction {
+export function createAuthTransaction(
+  returnTo: string,
+  now = Date.now(),
+): AuthTransaction {
   return {
     state: randomBase64Url(32),
     codeVerifier: randomBase64Url(64),
@@ -92,7 +95,10 @@ export function buildAuthorizationUrl(
   const url = new URL('/authorize', config.auth0Domain);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', config.clientId);
-  url.searchParams.set('redirect_uri', new URL('/auth/callback', config.appBaseUrl).toString());
+  url.searchParams.set(
+    'redirect_uri',
+    new URL('/auth/callback', config.appBaseUrl).toString(),
+  );
   url.searchParams.set('scope', 'openid profile email');
   url.searchParams.set('audience', config.apiAudience);
   url.searchParams.set('state', transaction.state);
@@ -166,7 +172,10 @@ export async function resolveNexoraUser(
     throw new Error(`Nexora identity resolution failed with HTTP ${response.status}`);
   }
 
-  const payload = (await response.json()) as { authenticated?: unknown; userId?: unknown };
+  const payload = (await response.json()) as {
+    authenticated?: unknown;
+    userId?: unknown;
+  };
   if (payload.authenticated !== true || typeof payload.userId !== 'string' || !payload.userId) {
     throw new Error('Nexora identity response is invalid');
   }
@@ -187,14 +196,20 @@ export function createWebSession(
   };
 }
 
-export function isWebSessionActive(session: WebSession, now = Date.now()): boolean {
+export function isWebSessionActive(
+  session: WebSession,
+  now = Date.now(),
+): boolean {
   return session.expiresAt > now && Boolean(session.accessToken) && Boolean(session.userId);
 }
 
 export function buildLogoutUrl(config: WebAuthConfig): URL {
   const url = new URL('/v2/logout', config.auth0Domain);
   url.searchParams.set('client_id', config.clientId);
-  url.searchParams.set('returnTo', new URL('/login?logged_out=1', config.appBaseUrl).toString());
+  url.searchParams.set(
+    'returnTo',
+    new URL('/login?logged_out=1', config.appBaseUrl).toString(),
+  );
   return url;
 }
 
@@ -238,7 +253,10 @@ export function sealAuthValue(value: unknown, secretHex: string): string {
   return `v1.${iv.toString('base64url')}.${encrypted.toString('base64url')}.${tag.toString('base64url')}`;
 }
 
-export function openAuthValue<T>(sealed: string | undefined, secretHex: string): T | undefined {
+export function openAuthValue<T>(
+  sealed: string | undefined,
+  secretHex: string,
+): T | undefined {
   if (!sealed) return undefined;
   try {
     const [version, ivValue, encryptedValue, tagValue] = sealed.split('.');
