@@ -282,7 +282,7 @@ jobs:
             exit 1
           }
           jq -e --arg allowed "$PARTY_A" --arg forbidden "$PARTY_B" '
-            (.data // .) as $items |
+            (if type == "object" and has("data") then .data else . end) as $items |
             ($items | type == "array") and
             ([$items[]?.id] | index($allowed) != null) and
             ([$items[]?.id] | index($forbidden) == null)
