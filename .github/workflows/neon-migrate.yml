@@ -74,7 +74,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ steps.target.outputs.environment }}
           database: neondb
           role: neondb_owner
@@ -105,7 +105,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ steps.target.outputs.environment }}
           database: neondb
           role: nexora_migrator
@@ -257,7 +257,6 @@ jobs:
               RAISE EXCEPTION 'Wave 0020 historical matching privileges are incorrect';
             END IF;
 
-
             SELECT count(*) INTO tables_count
               FROM information_schema.tables
              WHERE table_schema='public'
@@ -306,7 +305,6 @@ jobs:
             ) THEN
               RAISE EXCEPTION 'Wave 0021 reply scope trigger is missing';
             END IF;
-
 
             SELECT count(*) INTO tables_count
               FROM information_schema.tables
