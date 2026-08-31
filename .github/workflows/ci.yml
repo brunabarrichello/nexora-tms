@@ -2,9 +2,13 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -14,29 +18,58 @@ jobs:
   quality:
     name: Build, typecheck and test
     runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout feature branch
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref }}
+    timeout-minutes: 10
 
-      - name: Patch general Neon gate for Wave 0024
-        shell: bash
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          from pathlib import Path
-          p = Path('.github/workflows/neon-pr-gate.yml')
-          s = p.read_text()
-          old = "IF migration_count <> 24 THEN\n              RAISE EXCEPTION 'Expected 24 Drizzle migration records, found %', migration_count;"
-          new = "IF migration_count <> 25 THEN\n              RAISE EXCEPTION 'Expected 25 Drizzle migration records, found %', migration_count;"
-          if old not in s:
-              raise SystemExit('Expected Wave 0023 migration-count guard not found')
-          p.write_text(s.replace(old, new, 1))
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .github/workflows/neon-pr-gate.yml
-          git commit -m "chore(ci): expect 25 migrations after Wave 0024"
-          git push origin HEAD:${{ github.head_ref }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.20.0
+
+      - name: Toolchain doctor
+        run: node scripts/doctor.mjs
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Production dependency security audit
+        run: pnpm audit:prod
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Docker Compose model
+        run: docker compose config --quiet
+
+      - name: Generate Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Check Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Verify Drizzle artifacts are versioned
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: git diff --exit-code -- packages/database/migrations
