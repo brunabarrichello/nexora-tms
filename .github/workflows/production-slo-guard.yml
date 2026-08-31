@@ -1,0 +1,240 @@
+name: Production SLO Guard
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/production-slo-guard.yml'
+      - 'scripts/production-slo-evaluate.mjs'
+      - 'docs/operations/production-slo.md'
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/production-slo-guard.yml'
+      - 'scripts/production-slo-evaluate.mjs'
+      - 'docs/operations/production-slo.md'
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: production-slo-guard-${{ github.event_name }}
+  cancel-in-progress: false
+
+env:
+  SLO_WINDOW_HOURS: '168'
+  SLO_TARGET_AVAILABILITY: '0.99'
+  SLO_MINIMUM_SAMPLES: '12'
+  SLO_STALE_AFTER_MINUTES: '90'
+  SLO_INCIDENT_TITLE: '[slo] Production API availability error budget'
+
+jobs:
+  qualification:
+    name: Validate SLO evaluator and current monitor history
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'push' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Run deterministic SLO evaluator self-test
+        run: node scripts/production-slo-evaluate.mjs --self-test
+
+      - name: Collect scheduled Production monitor history
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          cutoff="$(date -u --date "-${SLO_WINDOW_HOURS} hours" +'%Y-%m-%dT%H:%M:%SZ')"
+          echo '[]' > /tmp/monitor-runs.json
+
+          for page in $(seq 1 10); do
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/production-health-monitor.yml/runs?event=schedule&per_page=100&page=${page}" \
+              > /tmp/monitor-page-payload.json
+
+            count="$(jq '.workflow_runs | length' /tmp/monitor-page-payload.json)"
+            jq --arg cutoff "$cutoff" \
+              '[.workflow_runs[] | select(.created_at >= $cutoff)]' \
+              /tmp/monitor-page-payload.json > /tmp/monitor-page.json
+            jq -s '.[0] + .[1]' \
+              /tmp/monitor-runs.json /tmp/monitor-page.json > /tmp/monitor-runs-next.json
+            mv /tmp/monitor-runs-next.json /tmp/monitor-runs.json
+
+            if [[ "$count" -lt 100 ]]; then
+              break
+            fi
+
+            oldest="$(jq -r '.workflow_runs[-1].created_at // empty' /tmp/monitor-page-payload.json)"
+            if [[ -z "$oldest" || "$oldest" < "$cutoff" ]]; then
+              break
+            fi
+          done
+
+          echo "Collected $(jq 'length' /tmp/monitor-runs.json) scheduled monitor runs inside the rolling window."
+
+      - name: Evaluate current Production SLO read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/production-slo-evaluate.mjs /tmp/monitor-runs.json > /tmp/slo.json
+          jq . /tmp/slo.json
+
+          state="$(jq -r '.state' /tmp/slo.json)"
+          case "$state" in
+            healthy|insufficient_data|budget_exhausted|monitor_stale) ;;
+            *) echo "Unexpected SLO state: $state" >&2; exit 1 ;;
+          esac
+
+          echo "Qualification is read-only; current state=${state}."
+
+  operational:
+    name: Reconcile Production availability error budget
+    if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Collect scheduled Production monitor history
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          cutoff="$(date -u --date "-${SLO_WINDOW_HOURS} hours" +'%Y-%m-%dT%H:%M:%SZ')"
+          echo '[]' > /tmp/monitor-runs.json
+
+          for page in $(seq 1 10); do
+            gh api --method GET \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/production-health-monitor.yml/runs?event=schedule&per_page=100&page=${page}" \
+              > /tmp/monitor-page-payload.json
+
+            count="$(jq '.workflow_runs | length' /tmp/monitor-page-payload.json)"
+            jq --arg cutoff "$cutoff" \
+              '[.workflow_runs[] | select(.created_at >= $cutoff)]' \
+              /tmp/monitor-page-payload.json > /tmp/monitor-page.json
+            jq -s '.[0] + .[1]' \
+              /tmp/monitor-runs.json /tmp/monitor-page.json > /tmp/monitor-runs-next.json
+            mv /tmp/monitor-runs-next.json /tmp/monitor-runs.json
+
+            if [[ "$count" -lt 100 ]]; then
+              break
+            fi
+
+            oldest="$(jq -r '.workflow_runs[-1].created_at // empty' /tmp/monitor-page-payload.json)"
+            if [[ -z "$oldest" || "$oldest" < "$cutoff" ]]; then
+              break
+            fi
+          done
+
+      - name: Evaluate Production SLO
+        id: slo
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/production-slo-evaluate.mjs /tmp/monitor-runs.json > /tmp/slo.json
+
+          state="$(jq -r '.state' /tmp/slo.json)"
+          echo "state=$state" >> "$GITHUB_OUTPUT"
+
+          {
+            echo '## Production availability SLO'
+            echo
+            echo "- State: \`$state\`"
+            echo "- Rolling window: $(jq -r '.windowHours' /tmp/slo.json) hours"
+            echo "- Target: $(jq -r '.targetAvailability * 100' /tmp/slo.json)%"
+            echo "- Completed scheduled samples: $(jq -r '.sampleCount' /tmp/slo.json)"
+            echo "- Successful samples: $(jq -r '.successfulSamples' /tmp/slo.json)"
+            echo "- Failed samples: $(jq -r '.failedSamples' /tmp/slo.json)"
+            echo "- Availability: $(jq -r '.availabilityPercent // "n/a"' /tmp/slo.json)%"
+            echo "- Error budget consumed: $(jq -r '.errorBudgetConsumedPercent // "n/a"' /tmp/slo.json)%"
+            echo "- Latest scheduled monitor age: $(jq -r '.latestScheduledAgeMinutes // "n/a"' /tmp/slo.json) minutes"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          jq . /tmp/slo.json
+
+      - name: Reconcile durable SLO incident
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STATE: ${{ steps.slo.outputs.state }}
+        run: |
+          set -euo pipefail
+
+          existing="$(gh issue list \
+            --repo "$GITHUB_REPOSITORY" \
+            --state open \
+            --limit 100 \
+            --json number,title | \
+            jq -r --arg title "$SLO_INCIDENT_TITLE" '.[] | select(.title == $title) | .number' | \
+            head -n 1)"
+
+          if [[ "$STATE" == 'budget_exhausted' || "$STATE" == 'monitor_stale' ]]; then
+            if [[ -z "$existing" ]]; then
+              cat > /tmp/slo-incident.md <<EOF
+          Automated Nexora Production SLO guard detected state \`${STATE}\`.
+
+          - Rolling window: $(jq -r '.windowHours' /tmp/slo.json) hours
+          - Availability target: $(jq -r '.targetAvailability * 100' /tmp/slo.json)%
+          - Completed scheduled samples: $(jq -r '.sampleCount' /tmp/slo.json)
+          - Successful samples: $(jq -r '.successfulSamples' /tmp/slo.json)
+          - Failed samples: $(jq -r '.failedSamples' /tmp/slo.json)
+          - Observed availability: $(jq -r '.availabilityPercent // "n/a"' /tmp/slo.json)%
+          - Error budget consumed: $(jq -r '.errorBudgetConsumedPercent // "n/a"' /tmp/slo.json)%
+          - Latest scheduled monitor age: $(jq -r '.latestScheduledAgeMinutes // "n/a"' /tmp/slo.json) minutes
+          - SLO workflow run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+
+          This issue contains aggregate monitor metadata only. It does not persist response bodies, Authorization headers, cookies, secrets or tenant payloads.
+          EOF
+
+              gh issue create \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "$SLO_INCIDENT_TITLE" \
+                --body-file /tmp/slo-incident.md
+            else
+              echo "SLO incident remains open as #${existing}; current run is repeat evidence."
+            fi
+
+            echo "Production SLO guard alert state: ${STATE}." >&2
+            exit 1
+          fi
+
+          if [[ "$STATE" == 'healthy' && -n "$existing" ]]; then
+            gh issue comment "$existing" \
+              --repo "$GITHUB_REPOSITORY" \
+              --body "Automated SLO guard verified the rolling availability objective is healthy again on ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}. Closing the SLO incident."
+            gh issue close "$existing" \
+              --repo "$GITHUB_REPOSITORY" \
+              --reason completed
+          elif [[ "$STATE" == 'insufficient_data' ]]; then
+            echo 'SLO window has insufficient completed samples; no alert state is asserted and any existing incident remains open.'
+          else
+            echo 'Production availability SLO is healthy; no open SLO incident requires reconciliation.'
+          fi
