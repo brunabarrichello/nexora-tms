@@ -1,0 +1,61 @@
+name: Temporary Wave 0019 Format
+
+on:
+  push:
+    branches:
+      - feat/wave-0019-freight-api-reconciliation
+    paths:
+      - '.github/workflows/tmp-wave0019-format.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    name: Format Wave 0019 API
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v7
+        with:
+          ref: feat/wave-0019-freight-api-reconciliation
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format reconciled Wave 0019 files
+        run: >-
+          pnpm exec prettier --write
+          apps/api/src/freight/freight-normalization.service.ts
+          apps/api/src/freight/freight-normalization.validation.ts
+          apps/api/src/freight/freight-normalization.validation.spec.ts
+
+      - name: Commit formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            apps/api/src/freight/freight-normalization.service.ts \
+            apps/api/src/freight/freight-normalization.validation.ts \
+            apps/api/src/freight/freight-normalization.validation.spec.ts
+          if git diff --cached --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git commit -m "style(freight): format Wave 0019 API"
+          git push origin HEAD:feat/wave-0019-freight-api-reconciliation
