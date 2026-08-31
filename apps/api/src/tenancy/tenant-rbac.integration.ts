@@ -2,7 +2,10 @@ import { strict as assert } from 'node:assert';
 
 import { Pool, type PoolClient } from 'pg';
 
-import { TENANT_PERMISSIONS, TENANT_ROLE_TEMPLATES } from './rbac-catalog.js';
+import {
+  TENANT_PERMISSIONS,
+  TENANT_ROLE_TEMPLATES,
+} from './rbac-catalog.js';
 import {
   provisionTenantRbac,
   requireRbacProvisionTarget,
@@ -34,9 +37,11 @@ async function provisionInTransaction(
 }
 
 async function run(): Promise<void> {
-  const provisionDatabaseUrl = process.env.RBAC_PROVISION_DATABASE_URL?.trim();
-  if (!provisionDatabaseUrl)
+  const provisionDatabaseUrl =
+    process.env.RBAC_PROVISION_DATABASE_URL?.trim();
+  if (!provisionDatabaseUrl) {
     throw new Error('RBAC_PROVISION_DATABASE_URL is required');
+  }
 
   const target = requireRbacProvisionTarget(process.env.RBAC_PROVISION_TARGET);
   const adminPool = new Pool({
@@ -106,7 +111,10 @@ async function run(): Promise<void> {
       tenantId: TENANT_A,
       userId: USER_A,
     });
-    const permissions = new TenantPermissionService(tenantContext, runtimeDatabase);
+    const permissions = new TenantPermissionService(
+      tenantContext,
+      runtimeDatabase,
+    );
 
     assert.equal(await permissions.hasPermission('freight.read'), true);
     assert.equal(await permissions.hasPermission('freight.write'), false);
@@ -122,7 +130,11 @@ async function run(): Promise<void> {
         return result.rows[0]?.count ?? -1;
       },
     );
-    assert.equal(tenantBLeakCount, 0, 'tenant A runtime must not see tenant B roles');
+    assert.equal(
+      tenantBLeakCount,
+      0,
+      'tenant A runtime must not see tenant B roles',
+    );
 
     const tenantBContext = new TenantContext();
     tenantBContext.establish({
