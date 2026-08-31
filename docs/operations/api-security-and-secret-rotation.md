@@ -27,14 +27,14 @@ The baseline enforces:
 
 ### Configuration
 
-| Variable | Default | Purpose |
-| --- | ---: | --- |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Fixed-window duration |
-| `RATE_LIMIT_MAX_REQUESTS` | `120` | General requests per client/window |
-| `RATE_LIMIT_SENSITIVE_MAX_REQUESTS` | `30` | Auth/runtime-gate requests per client/window |
-| `RATE_LIMIT_MAX_TRACKED_CLIENTS` | `10000` | Memory bound for active client buckets |
-| `MAX_REQUEST_BODY_BYTES` | `1048576` | Early declared-body limit |
-| `RATE_LIMIT_TRUST_FORWARDED_FOR` | `false` | Opt-in forwarded client identity only after proxy-chain validation |
+| Variable                            |   Default | Purpose                                                            |
+| ----------------------------------- | --------: | ------------------------------------------------------------------ |
+| `RATE_LIMIT_WINDOW_MS`              |   `60000` | Fixed-window duration                                              |
+| `RATE_LIMIT_MAX_REQUESTS`           |     `120` | General requests per client/window                                 |
+| `RATE_LIMIT_SENSITIVE_MAX_REQUESTS` |      `30` | Auth/runtime-gate requests per client/window                       |
+| `RATE_LIMIT_MAX_TRACKED_CLIENTS`    |   `10000` | Memory bound for active client buckets                             |
+| `MAX_REQUEST_BODY_BYTES`            | `1048576` | Early declared-body limit                                          |
+| `RATE_LIMIT_TRUST_FORWARDED_FOR`    |   `false` | Opt-in forwarded client identity only after proxy-chain validation |
 
 Invalid/out-of-range environment values fall back to bounded defaults rather than disabling the control.
 

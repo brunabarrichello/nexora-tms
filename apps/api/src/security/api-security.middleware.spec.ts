@@ -3,10 +3,7 @@ import { EventEmitter } from 'node:events';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { test } from 'node:test';
 
-import {
-  createApiSecurityMiddleware,
-  type ApiSecurityRequest,
-} from './api-security.middleware.js';
+import { createApiSecurityMiddleware, type ApiSecurityRequest } from './api-security.middleware.js';
 
 class FakeResponse extends EventEmitter {
   statusCode = 200;
@@ -25,12 +22,14 @@ class FakeResponse extends EventEmitter {
   }
 }
 
-function request(input: {
-  method?: string;
-  url?: string;
-  headers?: Record<string, string>;
-  remoteAddress?: string;
-} = {}): ApiSecurityRequest {
+function request(
+  input: {
+    method?: string;
+    url?: string;
+    headers?: Record<string, string>;
+    remoteAddress?: string;
+  } = {},
+): ApiSecurityRequest {
   return {
     headers: input.headers ?? {},
     method: input.method ?? 'GET',
@@ -68,7 +67,9 @@ test('rate limiter allows requests up to the configured global limit and then re
   }
 
   const limited = response();
-  middleware(request(), limited as unknown as ServerResponse, () => assert.fail('must not continue'));
+  middleware(request(), limited as unknown as ServerResponse, () =>
+    assert.fail('must not continue'),
+  );
   assert.equal(limited.statusCode, 429);
   assert.equal(limited.headers.get('retry-after'), '60');
   assert.match(limited.body, /RATE_LIMITED/);
@@ -102,10 +103,8 @@ test('sensitive authentication paths use the stricter limit', () => {
   );
 
   const limited = response();
-  middleware(
-    request({ url: '/api/v1/auth/me' }),
-    limited as unknown as ServerResponse,
-    () => assert.fail('must not continue'),
+  middleware(request({ url: '/api/v1/auth/me' }), limited as unknown as ServerResponse, () =>
+    assert.fail('must not continue'),
   );
   assert.equal(limited.statusCode, 429);
 });
@@ -163,10 +162,8 @@ test('TRACE is rejected globally', () => {
   const middleware = createApiSecurityMiddleware();
   const res = response();
 
-  middleware(
-    request({ method: 'TRACE' }),
-    res as unknown as ServerResponse,
-    () => assert.fail('must not continue'),
+  middleware(request({ method: 'TRACE' }), res as unknown as ServerResponse, () =>
+    assert.fail('must not continue'),
   );
 
   assert.equal(res.statusCode, 405);

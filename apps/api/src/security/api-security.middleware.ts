@@ -37,9 +37,7 @@ function boundedInteger(
   maximum: number,
 ): number {
   const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum
-    ? parsed
-    : fallback;
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum ? parsed : fallback;
 }
 
 function configFromEnvironment(): ApiSecurityConfig {
@@ -58,12 +56,7 @@ function configFromEnvironment(): ApiSecurityConfig {
       100,
       100_000,
     ),
-    maxBodyBytes: boundedInteger(
-      process.env.MAX_REQUEST_BODY_BYTES,
-      1_048_576,
-      1_024,
-      10_485_760,
-    ),
+    maxBodyBytes: boundedInteger(process.env.MAX_REQUEST_BODY_BYTES, 1_048_576, 1_024, 10_485_760),
     trustForwardedFor: process.env.RATE_LIMIT_TRUST_FORWARDED_FOR === 'true',
   };
 }
@@ -83,9 +76,7 @@ function resolvePath(request: ApiSecurityRequest): string {
 
 function resolveClientKey(request: ApiSecurityRequest, trustForwardedFor: boolean): string {
   if (trustForwardedFor) {
-    const forwarded = firstHeaderValue(request.headers['x-forwarded-for'])
-      ?.split(',')[0]
-      ?.trim();
+    const forwarded = firstHeaderValue(request.headers['x-forwarded-for'])?.split(',')[0]?.trim();
     if (forwarded && forwarded.length <= 128) {
       return `forwarded:${forwarded}`;
     }
@@ -213,7 +204,12 @@ export function createApiSecurityMiddleware(options: ApiSecurityOptions = {}) {
 
     if (!window || window.resetAt <= currentTime) {
       if (windows.size >= config.maxTrackedClients) {
-        reject(response, 503, 'RATE_LIMIT_CAPACITY', 'Request capacity is temporarily unavailable.');
+        reject(
+          response,
+          503,
+          'RATE_LIMIT_CAPACITY',
+          'Request capacity is temporarily unavailable.',
+        );
         return;
       }
       window = { count: 0, resetAt: currentTime + config.windowMs };
