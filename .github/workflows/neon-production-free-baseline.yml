@@ -1,0 +1,183 @@
+name: Neon Production Free Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: Type QUALIFY-PRODUCTION-FREE to verify the canonical free-tier Production baseline
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-production-free-baseline
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+  MIN_FREE_HISTORY_SECONDS: 21600
+  FREE_BRANCH_LIMIT: 10
+
+jobs:
+  qualify:
+    name: Qualify canonical Neon Production on Free tier
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: production
+
+    steps:
+      - name: Validate explicit free-tier qualification confirmation
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.confirmation }}" == "QUALIFY-PRODUCTION-FREE" ]] || {
+            echo "Explicit confirmation QUALIFY-PRODUCTION-FREE is required." >&2
+            exit 1
+          }
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Verify canonical root/default Production and free-tier capacity
+        id: production
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || {
+            echo "NEON_API_KEY is not configured for the protected GitHub production environment." >&2
+            exit 1
+          }
+
+          branches_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
+          project_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
+
+          production_json="$(jq -ec '[.branches[] | select(.name == "production")][0]' <<<"$branches_json")" || {
+            echo "Canonical Neon production branch does not exist." >&2
+            exit 1
+          }
+
+          branch_id="$(jq -er '.id' <<<"$production_json")"
+          parent_id="$(jq -r '.parent_id // ""' <<<"$production_json")"
+          is_default="$(jq -r '.default' <<<"$production_json")"
+          is_protected="$(jq -r '.protected' <<<"$production_json")"
+          branch_count="$(jq '.branches | length' <<<"$branches_json")"
+          history_seconds="$(jq -er '.project.history_retention_seconds' <<<"$project_json")"
+          block_public="$(jq -r '.project.settings.block_public_connections' <<<"$project_json")"
+          allowed_ip_count="$(jq '.project.settings.allowed_ips.ips | length' <<<"$project_json")"
+
+          [[ -z "$parent_id" ]] || {
+            echo "Production qualification is blocked: production must be a root branch." >&2
+            exit 1
+          }
+          [[ "$is_default" == "true" ]] || {
+            echo "Production qualification is blocked: production must be the default branch." >&2
+            exit 1
+          }
+          [[ "$history_seconds" -ge "$MIN_FREE_HISTORY_SECONDS" ]] || {
+            echo "Production qualification is blocked: expected at least the Free-tier restore window (${MIN_FREE_HISTORY_SECONDS}s), found ${history_seconds}s." >&2
+            exit 1
+          }
+          [[ "$branch_count" -le "$FREE_BRANCH_LIMIT" ]] || {
+            echo "Production qualification is blocked: branch count ${branch_count} exceeds Free-tier limit ${FREE_BRANCH_LIMIT}." >&2
+            exit 1
+          }
+
+          echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
+          echo "history_seconds=$history_seconds" >> "$GITHUB_OUTPUT"
+          echo "branch_count=$branch_count" >> "$GITHUB_OUTPUT"
+          echo "is_protected=$is_protected" >> "$GITHUB_OUTPUT"
+          echo "block_public=$block_public" >> "$GITHUB_OUTPUT"
+          echo "allowed_ip_count=$allowed_ip_count" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve Production admin and runtime connections
+        id: connections
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PRODUCTION_BRANCH_ID: ${{ steps.production.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+
+          connection_uri() {
+            local role_name="$1"
+            curl -fsSG \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
+              --data-urlencode "database_name=neondb" \
+              --data-urlencode "role_name=${role_name}" \
+              --data-urlencode "pooled=false" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+              | jq -er '.uri'
+          }
+
+          admin_url="$(connection_uri neondb_owner)"
+          app_url="$(connection_uri nexora_app)"
+          for value in "$admin_url" "$app_url"; do
+            test -n "$value" || { echo "Failed to resolve a required Production connection string." >&2; exit 1; }
+            echo "::add-mask::$value"
+          done
+          echo "admin_url=$admin_url" >> "$GITHUB_OUTPUT"
+          echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
+
+      - name: Verify TLS and minimum-privilege role posture
+        shell: bash
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.connections.outputs.admin_url }}
+          APP_DATABASE_URL: ${{ steps.connections.outputs.app_url }}
+        run: |
+          set -euo pipefail
+
+          admin_ssl="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false')")"
+          app_ssl="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false')")"
+          [[ "$admin_ssl" == "true" && "$app_ssl" == "true" ]] || {
+            echo "Production qualification is blocked: TLS must be active for admin and application database sessions." >&2
+            exit 1
+          }
+
+          posture="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            select count(*)
+              from pg_roles
+             where (rolname = 'nexora_owner' and rolcanlogin = false and rolsuper = false and rolbypassrls = false and rolcreatedb = false and rolcreaterole = false)
+                or (rolname in ('nexora_migrator','nexora_app','nexora_worker') and rolcanlogin = true and rolsuper = false and rolbypassrls = false and rolcreatedb = false and rolcreaterole = false);
+          ")"
+          [[ "$posture" == "4" ]] || {
+            echo "Production qualification is blocked: required minimum-privilege role posture is not satisfied." >&2
+            exit 1
+          }
+
+      - name: Free-tier Production baseline summary
+        shell: bash
+        run: |
+          {
+            echo "## Neon Production Free baseline passed"
+            echo ""
+            echo "- Branch: production"
+            echo "- Topology: root/default"
+            echo "- Platform branch protection available/enforced: ${{ steps.production.outputs.is_protected }}"
+            echo "- Restore/history window observed: ${{ steps.production.outputs.history_seconds }} seconds"
+            echo "- Branch usage: ${{ steps.production.outputs.branch_count }}/${FREE_BRANCH_LIMIT}"
+            echo "- Public database connectivity blocked: ${{ steps.production.outputs.block_public }}"
+            echo "- IP allowlist entries: ${{ steps.production.outputs.allowed_ip_count }}"
+            echo "- TLS: verified for admin and application sessions"
+            echo "- Minimum-privilege roles: verified"
+            echo "- Paid-plan perimeter/protection: not required by this Free-tier profile"
+            echo "- Database mutation performed: no"
+            echo "- Railway DATABASE_URL changed: no"
+            echo "- API redeployed: no"
+            echo ""
+            echo "Residual Free-tier risks are accepted by architecture policy: short restore window and no platform-enforced IP perimeter/branch protection."
+          } >> "$GITHUB_STEP_SUMMARY"
