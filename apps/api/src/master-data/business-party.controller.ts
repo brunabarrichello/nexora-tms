@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   BusinessPartyService,
   type BusinessParty,
@@ -8,7 +8,7 @@ import {
 } from './business-party.service.js';
 
 @Controller('api/v1/master-data/business-parties')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('master-data.read')
 export class BusinessPartyController {
   constructor(private readonly businessParties: BusinessPartyService) {}
 
@@ -18,6 +18,7 @@ export class BusinessPartyController {
   }
 
   @Post()
+  @TenantAuthorized('master-data.write')
   create(@Body() body: unknown): Promise<BusinessParty> {
     return this.businessParties.create(body);
   }
@@ -33,6 +34,7 @@ export class BusinessPartyController {
   }
 
   @Patch(':id')
+  @TenantAuthorized('master-data.write')
   update(@Param('id') id: string, @Body() body: unknown): Promise<BusinessParty> {
     return this.businessParties.update(id, body);
   }
