@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type MIGRATE-PRODUCTION to apply versioned migrations to canonical Production
+        description: Type MIGRATE-PRODUCTION to migrate or qualify canonical Production
         required: true
         type: string
       free_tier_acknowledgement:
@@ -32,7 +32,7 @@ env:
 
 jobs:
   migrate:
-    name: Migrate canonical Neon Production on Free tier
+    name: Migrate or qualify canonical Neon Production on Free tier
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
@@ -105,7 +105,7 @@ jobs:
       - name: Validate local migration artifacts before touching Production
         run: pnpm --filter @nexora/database db:check
 
-      - name: Resolve canonical root/default Production and Free-tier capacity
+      - name: Resolve canonical root/default Production and Free-tier posture
         id: production
         shell: bash
         env:
@@ -145,10 +145,6 @@ jobs:
           }
           [[ "$history_seconds" -ge "$MIN_FREE_HISTORY_SECONDS" ]] || {
             echo "Production migration is blocked: expected at least the Free-tier restore window (${MIN_FREE_HISTORY_SECONDS}s), found ${history_seconds}s." >&2
-            exit 1
-          }
-          [[ "$branch_count" -lt "$FREE_BRANCH_LIMIT" ]] || {
-            echo "Production migration is blocked: ${branch_count}/${FREE_BRANCH_LIMIT} Neon branches are in use and one slot is required for the pre-migration checkpoint." >&2
             exit 1
           }
 
@@ -276,14 +272,70 @@ jobs:
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
+      - name: Inspect Production migration ledger
+        id: ledger
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.connections.outputs.migrator_url }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+
+          expected="$(jq '.entries | length' packages/database/migrations/meta/_journal.json)"
+          ledger_exists="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
+            "select (to_regclass('drizzle.__drizzle_migrations') is not null)::text;")"
+
+          if [[ "$ledger_exists" == "true" ]]; then
+            actual="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
+              'select count(*) from drizzle.__drizzle_migrations;')"
+          else
+            actual=0
+          fi
+
+          [[ "$actual" -le "$expected" ]] || {
+            echo "Production migration is blocked: ledger has $actual entries but pinned release expects only $expected." >&2
+            exit 1
+          }
+
+          migration_required=false
+          if [[ "$actual" -lt "$expected" ]]; then
+            migration_required=true
+          fi
+
+          echo "expected=$expected" >> "$GITHUB_OUTPUT"
+          echo "actual_before=$actual" >> "$GITHUB_OUTPUT"
+          echo "migration_required=$migration_required" >> "$GITHUB_OUTPUT"
+          echo "EXPECTED_MIGRATIONS=$expected" >> "$GITHUB_ENV"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+
+          if [[ "$migration_required" == "true" ]]; then
+            echo "Production ledger is $actual/$expected; migration is required."
+          else
+            echo "Production ledger is already $actual/$expected; entering qualification-only resume mode."
+          fi
+
       - name: Create retained pre-migration Neon checkpoint
+        if: steps.ledger.outputs.migration_required == 'true'
         id: checkpoint
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           PRODUCTION_BRANCH_ID: ${{ steps.production.outputs.branch_id }}
+          BRANCH_COUNT: ${{ steps.production.outputs.branch_count }}
         run: |
           set -euo pipefail
+
+          [[ "$BRANCH_COUNT" -lt "$FREE_BRANCH_LIMIT" ]] || {
+            echo "Production migration is blocked: ${BRANCH_COUNT}/${FREE_BRANCH_LIMIT} Neon branches are in use and one slot is required for the pre-migration checkpoint." >&2
+            exit 1
+          }
+
           checkpoint_name="production-pre-migration-${GITHUB_RUN_ID}"
           payload="$(jq -cn --arg name "$checkpoint_name" --arg parent "$PRODUCTION_BRANCH_ID" '{branch:{name:$name,parent_id:$parent}}')"
 
@@ -302,29 +354,26 @@ jobs:
 
           echo "name=$checkpoint_name" >> "$GITHUB_OUTPUT"
           echo "id=$checkpoint_id" >> "$GITHUB_OUTPUT"
-          echo "Created retained checkpoint ${checkpoint_name} (${checkpoint_id}) before any schema migration."
+          echo "Created retained checkpoint ${checkpoint_name} (${checkpoint_id}) before schema migration."
 
       - name: Apply pinned versioned Drizzle migrations
+        if: steps.ledger.outputs.migration_required == 'true'
         shell: bash
-        env:
-          MIGRATOR_DATABASE_URL: ${{ steps.connections.outputs.migrator_url }}
         run: |
           set -euo pipefail
-          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
-          fi
-          echo "::add-mask::$OWNER_DATABASE_URL"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
-          expected="$(jq '.entries | length' packages/database/migrations/meta/_journal.json)"
-          actual="$(psql "$OWNER_DATABASE_URL" -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
-          [[ "$actual" == "$expected" ]] || {
-            echo "Production migration ledger mismatch: expected $expected, found $actual" >&2
+
+      - name: Verify Production migration ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc \
+            'select count(*) from drizzle.__drizzle_migrations;')"
+          [[ "$actual" == "$EXPECTED_MIGRATIONS" ]] || {
+            echo "Production migration ledger mismatch: expected $EXPECTED_MIGRATIONS, found $actual" >&2
             exit 1
           }
-          echo "EXPECTED_MIGRATIONS=$expected" >> "$GITHUB_ENV"
-          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          echo "Migration ledger verified at ${actual}/${EXPECTED_MIGRATIONS}."
 
       - name: Verify Wave 0024 schema and audit invariants
         shell: bash
@@ -345,14 +394,23 @@ jobs:
         shell: bash
         run: |
           {
-            echo "## Neon Production migration passed — Free-tier profile"
+            echo "## Neon Production migration/qualification passed — Free-tier profile"
             echo ""
             echo "- Branch: production"
             echo "- Branch type: root/default"
             echo "- Release SHA: ${{ inputs.release_sha }}"
             echo "- Free-tier risk acknowledgement: explicit"
-            echo "- Restore/history window observed before migration: ${{ steps.production.outputs.history_seconds }} seconds"
-            echo "- Pre-migration checkpoint retained: ${{ steps.checkpoint.outputs.name }} (${{ steps.checkpoint.outputs.id }})"
+            echo "- Restore/history window observed: ${{ steps.production.outputs.history_seconds }} seconds"
+            echo "- Ledger before this run: ${{ steps.ledger.outputs.actual_before }}/${{ steps.ledger.outputs.expected }}"
+            if [[ "${{ steps.ledger.outputs.migration_required }}" == "true" ]]; then
+              echo "- Execution mode: migration + qualification"
+              echo "- Pre-migration checkpoint retained: ${{ steps.checkpoint.outputs.name }} (${{ steps.checkpoint.outputs.id }})"
+              echo "- Migrations applied this run: yes"
+            else
+              echo "- Execution mode: qualification-only resume"
+              echo "- Pre-migration checkpoint created this run: no"
+              echo "- Migrations applied this run: no"
+            fi
             echo "- TLS: verified client-side for admin, migrator and runtime connections"
             echo "- TLS protocol policy: TLSv1.2 or TLSv1.3 only"
             echo "- Server authentication: CA + hostname verification (sslmode=verify-full)"
@@ -364,5 +422,5 @@ jobs:
             echo "- Railway variables changed: no"
             echo "- API redeployed: no"
             echo ""
-            echo "Keep the checkpoint until Railway/API Production qualification is complete; remove old checkpoints deliberately to remain within the 10-branch Free limit."
+            echo "Keep retained Production checkpoints until Railway/API Production qualification is complete; remove old checkpoints deliberately to remain within the 10-branch Free limit."
           } >> "$GITHUB_STEP_SUMMARY"
