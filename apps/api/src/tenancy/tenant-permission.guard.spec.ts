@@ -26,25 +26,19 @@ function permissionService(allowed: boolean): TenantPermissionService {
   } as unknown as TenantPermissionService;
 }
 
-test('permission guard denies by default when no permission metadata exists', async () => {
+test('denies without permission metadata', async () => {
   const guard = new TenantPermissionGuard(reflector(), permissionService(true));
 
   await assert.rejects(() => guard.canActivate(context()), ForbiddenException);
 });
 
-test(
-  'permission guard denies when the active membership lacks the required permission',
-  async () => {
-    const guard = new TenantPermissionGuard(
-      reflector('freight.read'),
-      permissionService(false),
-    );
+test('denies missing permission', async () => {
+  const guard = new TenantPermissionGuard(reflector('freight.read'), permissionService(false));
 
-    await assert.rejects(() => guard.canActivate(context()), ForbiddenException);
-  },
-);
+  await assert.rejects(() => guard.canActivate(context()), ForbiddenException);
+});
 
-test('permission guard allows when the active membership has the required permission', async () => {
+test('allows granted permission', async () => {
   const guard = new TenantPermissionGuard(reflector('freight.read'), permissionService(true));
 
   assert.equal(await guard.canActivate(context()), true);
