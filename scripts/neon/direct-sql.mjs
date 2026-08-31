@@ -11,7 +11,7 @@ const DEFAULT_ENVIRONMENT = 'development';
 const BRANCH_BY_ENVIRONMENT = Object.freeze({
   development: 'development',
   staging: 'staging',
-  production: 'main',
+  production: 'production',
 });
 
 function fail(message) {

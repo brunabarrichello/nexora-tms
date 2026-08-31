@@ -55,7 +55,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: neondb
           role: neondb_owner
@@ -74,6 +74,7 @@ jobs:
       - name: Bootstrap migration capability
         env:
           ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
@@ -87,7 +88,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: neondb
           role: nexora_migrator
@@ -203,7 +204,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: neondb
           role: nexora_app
