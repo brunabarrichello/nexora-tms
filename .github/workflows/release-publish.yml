@@ -1,0 +1,138 @@
+name: Publish Nexora Release
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/releases/v0.1.0.md'
+      - '.github/workflows/release-publish.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-v0-1-0:
+    name: Publish v0.1.0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RELEASE_VERSION: v0.1.0
+      RELEASE_TARGET_SHA: ed52490e1872d645ae06ab402fe646a497333b7b
+      RELEASE_NOTES_FILE: docs/releases/v0.1.0.md
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Validate immutable release target
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          [[ "$RELEASE_TARGET_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            echo "Release target must be a full 40-character SHA." >&2
+            exit 1
+          }
+
+          git cat-file -e "${RELEASE_TARGET_SHA}^{commit}"
+          git merge-base --is-ancestor "$RELEASE_TARGET_SHA" origin/main || {
+            echo "Release target is not in main history." >&2
+            exit 1
+          }
+
+          successful_ci="$({
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TARGET_SHA}/check-runs" \
+              --jq '[.check_runs[] | select(.name == "Build, typecheck and test" and .conclusion == "success")] | length'
+          })"
+
+          [[ "$successful_ci" -ge 1 ]] || {
+            echo "Required release CI is not green for ${RELEASE_TARGET_SHA}." >&2
+            exit 1
+          }
+
+          test -s "$RELEASE_NOTES_FILE" || {
+            echo "Release notes are missing or empty." >&2
+            exit 1
+          }
+
+          echo "Release target and required CI verified."
+
+      - name: Publish idempotent GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          existing_ref="$({
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_VERSION}" \
+              --jq '.object.sha' 2>/dev/null || true
+          })"
+
+          if [[ -n "$existing_ref" && "$existing_ref" != "$RELEASE_TARGET_SHA" ]]; then
+            echo "Existing tag ${RELEASE_VERSION} points to ${existing_ref}, not ${RELEASE_TARGET_SHA}." >&2
+            exit 1
+          fi
+
+          if gh release view "$RELEASE_VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            [[ "$existing_ref" == "$RELEASE_TARGET_SHA" ]] || {
+              echo "Existing release has an unexpected tag target." >&2
+              exit 1
+            }
+            echo "Release ${RELEASE_VERSION} already exists at the approved target."
+            exit 0
+          fi
+
+          if [[ -n "$existing_ref" ]]; then
+            gh release create "$RELEASE_VERSION" \
+              --repo "$GITHUB_REPOSITORY" \
+              --verify-tag \
+              --title "Nexora TMS ${RELEASE_VERSION}" \
+              --notes-file "$RELEASE_NOTES_FILE"
+          else
+            gh release create "$RELEASE_VERSION" \
+              --repo "$GITHUB_REPOSITORY" \
+              --target "$RELEASE_TARGET_SHA" \
+              --title "Nexora TMS ${RELEASE_VERSION}" \
+              --notes-file "$RELEASE_NOTES_FILE"
+          fi
+
+      - name: Verify published release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          tag_sha="$(gh api \
+            -H 'Accept: application/vnd.github+json' \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/${RELEASE_VERSION}" \
+            --jq '.object.sha')"
+
+          [[ "$tag_sha" == "$RELEASE_TARGET_SHA" ]] || {
+            echo "Published tag target mismatch: ${tag_sha}." >&2
+            exit 1
+          }
+
+          release_tag="$(gh release view "$RELEASE_VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --json tagName \
+            --jq '.tagName')"
+
+          [[ "$release_tag" == "$RELEASE_VERSION" ]] || {
+            echo "Published release tag mismatch: ${release_tag}." >&2
+            exit 1
+          }
+
+          echo "${RELEASE_VERSION} published at ${RELEASE_TARGET_SHA}."
