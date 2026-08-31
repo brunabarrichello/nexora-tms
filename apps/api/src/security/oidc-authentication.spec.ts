@@ -19,7 +19,14 @@ import {
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
-function executionContextFor(request: AuthenticatedHttpRequest): ExecutionContext {
+type VerifiedIdentity = {
+  providerKey: string;
+  subject: string;
+};
+
+function executionContextFor(
+  request: AuthenticatedHttpRequest,
+): ExecutionContext {
   return {
     switchToHttp: () => ({
       getRequest: () => request,
@@ -27,7 +34,7 @@ function executionContextFor(request: AuthenticatedHttpRequest): ExecutionContex
   } as unknown as ExecutionContext;
 }
 
-function verifier(result: { providerKey: string; subject: string }): OidcTokenVerifierService {
+function verifier(result: VerifiedIdentity): OidcTokenVerifierService {
   return { verify: async () => result } as unknown as OidcTokenVerifierService;
 }
 
@@ -40,7 +47,9 @@ function rejectedVerifier(): OidcTokenVerifierService {
 }
 
 function identities(userId?: string): ExternalIdentityService {
-  return { resolveActiveUser: async () => userId } as unknown as ExternalIdentityService;
+  return {
+    resolveActiveUser: async () => userId,
+  } as unknown as ExternalIdentityService;
 }
 
 function audit(events: PretenantAuthEvent[]): PretenantAuthAuditService {
@@ -51,7 +60,7 @@ function audit(events: PretenantAuthEvent[]): PretenantAuthAuditService {
   } as unknown as PretenantAuthAuditService;
 }
 
-test('OIDC guard rejects requests without a bearer token and audits without token data', async () => {
+test('missing bearer is audited without token data', async () => {
   const events: PretenantAuthEvent[] = [];
   const guard = new OidcAuthenticationGuard(
     verifier({ providerKey: 'test-idp', subject: 'subject-1' }),
@@ -75,7 +84,7 @@ test('OIDC guard rejects requests without a bearer token and audits without toke
   ]);
 });
 
-test('OIDC guard audits rejected bearer tokens without persisting the bearer value', async () => {
+test('rejected bearer is audited without the bearer value', async () => {
   const events: PretenantAuthEvent[] = [];
   const guard = new OidcAuthenticationGuard(
     rejectedVerifier(),
@@ -99,10 +108,13 @@ test('OIDC guard audits rejected bearer tokens without persisting the bearer val
       correlationId: undefined,
     },
   ]);
-  assert.equal(JSON.stringify(events).includes('do-not-persist-this-token'), false);
+  assert.equal(
+    JSON.stringify(events).includes('do-not-persist-this-token'),
+    false,
+  );
 });
 
-test('OIDC guard maps a verified identity to the trusted internal principal and audits success', async () => {
+test('verified identity maps to principal and audits success', async () => {
   const events: PretenantAuthEvent[] = [];
   const request: AuthenticatedHttpRequest = {
     headers: { authorization: 'Bearer signed-token' },
@@ -122,7 +134,7 @@ test('OIDC guard maps a verified identity to the trusted internal principal and 
   assert.equal(events[0]?.userId, USER_ID);
 });
 
-test('OIDC guard rejects and audits verified identities not linked to an active user', async () => {
+test('unlinked identity is rejected and audited', async () => {
   const events: PretenantAuthEvent[] = [];
   const guard = new OidcAuthenticationGuard(
     verifier({ providerKey: 'test-idp', subject: 'unknown-subject' }),
@@ -139,7 +151,7 @@ test('OIDC guard rejects and audits verified identities not linked to an active 
   assert.equal(events[0]?.eventType, 'auth.identity.unlinked');
 });
 
-test('pre-tenant auth identifiers are UUIDv7 and subjects are one-way fingerprinted', () => {
+test('pre-tenant ids are UUIDv7 and subjects are fingerprinted', () => {
   const id = createUuidV7(1_788_218_700_000);
   assert.match(
     id,
@@ -151,7 +163,7 @@ test('pre-tenant auth identifiers are UUIDv7 and subjects are one-way fingerprin
   assert.equal(fingerprint.includes('private-subject'), false);
 });
 
-test('OIDC configuration preserves the canonical issuer including a trailing slash', () => {
+test('OIDC config preserves an issuer trailing slash', () => {
   const names = [
     'OIDC_PROVIDER_KEY',
     'OIDC_ISSUER_URL',
@@ -159,15 +171,15 @@ test('OIDC configuration preserves the canonical issuer including a trailing sla
     'OIDC_AUDIENCE',
     'OIDC_ALLOWED_ALGORITHMS',
   ] as const;
-  const previous = Object.fromEntries(names.map((name) => [name, process.env[name]])) as Record<
-    (typeof names)[number],
-    string | undefined
-  >;
+  const previous = Object.fromEntries(
+    names.map((name) => [name, process.env[name]]),
+  ) as Record<(typeof names)[number], string | undefined>;
 
   try {
     process.env.OIDC_PROVIDER_KEY = 'auth0';
     process.env.OIDC_ISSUER_URL = 'https://nexora-dev.us.auth0.com/';
-    process.env.OIDC_JWKS_URL = 'https://nexora-dev.us.auth0.com/.well-known/jwks.json';
+    process.env.OIDC_JWKS_URL =
+      'https://nexora-dev.us.auth0.com/.well-known/jwks.json';
     process.env.OIDC_AUDIENCE = 'urn:nexora:tms:api:development';
     process.env.OIDC_ALLOWED_ALGORITHMS = 'RS256';
 
@@ -191,7 +203,7 @@ test('OIDC configuration preserves the canonical issuer including a trailing sla
   }
 });
 
-test('OIDC JWT verification enforces signature, exact issuer and audience', async () => {
+test('OIDC JWT verification enforces issuer and audience', async () => {
   const { privateKey, publicKey } = await generateKeyPair('RS256');
   const issuer = 'https://nexora-dev.us.auth0.com/';
   const audience = 'urn:nexora:tms:api:development';
