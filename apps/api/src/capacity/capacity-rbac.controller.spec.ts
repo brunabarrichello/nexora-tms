@@ -15,10 +15,7 @@ function assertHandlerPermission(method: (...args: never[]) => unknown, permissi
 }
 
 test('Capacity controllers default to capacity.read', () => {
-  assert.equal(
-    reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssetController),
-    'capacity.read',
-  );
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssetController), 'capacity.read');
   assert.equal(
     reflector.get(REQUIRED_TENANT_PERMISSION, CapacityAssignmentController),
     'capacity.read',
