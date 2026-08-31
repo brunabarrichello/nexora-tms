@@ -7,13 +7,19 @@ export type ObservableRequest = IncomingMessage & {
   originalUrl?: string;
 };
 
-function firstHeaderValue(value: string | string[] | undefined): string | undefined {
+function firstHeaderValue(
+  value: string | string[] | undefined,
+): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
 
 function resolveCorrelationId(request: ObservableRequest): string {
-  const incoming = firstHeaderValue(request.headers['x-correlation-id'])?.trim();
-  return incoming && CORRELATION_ID_PATTERN.test(incoming) ? incoming : randomUUID();
+  const incoming = firstHeaderValue(
+    request.headers['x-correlation-id'],
+  )?.trim();
+  return incoming && CORRELATION_ID_PATTERN.test(incoming)
+    ? incoming
+    : randomUUID();
 }
 
 function resolvePath(request: ObservableRequest): string {
@@ -56,7 +62,11 @@ export function httpObservabilityMiddleware(
   response.once('finish', () => {
     const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
     const level =
-      response.statusCode >= 500 ? 'error' : response.statusCode >= 400 ? 'warn' : 'info';
+      response.statusCode >= 500
+        ? 'error'
+        : response.statusCode >= 400
+          ? 'warn'
+          : 'info';
 
     process.stdout.write(
       `${JSON.stringify({
