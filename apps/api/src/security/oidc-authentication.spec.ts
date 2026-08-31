@@ -10,6 +10,12 @@ import { OidcAuthenticationGuard } from './oidc-authentication.guard.js';
 import { OidcConfigService } from './oidc-config.service.js';
 import type { OidcTokenVerifierService } from './oidc-token-verifier.service.js';
 import { verifyOidcJwt } from './oidc-token-verifier.service.js';
+import {
+  createUuidV7,
+  fingerprintExternalSubject,
+  type PretenantAuthAuditService,
+  type PretenantAuthEvent,
+} from './pretenant-auth-audit.service.js';
 
 const USER_ID = '11111111-1111-4111-8111-111111111111';
 
@@ -27,31 +33,82 @@ function verifier(result: { providerKey: string; subject: string }): OidcTokenVe
   } as unknown as OidcTokenVerifierService;
 }
 
+function rejectedVerifier(): OidcTokenVerifierService {
+  return {
+    verify: async () => {
+      throw new UnauthorizedException('Bearer token is invalid or expired');
+    },
+  } as unknown as OidcTokenVerifierService;
+}
+
 function identities(userId?: string): ExternalIdentityService {
   return {
     resolveActiveUser: async () => userId,
   } as unknown as ExternalIdentityService;
 }
 
-test('OIDC guard rejects requests without a bearer token', async () => {
+function audit(events: PretenantAuthEvent[]): PretenantAuthAuditService {
+  return {
+    record: async (event: PretenantAuthEvent) => {
+      events.push(event);
+    },
+  } as unknown as PretenantAuthAuditService;
+}
+
+test('OIDC guard rejects requests without a bearer token and audits the denial', async () => {
+  const events: PretenantAuthEvent[] = [];
   const guard = new OidcAuthenticationGuard(
     verifier({ providerKey: 'test-idp', subject: 'subject-1' }),
     identities(USER_ID),
+    audit(events),
   );
 
   await assert.rejects(
-    guard.canActivate(executionContextFor({ headers: {} })),
+    guard.canActivate(executionContextFor({ headers: { 'x-request-id': 'request-1' } })),
     (error: unknown) => error instanceof UnauthorizedException,
   );
+  assert.deepEqual(events, [
+    {
+      eventType: 'auth.bearer.missing',
+      outcome: 'denied',
+      requestId: 'request-1',
+      correlationId: undefined,
+    },
+  ]);
+});
+
+test('OIDC guard audits rejected bearer tokens without storing the bearer value', async () => {
+  const events: PretenantAuthEvent[] = [];
+  const guard = new OidcAuthenticationGuard(rejectedVerifier(), identities(USER_ID), audit(events));
+
+  await assert.rejects(
+    guard.canActivate(
+      executionContextFor({
+        headers: { authorization: 'Bearer do-not-persist-this-token' },
+      }),
+    ),
+    (error: unknown) => error instanceof UnauthorizedException,
+  );
+  assert.deepEqual(events, [
+    {
+      eventType: 'auth.bearer.rejected',
+      outcome: 'denied',
+      requestId: undefined,
+      correlationId: undefined,
+    },
+  ]);
+  assert.equal(JSON.stringify(events).includes('do-not-persist-this-token'), false);
 });
 
 test('OIDC guard maps a verified identity to the trusted internal principal', async () => {
+  const events: PretenantAuthEvent[] = [];
   const request: AuthenticatedHttpRequest = {
     headers: { authorization: 'Bearer signed-token' },
   };
   const guard = new OidcAuthenticationGuard(
     verifier({ providerKey: 'test-idp', subject: 'subject-1' }),
     identities(USER_ID),
+    audit(events),
   );
 
   assert.equal(await guard.canActivate(executionContextFor(request)), true);
@@ -59,12 +116,16 @@ test('OIDC guard maps a verified identity to the trusted internal principal', as
     subject: 'test-idp|subject-1',
     userId: USER_ID,
   });
+  assert.equal(events[0]?.eventType, 'auth.identity.accepted');
+  assert.equal(events[0]?.userId, USER_ID);
 });
 
 test('OIDC guard rejects verified identities that are not linked to an active user', async () => {
+  const events: PretenantAuthEvent[] = [];
   const guard = new OidcAuthenticationGuard(
     verifier({ providerKey: 'test-idp', subject: 'unknown-subject' }),
     identities(undefined),
+    audit(events),
   );
 
   await assert.rejects(
@@ -75,6 +136,16 @@ test('OIDC guard rejects verified identities that are not linked to an active us
     ),
     (error: unknown) => error instanceof UnauthorizedException,
   );
+  assert.equal(events[0]?.eventType, 'auth.identity.unlinked');
+});
+
+test('pre-tenant auth identifiers use UUIDv7 and one-way subject fingerprints', () => {
+  const id = createUuidV7(1_788_218_700_000);
+  assert.match(id, /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+
+  const fingerprint = fingerprintExternalSubject('auth0', 'private-subject');
+  assert.match(fingerprint, /^[0-9a-f]{64}$/);
+  assert.equal(fingerprint.includes('private-subject'), false);
 });
 
 test('OIDC configuration preserves the canonical issuer including a trailing slash', () => {
