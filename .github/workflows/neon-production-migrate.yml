@@ -170,8 +170,6 @@ jobs:
 
       - name: Verify Wave 0024 schema and audit invariants
         shell: bash
-        env:
-          OWNER_DATABASE_URL: ${{ env.OWNER_DATABASE_URL }}
         run: |
           set -euo pipefail
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
