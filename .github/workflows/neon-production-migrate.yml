@@ -128,7 +128,7 @@ jobs:
 
           echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
 
-      - name: Verify production retention and network perimeter
+      - name: Verify production retention and permanent network perimeter
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -140,17 +140,80 @@ jobs:
 
           history_seconds="$(jq -er '.project.history_retention_seconds' <<<"$project_json")"
           block_public="$(jq -er '.project.settings.block_public_connections' <<<"$project_json")"
+          protected_only="$(jq -er '.project.settings.allowed_ips.protected_branches_only' <<<"$project_json")"
           allowed_ip_count="$(jq -er '.project.settings.allowed_ips.ips | length' <<<"$project_json")"
 
           [[ "$history_seconds" -ge "$MIN_PRODUCTION_HISTORY_SECONDS" ]] || {
             echo "Production migration is blocked: history window must be at least 7 days (${MIN_PRODUCTION_HISTORY_SECONDS}s), found ${history_seconds}s." >&2
             exit 1
           }
-
-          if [[ "$block_public" != "true" && "$allowed_ip_count" -eq 0 ]]; then
-            echo "Production migration is blocked: configure a restricted network perimeter using IP Allow or private networking before migration." >&2
+          [[ "$block_public" == "false" ]] || {
+            echo "Production migration is blocked: this workflow requires public connectivity constrained by explicit IP Allow entries." >&2
             exit 1
+          }
+          [[ "$protected_only" == "true" ]] || {
+            echo "Production migration is blocked: IP Allow must be scoped to protected branches only." >&2
+            exit 1
+          }
+          [[ "$allowed_ip_count" -gt 0 ]] || {
+            echo "Production migration is blocked: the permanent Railway static egress allowlist is empty." >&2
+            exit 1
+          }
+
+      - name: Temporarily allow this GitHub runner IPv4
+        id: runner_perimeter
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          runner_ip="$(curl -fsS --max-time 10 https://api.ipify.org)"
+          python3 - "$runner_ip" <<'PY'
+          import ipaddress
+          import sys
+          address = ipaddress.ip_address(sys.argv[1])
+          if address.version != 4:
+              raise SystemExit("GitHub runner did not resolve to an IPv4 address.")
+          PY
+          runner_cidr="${runner_ip}/32"
+
+          project_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
+          current_ips="$(jq -c '.project.settings.allowed_ips.ips' <<<"$project_json")"
+          protected_only="$(jq -er '.project.settings.allowed_ips.protected_branches_only' <<<"$project_json")"
+
+          [[ "$protected_only" == "true" ]] || {
+            echo "Refusing temporary runner access because protected-branch-only IP Allow is not enabled." >&2
+            exit 1
+          }
+
+          if jq -e --arg cidr "$runner_cidr" 'index($cidr) != null' <<<"$current_ips" >/dev/null; then
+            echo "Runner IPv4 is already present in the allowlist; no temporary entry will be removed later."
+            echo "added=false" >> "$GITHUB_OUTPUT"
+          else
+            updated_ips="$(jq -c --arg cidr "$runner_cidr" '. + [$cidr] | unique' <<<"$current_ips")"
+            payload="$(jq -cn --argjson ips "$updated_ips" '{project:{settings:{allowed_ips:{ips:$ips,protected_branches_only:true}}}}')"
+
+            curl -fsS -X PATCH \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              -H "Content-Type: application/json" \
+              -d "$payload" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}" >/dev/null
+
+            verify_json="$(curl -fsS \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
+            jq -e --arg cidr "$runner_cidr" '.project.settings.allowed_ips.ips | index($cidr) != null' <<<"$verify_json" >/dev/null || {
+              echo "Temporary GitHub runner /32 was not applied." >&2
+              exit 1
+            }
+            echo "added=true" >> "$GITHUB_OUTPUT"
           fi
+
+          echo "runner_cidr=$runner_cidr" >> "$GITHUB_OUTPUT"
+          echo "GitHub runner network access is constrained to one IPv4 /32 for this migration window."
 
       - name: Resolve production connection strings without creating branches
         id: connections
@@ -247,6 +310,50 @@ jobs:
           set -euo pipefail
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-runtime.sql
 
+      - name: Remove temporary GitHub runner IPv4
+        if: ${{ always() && steps.runner_perimeter.outputs.added == 'true' }}
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          RUNNER_CIDR: ${{ steps.runner_perimeter.outputs.runner_cidr }}
+        run: |
+          set -euo pipefail
+          test -n "${RUNNER_CIDR:-}" || {
+            echo "Runner CIDR output is missing; refusing ambiguous allowlist mutation." >&2
+            exit 1
+          }
+
+          project_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
+          current_ips="$(jq -c '.project.settings.allowed_ips.ips' <<<"$project_json")"
+          updated_ips="$(jq -c --arg cidr "$RUNNER_CIDR" 'map(select(. != $cidr))' <<<"$current_ips")"
+
+          [[ "$(jq 'length' <<<"$updated_ips")" -gt 0 ]] || {
+            echo "Refusing to remove the temporary runner entry because it would leave Production with an empty permanent allowlist." >&2
+            exit 1
+          }
+
+          payload="$(jq -cn --argjson ips "$updated_ips" '{project:{settings:{allowed_ips:{ips:$ips,protected_branches_only:true}}}}')"
+          curl -fsS -X PATCH \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}" >/dev/null
+
+          verify_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
+          if jq -e --arg cidr "$RUNNER_CIDR" '.project.settings.allowed_ips.ips | index($cidr) != null' <<<"$verify_json" >/dev/null; then
+            echo "Temporary GitHub runner /32 remains in the allowlist after cleanup." >&2
+            exit 1
+          fi
+          [[ "$(jq -er '.project.settings.allowed_ips.protected_branches_only' <<<"$verify_json")" == "true" ]] || {
+            echo "Protected-branch-only IP Allow was not preserved during cleanup." >&2
+            exit 1
+          }
+          echo "Temporary GitHub runner /32 removed; permanent Railway perimeter preserved."
+
       - name: Production migration summary
         shell: bash
         run: |
@@ -256,7 +363,8 @@ jobs:
             echo "- Branch: production"
             echo "- Branch type: root/default/protected"
             echo "- Minimum history window: >= 7 days"
-            echo "- Network perimeter: restricted"
+            echo "- Permanent network perimeter: restricted to approved static egress IPs"
+            echo "- Migration runner access: one temporary IPv4 /32, automatically removed when added by this run"
             echo "- Release SHA: ${{ inputs.release_sha }}"
             echo "- Versioned migrations: ${EXPECTED_MIGRATIONS}"
             echo "- Migration ledger: verified"
