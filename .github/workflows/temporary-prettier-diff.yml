@@ -1,0 +1,29 @@
+name: Temporary Prettier Diff
+
+on:
+  push:
+    branches:
+      - hardening/nex-84-authenticated-tenant-e2e
+
+permissions:
+  contents: read
+
+jobs:
+  prettier-diff:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+      - run: pnpm install --frozen-lockfile
+      - name: Show canonical Prettier diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write apps/api/scripts/ci-oidc-fixture.mjs
+          git diff -- apps/api/scripts/ci-oidc-fixture.mjs
