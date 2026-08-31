@@ -1,0 +1,373 @@
+name: API Authenticated Tenant E2E
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/api/**'
+      - '.github/workflows/api-authenticated-tenant-e2e.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: api-authenticated-tenant-e2e-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: neondb
+  TENANT_A: '53000000-0000-4000-8000-000000000001'
+  TENANT_B: '53000000-0000-4000-8000-000000000002'
+  USER_A: '53000000-0000-4000-8000-000000000101'
+  PARTY_A: '53000000-0000-4000-8000-000000000201'
+  PARTY_B: '53000000-0000-4000-8000-000000000202'
+  OIDC_ISSUER: 'https://127.0.0.1:9443/'
+  OIDC_AUDIENCE: 'urn:nexora:tms:api:ci-e2e'
+  API_BASE_URL: 'http://127.0.0.1:3011'
+
+jobs:
+  authenticated-tenant-e2e:
+    name: Authenticated API two-tenant isolation E2E
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || {
+            echo 'NEON_API_KEY repository secret is not configured.' >&2
+            exit 1
+          }
+
+      - name: Set isolated branch identity and expiry
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-auth-e2e-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch from staging
+        id: create-neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: staging
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client is available
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Migrate and seed two-tenant authenticated fixtures
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *'?'* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+
+          roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
+          [[ "$roles" == 'nexora_migrator:nexora_owner' ]] || {
+            echo "Unexpected migration role chain: $roles" >&2
+            exit 1
+          }
+
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO tenants (id, slug, name, status) VALUES
+            ('53000000-0000-4000-8000-000000000001', 'auth-e2e-a', 'Auth E2E Tenant A', 'active'),
+            ('53000000-0000-4000-8000-000000000002', 'auth-e2e-b', 'Auth E2E Tenant B', 'active');
+
+          INSERT INTO users (id, display_name, status) VALUES
+            ('53000000-0000-4000-8000-000000000101', 'Auth E2E User A', 'active');
+
+          INSERT INTO external_identities (id, user_id, provider, subject) VALUES
+            ('53000000-0000-4000-8000-000000000111', '53000000-0000-4000-8000-000000000101', 'ci-auth-e2e', 'subject-user-a');
+
+          INSERT INTO memberships (id, tenant_id, user_id, status) VALUES
+            ('53000000-0000-4000-8000-000000000121', '53000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000101', 'active');
+
+          INSERT INTO business_parties (
+            id, tenant_id, tax_id, legal_name, email, status, homologation_status
+          ) VALUES
+            ('53000000-0000-4000-8000-000000000201', '53000000-0000-4000-8000-000000000001', '11222333000181', 'Auth E2E Tenant A Seed Party', 'tenant-a@example.test', 'active', NULL),
+            ('53000000-0000-4000-8000-000000000202', '53000000-0000-4000-8000-000000000002', '22333444000192', 'Auth E2E Tenant B Seed Party', 'tenant-b@example.test', 'active', NULL);
+
+          INSERT INTO business_party_roles (tenant_id, party_id, role) VALUES
+            ('53000000-0000-4000-8000-000000000001', '53000000-0000-4000-8000-000000000201', 'customer'),
+            ('53000000-0000-4000-8000-000000000002', '53000000-0000-4000-8000-000000000202', 'customer');
+          SQL
+
+      - name: Resolve nexora_app connection
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name nexora_app)"
+          test -n "$APP_DATABASE_URL"
+          echo "::add-mask::$APP_DATABASE_URL"
+
+          identity="$(psql "$APP_DATABASE_URL" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
+          [[ "$identity" == 'nexora_app|nexora_app|f' ]] || {
+            echo "Unexpected API runtime identity: $identity" >&2
+            exit 1
+          }
+
+          echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Build API
+        run: pnpm --filter @nexora/api build
+
+      - name: Create trusted local HTTPS OIDC fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl req -x509 -newkey rsa:2048 -nodes \
+            -keyout /tmp/nexora-ci-tls-key.pem \
+            -out /tmp/nexora-ci-tls-cert.pem \
+            -days 1 \
+            -subj '/CN=127.0.0.1' \
+            -addext 'subjectAltName=IP:127.0.0.1' >/dev/null 2>&1
+
+          OIDC_FIXTURE_ISSUER="$OIDC_ISSUER" \
+          OIDC_FIXTURE_AUDIENCE="$OIDC_AUDIENCE" \
+          OIDC_FIXTURE_SUBJECT='subject-user-a' \
+          OIDC_FIXTURE_TOKEN_FILE='/tmp/nexora-ci-access-token' \
+          OIDC_FIXTURE_CERT_FILE='/tmp/nexora-ci-tls-cert.pem' \
+          OIDC_FIXTURE_TLS_KEY_FILE='/tmp/nexora-ci-tls-key.pem' \
+          node apps/api/scripts/ci-oidc-fixture.mjs > /tmp/nexora-ci-oidc.log 2>&1 &
+          echo $! > /tmp/nexora-ci-oidc.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --cacert /tmp/nexora-ci-tls-cert.pem \
+              https://127.0.0.1:9443/health >/dev/null 2>&1 && \
+              [[ -s /tmp/nexora-ci-access-token ]]; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/nexora-ci-oidc.log >&2 || true
+          echo 'OIDC fixture did not become ready.' >&2
+          exit 1
+
+      - name: Start API against isolated Neon and CI OIDC
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_ENV=ci \
+          APP_NAME=nexora-tms-api \
+          NODE_ENV=test \
+          TZ=UTC \
+          PORT=3011 \
+          DATABASE_URL="$APP_DATABASE_URL" \
+          DATABASE_POOL_MAX=2 \
+          AUTH_DATABASE_POOL_MAX=2 \
+          OIDC_PROVIDER_KEY=ci-auth-e2e \
+          OIDC_ISSUER_URL="$OIDC_ISSUER" \
+          OIDC_JWKS_URL='https://127.0.0.1:9443/.well-known/jwks.json' \
+          OIDC_AUDIENCE="$OIDC_AUDIENCE" \
+          OIDC_ALLOWED_ALGORITHMS=RS256 \
+          NODE_EXTRA_CA_CERTS=/tmp/nexora-ci-tls-cert.pem \
+          node apps/api/dist/main.js > /tmp/nexora-ci-api.log 2>&1 &
+          echo $! > /tmp/nexora-ci-api.pid
+
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error "$API_BASE_URL/health/ready" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/nexora-ci-api.log >&2 || true
+          echo 'API did not become ready.' >&2
+          exit 1
+
+      - name: Run authenticated two-tenant HTTP E2E
+        shell: bash
+        run: |
+          set -euo pipefail
+          TOKEN="$(cat /tmp/nexora-ci-access-token)"
+          test -n "$TOKEN"
+
+          no_auth_status="$(curl --silent --show-error \
+            -o /tmp/e2e-no-auth.json -w '%{http_code}' \
+            "$API_BASE_URL/api/v1/tenant/runtime-gate" \
+            -H "x-nexora-tenant-id: $TENANT_A")"
+          [[ "$no_auth_status" == '401' ]] || {
+            cat /tmp/e2e-no-auth.json >&2
+            echo "Expected unauthenticated runtime gate to return 401, got $no_auth_status" >&2
+            exit 1
+          }
+
+          tenant_a_status="$(curl --silent --show-error \
+            -o /tmp/e2e-tenant-a.json -w '%{http_code}' \
+            "$API_BASE_URL/api/v1/tenant/runtime-gate" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-nexora-tenant-id: $TENANT_A")"
+          [[ "$tenant_a_status" == '200' ]] || {
+            cat /tmp/e2e-tenant-a.json >&2
+            echo "Expected Tenant A runtime gate 200, got $tenant_a_status" >&2
+            exit 1
+          }
+          jq -e --arg tenant "$TENANT_A" \
+            '(.data // .) | .authenticated == true and .rlsIsolated == true and .tenantId == $tenant' \
+            /tmp/e2e-tenant-a.json >/dev/null
+
+          tenant_b_status="$(curl --silent --show-error \
+            -o /tmp/e2e-tenant-b.json -w '%{http_code}' \
+            "$API_BASE_URL/api/v1/tenant/runtime-gate" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-nexora-tenant-id: $TENANT_B")"
+          [[ "$tenant_b_status" == '403' ]] || {
+            cat /tmp/e2e-tenant-b.json >&2
+            echo "Expected cross-tenant runtime selection to return 403, got $tenant_b_status" >&2
+            exit 1
+          }
+
+          list_status="$(curl --silent --show-error \
+            -o /tmp/e2e-party-list.json -w '%{http_code}' \
+            "$API_BASE_URL/api/v1/master-data/business-parties" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-nexora-tenant-id: $TENANT_A")"
+          [[ "$list_status" == '200' ]] || {
+            cat /tmp/e2e-party-list.json >&2
+            echo "Expected Tenant A party list 200, got $list_status" >&2
+            exit 1
+          }
+          jq -e --arg allowed "$PARTY_A" --arg forbidden "$PARTY_B" '
+            (if type == "object" and has("data") then .data else . end) as $items |
+            ($items | type == "array") and
+            ([$items[]?.id] | index($allowed) != null) and
+            ([$items[]?.id] | index($forbidden) == null)
+          ' /tmp/e2e-party-list.json >/dev/null
+
+          create_status="$(curl --silent --show-error \
+            -o /tmp/e2e-create-a.json -w '%{http_code}' \
+            -X POST "$API_BASE_URL/api/v1/master-data/business-parties" \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-nexora-tenant-id: $TENANT_A" \
+            --data '{"taxId":"52998224725","legalName":"Auth E2E Created Party A","roles":["customer"]}')"
+          [[ "$create_status" == '201' ]] || {
+            cat /tmp/e2e-create-a.json >&2
+            echo "Expected Tenant A create 201, got $create_status" >&2
+            exit 1
+          }
+
+          cross_write_status="$(curl --silent --show-error \
+            -o /tmp/e2e-create-b.json -w '%{http_code}' \
+            -X POST "$API_BASE_URL/api/v1/master-data/business-parties" \
+            -H 'Content-Type: application/json' \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "x-nexora-tenant-id: $TENANT_B" \
+            --data '{"taxId":"98765432100","legalName":"Forbidden Cross Tenant Party","roles":["customer"]}')"
+          [[ "$cross_write_status" == '403' ]] || {
+            cat /tmp/e2e-create-b.json >&2
+            echo "Expected cross-tenant write 403, got $cross_write_status" >&2
+            exit 1
+          }
+
+          tenant_a_created="$(psql "$OWNER_DATABASE_URL" -Atqc "select count(*) from business_parties where tenant_id = '$TENANT_A' and tax_id = '52998224725'")"
+          tenant_b_forbidden="$(psql "$OWNER_DATABASE_URL" -Atqc "select count(*) from business_parties where tenant_id = '$TENANT_B' and tax_id = '98765432100'")"
+          [[ "$tenant_a_created" == '1' ]] || {
+            echo "Expected positive Tenant A write to persist exactly once; count=$tenant_a_created" >&2
+            exit 1
+          }
+          [[ "$tenant_b_forbidden" == '0' ]] || {
+            echo "Cross-tenant write unexpectedly persisted; count=$tenant_b_forbidden" >&2
+            exit 1
+          }
+
+          echo 'Authenticated HTTP E2E passed: auth fail-closed, Tenant A positive read/write, Tenant B read/write denial, RLS isolation.'
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '## Authenticated API two-tenant E2E passed'
+            echo ''
+            echo '- OIDC: locally signed RS256 JWT verified through HTTPS JWKS'
+            echo '- external identity: resolved through the real Neon fixture'
+            echo '- Tenant A membership: active and selected through x-nexora-tenant-id'
+            echo '- unauthenticated runtime request: 401'
+            echo '- authenticated Tenant A runtime gate: 200 + rlsIsolated=true'
+            echo '- same principal selecting Tenant B: 403'
+            echo '- Tenant A business-party read: Tenant B row excluded'
+            echo '- Tenant A business-party write: persisted once'
+            echo '- same principal attempting Tenant B write: 403 and zero persistence'
+            echo '- runtime database role: nexora_app with BYPASSRLS=false'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Show service logs on failure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          echo '--- OIDC fixture log ---'
+          cat /tmp/nexora-ci-oidc.log 2>/dev/null || true
+          echo '--- API log ---'
+          cat /tmp/nexora-ci-api.log 2>/dev/null || true
+
+      - name: Stop local E2E processes
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          for pid_file in /tmp/nexora-ci-api.pid /tmp/nexora-ci-oidc.pid; do
+            if [[ -f "$pid_file" ]]; then
+              kill "$(cat "$pid_file")" 2>/dev/null || true
+            fi
+          done
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.create-neon.outputs.branch_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
