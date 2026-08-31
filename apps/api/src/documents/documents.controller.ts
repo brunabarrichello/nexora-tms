@@ -1,11 +1,11 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { DocumentsService, type DocumentRecord } from './documents.service.js';
 import type { PreparedDocumentDownload, PreparedDocumentUpload } from './document-storage.port.js';
 
 @Controller('api/v1/documents')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('documents.read')
 export class DocumentsController {
   constructor(private readonly documents: DocumentsService) {}
 
@@ -15,6 +15,7 @@ export class DocumentsController {
   }
 
   @Post()
+  @TenantAuthorized('documents.write')
   create(@Body() body: unknown): Promise<DocumentRecord> {
     return this.documents.create(body);
   }
@@ -25,11 +26,13 @@ export class DocumentsController {
   }
 
   @Patch(':documentId')
+  @TenantAuthorized('documents.write')
   update(@Param('documentId') documentId: string, @Body() body: unknown): Promise<DocumentRecord> {
     return this.documents.update(documentId, body);
   }
 
   @Post(':documentId/soft-delete')
+  @TenantAuthorized('documents.write')
   softDelete(
     @Param('documentId') documentId: string,
     @Body() body: unknown,
@@ -38,6 +41,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/uploads/prepare')
+  @TenantAuthorized('documents.write')
   prepareUpload(
     @Param('documentId') documentId: string,
     @Body() body: unknown,
@@ -46,6 +50,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/uploads/commit')
+  @TenantAuthorized('documents.write')
   commitUpload(
     @Param('documentId') documentId: string,
     @Body() body: unknown,
@@ -72,6 +77,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/validations')
+  @TenantAuthorized('documents.write')
   validate(
     @Param('documentId') documentId: string,
     @Body() body: unknown,
@@ -80,6 +86,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/links/business-parties/:partyId')
+  @TenantAuthorized('documents.write')
   linkBusinessParty(
     @Param('documentId') documentId: string,
     @Param('partyId') partyId: string,
@@ -89,6 +96,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/links/transport-requests/:requestId')
+  @TenantAuthorized('documents.write')
   linkTransportRequest(
     @Param('documentId') documentId: string,
     @Param('requestId') requestId: string,
@@ -98,6 +106,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/links/drivers/:driverId')
+  @TenantAuthorized('documents.write')
   linkDriver(
     @Param('documentId') documentId: string,
     @Param('driverId') driverId: string,
@@ -106,6 +115,7 @@ export class DocumentsController {
   }
 
   @Post(':documentId/links/assets/:assetId')
+  @TenantAuthorized('documents.write')
   linkAsset(
     @Param('documentId') documentId: string,
     @Param('assetId') assetId: string,
