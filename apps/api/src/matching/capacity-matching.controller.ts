@@ -1,6 +1,6 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import {
   CapacityMatchingService,
   type CapacityMatchingResult,
@@ -12,7 +12,7 @@ interface ExecuteMatchingBody {
 }
 
 @Controller('api/v1/matching')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('matching.read')
 export class CapacityMatchingController {
   constructor(
     private readonly matching: CapacityMatchingService,
@@ -25,6 +25,7 @@ export class CapacityMatchingController {
   }
 
   @Post('requests/:requestId/runs')
+  @TenantAuthorized('matching.write')
   execute(@Param('requestId') requestId: string, @Body() body: ExecuteMatchingBody = {}) {
     return this.persistence.execute(requestId, body.preferenceId);
   }
