@@ -35,7 +35,8 @@ async function provisionInTransaction(
 
 async function run(): Promise<void> {
   const provisionDatabaseUrl = process.env.RBAC_PROVISION_DATABASE_URL?.trim();
-  if (!provisionDatabaseUrl) throw new Error('RBAC_PROVISION_DATABASE_URL is required');
+  if (!provisionDatabaseUrl)
+    throw new Error('RBAC_PROVISION_DATABASE_URL is required');
 
   const target = requireRbacProvisionTarget(process.env.RBAC_PROVISION_TARGET);
   const adminPool = new Pool({
@@ -52,7 +53,11 @@ async function run(): Promise<void> {
     const second = await provisionInTransaction(admin, TENANT_A, target);
     await provisionInTransaction(admin, TENANT_B, target);
 
-    assert.deepEqual(second, first, 'repeat provisioning must produce the same catalog shape');
+    assert.deepEqual(
+      second,
+      first,
+      'repeat provisioning must produce the same catalog shape',
+    );
     assert.equal(first.roleCount, Object.keys(TENANT_ROLE_TEMPLATES).length);
 
     const managedPermissionKeys = Object.values(TENANT_PERMISSIONS);
@@ -89,7 +94,11 @@ async function run(): Promise<void> {
           AND membership_id = $2::uuid`,
       [TENANT_A, MEMBERSHIP_A],
     );
-    assert.equal(assignmentCount.rows[0]?.count, 1, 'fixture membership must receive one viewer role');
+    assert.equal(
+      assignmentCount.rows[0]?.count,
+      1,
+      'fixture membership must receive one viewer role',
+    );
 
     const tenantContext = new TenantContext();
     tenantContext.establish({
@@ -121,7 +130,10 @@ async function run(): Promise<void> {
       tenantId: TENANT_B,
       userId: USER_A,
     });
-    const tenantBPermissions = new TenantPermissionService(tenantBContext, runtimeDatabase);
+    const tenantBPermissions = new TenantPermissionService(
+      tenantBContext,
+      runtimeDatabase,
+    );
     assert.equal(
       await tenantBPermissions.hasPermission('freight.read'),
       false,
