@@ -22,7 +22,7 @@
     "dev:worker": "pnpm build:worker && pnpm start:worker",
     "doctor": "node scripts/doctor.mjs",
     "format": "prettier --write . --ignore-unknown",
-    "format:check": "prettier --write apps/api/src/freight/freight-normalization.service.ts apps/api/src/freight/freight-normalization.validation.ts apps/api/src/freight/freight-normalization.validation.spec.ts && git diff -- apps/api/src/freight/freight-normalization.service.ts apps/api/src/freight/freight-normalization.validation.ts apps/api/src/freight/freight-normalization.validation.spec.ts && exit 1",
+    "format:check": "prettier --check . --ignore-unknown",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "lint:fix": "pnpm lint --fix",
     "neon:sql": "node scripts/neon/direct-sql.mjs",
