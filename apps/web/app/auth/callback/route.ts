@@ -60,7 +60,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     return response;
   } catch {
-    const response = NextResponse.redirect(new URL('/login?error=authentication', config.appBaseUrl));
+    const response = NextResponse.redirect(
+      new URL('/login?error=authentication', config.appBaseUrl),
+    );
     clearTransaction(response, secure);
     response.cookies.set(WEB_SESSION_COOKIE, '', {
       httpOnly: true,
