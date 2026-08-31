@@ -52,8 +52,18 @@ function configFromEnvironment(): ApiSecurityConfig {
       1,
       100_000,
     ),
-    maxTrackedClients: boundedInteger(process.env.RATE_LIMIT_MAX_TRACKED_CLIENTS, 10_000, 100, 100_000),
-    maxBodyBytes: boundedInteger(process.env.MAX_REQUEST_BODY_BYTES, 1_048_576, 1_024, 10_485_760),
+    maxTrackedClients: boundedInteger(
+      process.env.RATE_LIMIT_MAX_TRACKED_CLIENTS,
+      10_000,
+      100,
+      100_000,
+    ),
+    maxBodyBytes: boundedInteger(
+      process.env.MAX_REQUEST_BODY_BYTES,
+      1_048_576,
+      1_024,
+      10_485_760,
+    ),
     trustForwardedFor: process.env.RATE_LIMIT_TRUST_FORWARDED_FOR === 'true',
   };
 }
@@ -94,8 +104,12 @@ function hasRequestBody(request: ApiSecurityRequest): boolean {
     return false;
   }
 
+  if (request.headers['transfer-encoding'] !== undefined) {
+    return true;
+  }
+
   const contentLength = firstHeaderValue(request.headers['content-length']);
-  return contentLength !== '0' || request.headers['transfer-encoding'] !== undefined;
+  return contentLength !== undefined && contentLength !== '0';
 }
 
 function acceptedContentType(request: ApiSecurityRequest): boolean {
@@ -191,9 +205,10 @@ export function createApiSecurityMiddleware(options: ApiSecurityOptions = {}) {
     }
 
     const path = resolvePath(request);
-    const limit = isSensitivePath(path) ? config.sensitiveMaxRequests : config.globalMaxRequests;
+    const sensitive = isSensitivePath(path);
+    const limit = sensitive ? config.sensitiveMaxRequests : config.globalMaxRequests;
     const clientKey = resolveClientKey(request, config.trustForwardedFor);
-    const bucketKey = `${clientKey}:${isSensitivePath(path) ? 'sensitive' : 'global'}`;
+    const bucketKey = `${clientKey}:${sensitive ? 'sensitive' : 'global'}`;
     let window = windows.get(bucketKey);
 
     if (!window || window.resetAt <= currentTime) {
