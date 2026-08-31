@@ -56,4 +56,20 @@ CREATE INDEX "audit_events_tenant_action_idx" ON "audit_events" USING btree ("te
 CREATE INDEX "audit_events_tenant_correlation_idx" ON "audit_events" USING btree ("tenant_id","correlation_id");--> statement-breakpoint
 CREATE INDEX "audit_events_tenant_request_idx" ON "audit_events" USING btree ("tenant_id","request_id");--> statement-breakpoint
 CREATE POLICY "audit_changes_tenant_isolation" ON "audit_changes" AS PERMISSIVE FOR ALL TO public USING ("audit_changes"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("audit_changes"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
-CREATE POLICY "audit_events_tenant_isolation" ON "audit_events" AS PERMISSIVE FOR ALL TO public USING ("audit_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("audit_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY "audit_events_tenant_isolation" ON "audit_events" AS PERMISSIVE FOR ALL TO public USING ("audit_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("audit_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
+CREATE FUNCTION "nexora_prevent_audit_mutation"()
+RETURNS trigger
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RAISE EXCEPTION 'audit records are immutable';
+END;
+$$;--> statement-breakpoint
+CREATE TRIGGER "audit_events_immutable"
+BEFORE UPDATE OR DELETE ON "audit_events"
+FOR EACH ROW EXECUTE FUNCTION "nexora_prevent_audit_mutation"();--> statement-breakpoint
+CREATE TRIGGER "audit_changes_immutable"
+BEFORE UPDATE OR DELETE ON "audit_changes"
+FOR EACH ROW EXECUTE FUNCTION "nexora_prevent_audit_mutation"();--> statement-breakpoint
+GRANT SELECT, INSERT ON TABLE "audit_events", "audit_changes" TO nexora_app;--> statement-breakpoint
+REVOKE UPDATE, DELETE ON TABLE "audit_events", "audit_changes" FROM nexora_app;
