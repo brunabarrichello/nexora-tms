@@ -101,22 +101,22 @@ A rollback is not complete until health, authentication, tenant isolation and cr
 
 Record at minimum for each qualified production promotion:
 
-| Field | Required |
-| --- | --- |
-| Release/tag | yes |
-| Source `main` SHA | yes |
-| Web SHA/version | yes |
-| API SHA/version | yes |
-| Worker SHA/version | yes, or explicit N/A with reason |
-| Migration/schema version | yes |
-| Drizzle ledger state | yes when database applies |
-| Source environment | yes |
-| Promotion timestamp | yes |
-| Release owner/operator | yes |
-| Jira/PR evidence | yes |
-| Smoke/health/RLS result | yes |
-| Rollback target/readiness | yes |
-| NEX-88 Go/No-Go result | yes |
+| Field                     | Required                         |
+| ------------------------- | -------------------------------- |
+| Release/tag               | yes                              |
+| Source `main` SHA         | yes                              |
+| Web SHA/version           | yes                              |
+| API SHA/version           | yes                              |
+| Worker SHA/version        | yes, or explicit N/A with reason |
+| Migration/schema version  | yes                              |
+| Drizzle ledger state      | yes when database applies        |
+| Source environment        | yes                              |
+| Promotion timestamp       | yes                              |
+| Release owner/operator    | yes                              |
+| Jira/PR evidence          | yes                              |
+| Smoke/health/RLS result   | yes                              |
+| Rollback target/readiness | yes                              |
+| NEX-88 Go/No-Go result    | yes                              |
 
 ## Current production qualification status — 2026-08-30
 
