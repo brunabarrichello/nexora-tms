@@ -33,6 +33,18 @@ async function provisionInTransaction(
   }
 }
 
+async function assignRole(admin: PoolClient, roleCode: string): Promise<void> {
+  await admin.query(
+    `INSERT INTO membership_roles (tenant_id, membership_id, role_id)
+     SELECT $1::uuid, $2::uuid, roles.id
+       FROM roles
+      WHERE roles.tenant_id = $1::uuid
+        AND roles.code = $3
+     ON CONFLICT (tenant_id, membership_id, role_id) DO NOTHING`,
+    [TENANT_A, MEMBERSHIP_A, roleCode],
+  );
+}
+
 async function run(): Promise<void> {
   const provisionDatabaseUrl = process.env.RBAC_PROVISION_DATABASE_URL?.trim();
   if (!provisionDatabaseUrl) {
@@ -74,15 +86,7 @@ async function run(): Promise<void> {
     assert.equal(counts.rows[0]?.roles, first.roleCount);
     assert.equal(counts.rows[0]?.role_permissions, first.rolePermissionCount);
 
-    await admin.query(
-      `INSERT INTO membership_roles (tenant_id, membership_id, role_id)
-       SELECT $1::uuid, $2::uuid, roles.id
-         FROM roles
-        WHERE roles.tenant_id = $1::uuid
-          AND roles.code = 'viewer'
-       ON CONFLICT (tenant_id, membership_id, role_id) DO NOTHING`,
-      [TENANT_A, MEMBERSHIP_A],
-    );
+    await assignRole(admin, 'viewer');
 
     const assignmentCount = await admin.query<{ count: number }>(
       `SELECT count(*)::int AS count
@@ -108,6 +112,13 @@ async function run(): Promise<void> {
     assert.equal(await permissions.hasPermission('freight.read'), true);
     assert.equal(await permissions.hasPermission('freight.write'), false);
     assert.equal(await permissions.hasPermission('audit.read'), false);
+
+    await assignRole(admin, 'dispatcher');
+    assert.equal(
+      await permissions.hasPermission('freight.write'),
+      true,
+      'dispatcher role must make the Freight write canary positive',
+    );
 
     const tenantBLeakCount = await runtimeDatabase.withTenantContext(
       tenantContext.require(),
