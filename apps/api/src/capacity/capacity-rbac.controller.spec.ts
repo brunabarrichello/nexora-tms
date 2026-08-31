@@ -7,6 +7,7 @@ import { REQUIRED_TENANT_PERMISSION } from '../tenancy/tenant-permission.guard.j
 import { CapacityAssetController } from './capacity-asset.controller.js';
 import { CapacityAssignmentController } from './capacity-assignment.controller.js';
 import { CapacityQualificationController } from './capacity-qualification.controller.js';
+import { DriverController } from './driver.controller.js';
 
 const reflector = new Reflector();
 
@@ -24,14 +25,17 @@ test('Capacity controllers default to capacity.read', () => {
     reflector.get(REQUIRED_TENANT_PERMISSION, CapacityQualificationController),
     'capacity.read',
   );
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, DriverController), 'capacity.read');
 });
 
-test('Capacity asset and assignment mutations require capacity.write', () => {
+test('Capacity asset, assignment and driver mutations require capacity.write', () => {
   const methods = [
     CapacityAssetController.prototype.create,
     CapacityAssetController.prototype.update,
     CapacityAssignmentController.prototype.create,
     CapacityAssignmentController.prototype.close,
+    DriverController.prototype.create,
+    DriverController.prototype.update,
   ];
 
   for (const method of methods) {
