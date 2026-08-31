@@ -35,8 +35,15 @@ export function createUuidV7(now = Date.now()): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
 }
 
-export function fingerprintExternalSubject(providerKey: string, subject: string): string {
-  return createHash('sha256').update(providerKey).update('\0').update(subject).digest('hex');
+export function fingerprintExternalSubject(
+  providerKey: string,
+  subject: string,
+): string {
+  return createHash('sha256')
+    .update(providerKey)
+    .update('\0')
+    .update(subject)
+    .digest('hex');
 }
 
 @Injectable()
@@ -72,9 +79,11 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
         ],
       );
     } catch {
-      // Authentication semantics must remain deterministic even if the audit sink is unavailable.
-      // Never include the token, external subject, credentials or database error in logs.
-      this.logger.error(`pre-tenant auth audit persistence failed (${event.eventType})`);
+      // Authentication remains deterministic if the audit sink is unavailable.
+      // Never include token, subject, credential or database errors in logs.
+      this.logger.error(
+        `pre-tenant auth audit persistence failed (${event.eventType})`,
+      );
     }
   }
 
@@ -90,7 +99,8 @@ export class PretenantAuthAuditService implements OnModuleDestroy {
         process.env.AUTH_AUDIT_DATABASE_POOL_MAX ?? '2',
         10,
       );
-      const max = Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 2;
+      const max =
+        Number.isFinite(configuredMax) && configuredMax > 0 ? configuredMax : 2;
       this.pool = new Pool({
         application_name: 'nexora-tms-api-auth-audit',
         connectionString,
