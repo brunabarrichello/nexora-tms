@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -23,8 +23,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -72,16 +70,6 @@ jobs:
         if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
         run: pnpm --filter @nexora/database db:check
 
-      - name: Version Drizzle artifacts for Wave 0024
+      - name: Verify Drizzle artifacts are versioned
         if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
-        shell: bash
-        run: |
-          if git diff --quiet -- packages/database/migrations; then
-            echo "Drizzle artifacts already versioned."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add packages/database/migrations
-          git commit -m "chore(database): version Wave 0024 Drizzle artifacts"
-          git push origin HEAD:${{ github.head_ref }}
+        run: git diff --exit-code -- packages/database/migrations
