@@ -8,18 +8,22 @@ import { DocumentsController } from './documents.controller.js';
 
 const reflector = new Reflector();
 
-function expectPermission(target: object, permission: string): void {
-  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, target), permission);
+function expectHandlerPermission(
+  handler: (...args: never[]) => unknown,
+  permission: string,
+): void {
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, handler), permission);
 }
 
 test('Documents controller requires read permission by default', () => {
-  expectPermission(DocumentsController, 'documents.read');
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, DocumentsController), 'documents.read');
 });
 
 test('Document write handlers require write permission', () => {
   const handlers = [
     DocumentsController.prototype.create,
     DocumentsController.prototype.update,
+    DocumentsController.prototype.softDelete,
     DocumentsController.prototype.prepareUpload,
     DocumentsController.prototype.commitUpload,
     DocumentsController.prototype.validate,
@@ -30,6 +34,6 @@ test('Document write handlers require write permission', () => {
   ];
 
   for (const handler of handlers) {
-    expectPermission(handler, 'documents.write');
+    expectHandlerPermission(handler, 'documents.write');
   }
 });
