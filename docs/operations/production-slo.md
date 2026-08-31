@@ -12,6 +12,8 @@ This document defines the internal availability SLO for the current Free-tier sy
 
 It is an engineering reliability objective, not a contractual customer SLA. It intentionally uses the existing Free-tier Production health-monitor evidence and does not claim paid APM, SIEM or long-term metrics storage.
 
+For SLO/error-budget controls, this document supersedes the earlier NEX-82 note that listed them as a future NEX-80 enhancement.
+
 Worker-specific SLI/SLO and readiness controls become mandatory when NEX-90/NEX-91 add the asynchronous Worker topology.
 
 ## 2. Availability SLI
@@ -49,8 +51,10 @@ The guard distinguishes application availability from monitor coverage.
 
 - minimum completed samples before asserting the availability objective: **12**;
 - scheduled monitor freshness threshold: **90 minutes**;
-- fewer than 12 completed samples produces `insufficient_data`;
-- a latest scheduled monitor older than 90 minutes produces `monitor_stale`, independent of the calculated availability ratio.
+- Production health-monitor activation anchor: **2026-08-31T14:14:41Z**, the merge time of PR #124 that introduced the scheduled monitor;
+- fewer than 12 completed samples with a fresh monitor produces `insufficient_data`;
+- a latest scheduled monitor older than 90 minutes produces `monitor_stale`, independent of the calculated availability ratio;
+- if no scheduled run has ever been recorded, the activation anchor is used as the freshness reference so an indefinitely missing scheduler cannot remain hidden as `insufficient_data`.
 
 `insufficient_data` is not treated as proof of a healthy SLO. `monitor_stale` is an alert state because the measurement path itself is no longer providing timely evidence.
 
@@ -59,11 +63,11 @@ The guard distinguishes application availability from monitor coverage.
 `scripts/production-slo-evaluate.mjs` produces one of four states:
 
 - `healthy` — sufficient samples, monitor fresh and observed availability at or above 99.0%;
-- `insufficient_data` — monitor history exists but the minimum completed-sample threshold is not yet met;
+- `insufficient_data` — the monitor is fresh but the minimum completed-sample threshold is not yet met;
 - `budget_exhausted` — sufficient samples exist and observed availability is below 99.0%;
-- `monitor_stale` — the scheduled monitor has not produced a timely run within the freshness threshold.
+- `monitor_stale` — the scheduled monitor has not produced timely evidence within the freshness threshold, including after initial activation.
 
-The evaluator also emits aggregate evidence including sample count, successful/failed samples, availability percentage, error-budget consumption and age of the latest scheduled monitor.
+The evaluator also emits aggregate evidence including sample count, successful/failed samples, availability percentage, error-budget consumption and age of the latest scheduled monitor or activation reference.
 
 ## 6. Operational reconciliation
 
