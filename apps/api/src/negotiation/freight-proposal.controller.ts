@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { FreightProposalService, type FreightProposal } from './freight-proposal.service.js';
 
 @Controller('api/v1/negotiation')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('negotiation.read')
 export class FreightProposalController {
   constructor(private readonly proposals: FreightProposalService) {}
 
@@ -14,11 +14,13 @@ export class FreightProposalController {
   }
 
   @Post('requests/:requestId/proposals')
+  @TenantAuthorized('negotiation.write')
   create(@Param('requestId') requestId: string, @Body() body: unknown): Promise<FreightProposal> {
     return this.proposals.create(requestId, body);
   }
 
   @Post('proposals/:proposalId/counterproposals')
+  @TenantAuthorized('negotiation.write')
   counterproposal(
     @Param('proposalId') proposalId: string,
     @Body() body: unknown,
@@ -27,6 +29,7 @@ export class FreightProposalController {
   }
 
   @Post('proposals/:proposalId/status')
+  @TenantAuthorized('negotiation.write')
   setStatus(
     @Param('proposalId') proposalId: string,
     @Body() body: unknown,
