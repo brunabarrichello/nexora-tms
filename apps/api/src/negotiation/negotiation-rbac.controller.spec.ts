@@ -11,15 +11,19 @@ import { TransportContractController } from './transport-contract.controller.js'
 
 const reflector = new Reflector();
 
+function assertClassPermission(target: Function, permission: string): void {
+  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, target), permission);
+}
+
 function assertPermission(method: (...args: never[]) => unknown, permission: string): void {
   assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, method), permission);
 }
 
 test('Negotiation controllers default to negotiation.read', () => {
-  assertPermission(CapacityReservationController, 'negotiation.read');
-  assertPermission(FreightProposalController, 'negotiation.read');
-  assertPermission(NegotiationCollaborationController, 'negotiation.read');
-  assertPermission(TransportContractController, 'negotiation.read');
+  assertClassPermission(CapacityReservationController, 'negotiation.read');
+  assertClassPermission(FreightProposalController, 'negotiation.read');
+  assertClassPermission(NegotiationCollaborationController, 'negotiation.read');
+  assertClassPermission(TransportContractController, 'negotiation.read');
 });
 
 test('Reservation and proposal mutations require negotiation.write', () => {
