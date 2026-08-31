@@ -113,13 +113,7 @@ export class FreightNormalizationService {
 
   createItem(requestId: string, input: unknown): Promise<FreightNormalizedRecord> {
     const data = parseItemCreate(input);
-    return this.createRequestChild(
-      requestId,
-      'transport_request_items',
-      itemColumns,
-      data,
-      'item',
-    );
+    return this.createRequestChild(requestId, 'transport_request_items', itemColumns, data, 'item');
   }
 
   updateItem(requestId: string, itemId: string, input: unknown): Promise<FreightNormalizedRecord> {
@@ -447,7 +441,8 @@ export class FreightNormalizationService {
           `DELETE FROM ${table} WHERE id=$1::uuid AND transport_request_id=$2::uuid`,
           [id, requestUuid],
         );
-        if (result.rowCount !== 1) throw new NotFoundException(`${label} not found for transport request`);
+        if (result.rowCount !== 1)
+          throw new NotFoundException(`${label} not found for transport request`);
       }),
     );
   }
@@ -538,10 +533,12 @@ export class FreightNormalizationService {
   }
 
   private async requireRequest(client: TenantQueryClient, requestId: string): Promise<void> {
-    const result = await client.query('SELECT 1 FROM transport_requests WHERE id=$1::uuid LIMIT 1', [
-      requestId,
-    ]);
-    if (result.rowCount !== 1) throw new NotFoundException('Transport request not found in current tenant');
+    const result = await client.query(
+      'SELECT 1 FROM transport_requests WHERE id=$1::uuid LIMIT 1',
+      [requestId],
+    );
+    if (result.rowCount !== 1)
+      throw new NotFoundException('Transport request not found in current tenant');
   }
 
   private async wrap<T>(work: () => Promise<T>): Promise<T> {
@@ -559,10 +556,16 @@ export class FreightNormalizationService {
         typeof error === 'object' && error !== null && 'code' in error
           ? String((error as { code?: unknown }).code)
           : '';
-      if (code === '23505') throw new ConflictException('Freight normalization record conflicts with an existing record');
-      if (code === '23503') throw new BadRequestException('Referenced entity does not exist in the current tenant');
-      if (code === '23514' || code === '22P02') throw new BadRequestException('Freight normalization data violates a database constraint');
-      if (code === '42501') throw new ConflictException('Operation is not allowed by the Wave 0019 runtime policy');
+      if (code === '23505')
+        throw new ConflictException(
+          'Freight normalization record conflicts with an existing record',
+        );
+      if (code === '23503')
+        throw new BadRequestException('Referenced entity does not exist in the current tenant');
+      if (code === '23514' || code === '22P02')
+        throw new BadRequestException('Freight normalization data violates a database constraint');
+      if (code === '42501')
+        throw new ConflictException('Operation is not allowed by the Wave 0019 runtime policy');
       throw error;
     }
   }

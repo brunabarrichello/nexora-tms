@@ -96,11 +96,25 @@ function normalizeItem(body: Record<string, unknown>, create: boolean): MutableP
   assign(data, body, 'cargoTypeId', (value) => optionalUuid(value, 'cargoTypeId'));
   assign(data, body, 'sku', (value) => optionalText(value, 'sku', 120));
   assign(data, body, 'description', (value) => text(value, 'description', 500), create);
-  assign(data, body, 'quantity', (value) => positiveNumber(value, 'quantity'), false, create ? 1 : undefined);
+  assign(
+    data,
+    body,
+    'quantity',
+    (value) => positiveNumber(value, 'quantity'),
+    false,
+    create ? 1 : undefined,
+  );
   assign(data, body, 'unitOfMeasureId', (value) => optionalUuid(value, 'unitOfMeasureId'));
   assign(data, body, 'totalWeightKg', (value) => optionalPositiveNumber(value, 'totalWeightKg'));
   assign(data, body, 'totalVolumeM3', (value) => optionalPositiveNumber(value, 'totalVolumeM3'));
-  assign(data, body, 'hazardous', (value) => booleanValue(value, 'hazardous'), false, create ? false : undefined);
+  assign(
+    data,
+    body,
+    'hazardous',
+    (value) => booleanValue(value, 'hazardous'),
+    false,
+    create ? false : undefined,
+  );
   assign(data, body, 'minTemperatureC', (value) => optionalNumber(value, 'minTemperatureC'));
   assign(data, body, 'maxTemperatureC', (value) => optionalNumber(value, 'maxTemperatureC'));
   assign(data, body, 'stackable', (value) => optionalBoolean(value, 'stackable'));
@@ -122,7 +136,14 @@ function normalizePackage(body: Record<string, unknown>, create: boolean): Mutab
   assign(data, body, 'itemId', (value) => optionalUuid(value, 'itemId'));
   assign(data, body, 'sequence', (value) => positiveInteger(value, 'sequence'), create);
   assign(data, body, 'packageTypeId', (value) => optionalUuid(value, 'packageTypeId'));
-  assign(data, body, 'quantity', (value) => positiveInteger(value, 'quantity'), false, create ? 1 : undefined);
+  assign(
+    data,
+    body,
+    'quantity',
+    (value) => positiveInteger(value, 'quantity'),
+    false,
+    create ? 1 : undefined,
+  );
   assign(data, body, 'weightKg', (value) => optionalPositiveNumber(value, 'weightKg'));
   assign(data, body, 'lengthM', (value) => optionalPositiveNumber(value, 'lengthM'));
   assign(data, body, 'widthM', (value) => optionalPositiveNumber(value, 'widthM'));
@@ -150,11 +171,25 @@ function normalizeRequirement(body: Record<string, unknown>, create: boolean): M
   );
   assign(data, body, 'vehicleTypeId', (value) => optionalUuid(value, 'vehicleTypeId'));
   assign(data, body, 'bodyTypeId', (value) => optionalUuid(value, 'bodyTypeId'));
-  assign(data, body, 'required', (value) => booleanValue(value, 'required'), false, create ? true : undefined);
+  assign(
+    data,
+    body,
+    'required',
+    (value) => booleanValue(value, 'required'),
+    false,
+    create ? true : undefined,
+  );
   assign(data, body, 'valueText', (value) => optionalText(value, 'valueText', 500));
   assign(data, body, 'valueNumeric', (value) => optionalNumber(value, 'valueNumeric'));
   assign(data, body, 'valueBoolean', (value) => optionalBoolean(value, 'valueBoolean'));
-  assign(data, body, 'metadata', (value) => jsonObject(value, 'metadata', {}), false, create ? {} : undefined);
+  assign(
+    data,
+    body,
+    'metadata',
+    (value) => jsonObject(value, 'metadata', {}),
+    false,
+    create ? {} : undefined,
+  );
   assign(data, body, 'notes', (value) => optionalText(value, 'notes', 1000));
   return data;
 }
@@ -178,10 +213,23 @@ function validateRequirement(data: MutablePatch): MutablePatch {
 
 function normalizeReference(body: Record<string, unknown>, create: boolean): MutablePatch {
   const data: Record<string, unknown> = {};
-  assign(data, body, 'referenceType', (value) => enumValue(value, 'referenceType', referenceTypes), create);
+  assign(
+    data,
+    body,
+    'referenceType',
+    (value) => enumValue(value, 'referenceType', referenceTypes),
+    create,
+  );
   assign(data, body, 'value', (value) => text(value, 'value', 180), create);
   assign(data, body, 'issuerPartyId', (value) => optionalUuid(value, 'issuerPartyId'));
-  assign(data, body, 'metadata', (value) => jsonObject(value, 'metadata', {}), false, create ? {} : undefined);
+  assign(
+    data,
+    body,
+    'metadata',
+    (value) => jsonObject(value, 'metadata', {}),
+    false,
+    create ? {} : undefined,
+  );
   return data;
 }
 
@@ -190,12 +238,31 @@ function normalizeLane(body: Record<string, unknown>, create: boolean): MutableP
   assign(data, body, 'code', (value) => text(value, 'code', 80).toUpperCase(), create);
   assign(data, body, 'name', (value) => text(value, 'name', 180), create);
   assign(data, body, 'originCityId', (value) => requiredUuid(value, 'originCityId'), create);
-  assign(data, body, 'destinationCityId', (value) => requiredUuid(value, 'destinationCityId'), create);
-  assign(data, body, 'originRadiusKm', (value) => optionalNonNegativeNumber(value, 'originRadiusKm'));
-  assign(data, body, 'destinationRadiusKm', (value) => optionalNonNegativeNumber(value, 'destinationRadiusKm'));
+  assign(
+    data,
+    body,
+    'destinationCityId',
+    (value) => requiredUuid(value, 'destinationCityId'),
+    create,
+  );
+  assign(data, body, 'originRadiusKm', (value) =>
+    optionalNonNegativeNumber(value, 'originRadiusKm'),
+  );
+  assign(data, body, 'destinationRadiusKm', (value) =>
+    optionalNonNegativeNumber(value, 'destinationRadiusKm'),
+  );
   assign(data, body, 'distanceKm', (value) => optionalPositiveNumber(value, 'distanceKm'));
-  assign(data, body, 'typicalTransitHours', (value) => optionalPositiveNumber(value, 'typicalTransitHours'));
-  assign(data, body, 'isActive', (value) => booleanValue(value, 'isActive'), false, create ? true : undefined);
+  assign(data, body, 'typicalTransitHours', (value) =>
+    optionalPositiveNumber(value, 'typicalTransitHours'),
+  );
+  assign(
+    data,
+    body,
+    'isActive',
+    (value) => booleanValue(value, 'isActive'),
+    false,
+    create ? true : undefined,
+  );
   return data;
 }
 
@@ -223,7 +290,8 @@ function assign(
 }
 
 function requirePatch(data: MutablePatch): MutablePatch {
-  if (Object.keys(data).length === 0) throw new BadRequestException('At least one field must be provided');
+  if (Object.keys(data).length === 0)
+    throw new BadRequestException('At least one field must be provided');
   return data;
 }
 
@@ -259,13 +327,15 @@ function optionalBoolean(value: unknown, field: string): boolean | null {
 
 function positiveInteger(value: unknown, field: string): number {
   const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new BadRequestException(`${field} must be a positive integer`);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0)
+    throw new BadRequestException(`${field} must be a positive integer`);
   return parsed;
 }
 
 function positiveNumber(value: unknown, field: string): number {
   const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed <= 0) throw new BadRequestException(`${field} must be a positive number`);
+  if (!Number.isFinite(parsed) || parsed <= 0)
+    throw new BadRequestException(`${field} must be a positive number`);
   return parsed;
 }
 
@@ -277,7 +347,8 @@ function optionalPositiveNumber(value: unknown, field: string): number | null {
 function optionalNonNegativeNumber(value: unknown, field: string): number | null {
   if (value === undefined || value === null || value === '') return null;
   const parsed = typeof value === 'number' ? value : Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) throw new BadRequestException(`${field} must be non-negative`);
+  if (!Number.isFinite(parsed) || parsed < 0)
+    throw new BadRequestException(`${field} must be non-negative`);
   return parsed;
 }
 
@@ -289,12 +360,14 @@ function optionalNumber(value: unknown, field: string): number | null {
 }
 
 function enumValue(value: unknown, field: string, values: ReadonlySet<string>): string {
-  if (typeof value !== 'string' || !values.has(value)) throw new BadRequestException(`${field} is invalid`);
+  if (typeof value !== 'string' || !values.has(value))
+    throw new BadRequestException(`${field} is invalid`);
   return value;
 }
 
 function requiredUuid(value: unknown, field: string): string {
-  if (typeof value !== 'string' || !isUuid(value)) throw new BadRequestException(`${field} must be a valid UUID`);
+  if (typeof value !== 'string' || !isUuid(value))
+    throw new BadRequestException(`${field} must be a valid UUID`);
   return value;
 }
 
@@ -303,7 +376,11 @@ function optionalUuid(value: unknown, field: string): string | null {
   return requiredUuid(value, field);
 }
 
-function jsonObject(value: unknown, field: string, fallback: Record<string, unknown>): Record<string, unknown> {
+function jsonObject(
+  value: unknown,
+  field: string,
+  fallback: Record<string, unknown>,
+): Record<string, unknown> {
   if (value === undefined || value === null) return fallback;
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new BadRequestException(`${field} must be an object`);

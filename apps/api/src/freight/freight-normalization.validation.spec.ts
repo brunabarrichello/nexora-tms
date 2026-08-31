@@ -37,8 +37,7 @@ test('packages require dimensions together and positive quantity', () => {
     BadRequestException,
   );
   assert.equal(
-    parsePackageCreate({ sequence: 1, quantity: 2, lengthM: 1, widthM: 2, heightM: 3 })
-      .quantity,
+    parsePackageCreate({ sequence: 1, quantity: 2, lengthM: 1, widthM: 2, heightM: 3 }).quantity,
     2,
   );
 });
