@@ -27,6 +27,8 @@ env:
   NEON_PROJECT_ID: raspy-river-76339604
   MIN_FREE_HISTORY_SECONDS: 21600
   FREE_BRANCH_LIMIT: 10
+  PGSSLMODE: verify-full
+  PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
 
 jobs:
   migrate:
@@ -95,6 +97,10 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y postgresql-client
           fi
+          test -r "$PGSSLROOTCERT" || {
+            echo "System CA bundle is unavailable at $PGSSLROOTCERT." >&2
+            exit 1
+          }
 
       - name: Validate local migration artifacts before touching Production
         run: pnpm --filter @nexora/database db:check
@@ -159,16 +165,36 @@ jobs:
         run: |
           set -euo pipefail
 
+          harden_connection_uri() {
+            local raw_uri="$1"
+            python3 - "$raw_uri" <<'PY'
+          import sys
+          from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+          uri = urlsplit(sys.argv[1])
+          query = [
+              (key, value)
+              for key, value in parse_qsl(uri.query, keep_blank_values=True)
+              if key.lower() not in {"sslmode", "sslrootcert"}
+          ]
+          query.append(("sslmode", "verify-full"))
+          print(urlunsplit((uri.scheme, uri.netloc, uri.path, urlencode(query), uri.fragment)))
+          PY
+          }
+
           connection_uri() {
             local role_name="$1"
-            curl -fsSG \
+            local raw_uri
+            raw_uri="$(curl -fsSG \
               -H "Authorization: Bearer ${NEON_API_KEY}" \
               --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
               --data-urlencode "database_name=neondb" \
               --data-urlencode "role_name=${role_name}" \
               --data-urlencode "pooled=false" \
               "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
-              | jq -er '.uri'
+              | jq -er '.uri')"
+            echo "::add-mask::$raw_uri" >&2
+            harden_connection_uri "$raw_uri"
           }
 
           admin_url="$(connection_uri neondb_owner)"
@@ -177,6 +203,10 @@ jobs:
 
           for value in "$admin_url" "$migrator_url" "$app_url"; do
             test -n "$value" || { echo "Failed to resolve a required Production connection string." >&2; exit 1; }
+            [[ "$value" == *"sslmode=verify-full"* ]] || {
+              echo "Production connection string is not hardened with sslmode=verify-full." >&2
+              exit 1
+            }
             echo "::add-mask::$value"
           done
 
@@ -193,10 +223,25 @@ jobs:
         run: |
           set -euo pipefail
 
-          for url in "$ADMIN_DATABASE_URL" "$MIGRATOR_DATABASE_URL" "$APP_DATABASE_URL"; do
-            ssl_used="$(psql "$url" -v ON_ERROR_STOP=1 -Atqc "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false')")"
-            [[ "$ssl_used" == "true" ]] || {
-              echo "Production migration is blocked: every database session must use TLS." >&2
+          for connection_name in ADMIN_DATABASE_URL MIGRATOR_DATABASE_URL APP_DATABASE_URL; do
+            url="${!connection_name}"
+            tls_posture="$(psql "$url" -v ON_ERROR_STOP=1 -F '|' -Atqc \
+              "select ssl::text, coalesce(version, ''), coalesce(cipher, '') from pg_stat_ssl where pid = pg_backend_pid();")"
+            IFS='|' read -r tls_active tls_version tls_cipher <<< "$tls_posture"
+
+            [[ "$tls_active" == "true" ]] || {
+              echo "Production migration is blocked: ${connection_name} must use TLS." >&2
+              exit 1
+            }
+            case "$tls_version" in
+              TLSv1.2|TLSv1.3) ;;
+              *)
+                echo "Production migration is blocked: ${connection_name} must negotiate TLSv1.2 or TLSv1.3; found '${tls_version:-unknown}'." >&2
+                exit 1
+                ;;
+            esac
+            [[ -n "$tls_cipher" ]] || {
+              echo "Production migration is blocked: ${connection_name} did not report a TLS cipher." >&2
               exit 1
             }
           done
@@ -308,6 +353,8 @@ jobs:
             echo "- Restore/history window observed before migration: ${{ steps.production.outputs.history_seconds }} seconds"
             echo "- Pre-migration checkpoint retained: ${{ steps.checkpoint.outputs.name }} (${{ steps.checkpoint.outputs.id }})"
             echo "- TLS: verified for admin, migrator and runtime connections"
+            echo "- TLS protocol policy: TLSv1.2 or TLSv1.3 only"
+            echo "- Server authentication: CA + hostname verification (sslmode=verify-full)"
             echo "- Versioned migrations: ${EXPECTED_MIGRATIONS}"
             echo "- Migration ledger: verified"
             echo "- Wave 0024 schema/audit invariants: verified"
