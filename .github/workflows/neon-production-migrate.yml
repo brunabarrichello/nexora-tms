@@ -214,7 +214,7 @@ jobs:
           echo "migrator_url=$migrator_url" >> "$GITHUB_OUTPUT"
           echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
 
-      - name: Verify TLS, roles and migration capability
+      - name: Verify client TLS, roles and migration capability
         shell: bash
         env:
           ADMIN_DATABASE_URL: ${{ steps.connections.outputs.admin_url }}
@@ -223,28 +223,29 @@ jobs:
         run: |
           set -euo pipefail
 
-          for connection_name in ADMIN_DATABASE_URL MIGRATOR_DATABASE_URL APP_DATABASE_URL; do
-            url="${!connection_name}"
-            tls_posture="$(psql "$url" -v ON_ERROR_STOP=1 -F '|' -Atqc \
-              "select ssl::text, coalesce(version, ''), coalesce(cipher, '') from pg_stat_ssl where pid = pg_backend_pid();")"
-            IFS='|' read -r tls_active tls_version tls_cipher <<< "$tls_posture"
+          verify_client_tls() {
+            local connection_name="$1"
+            local url="$2"
+            local conninfo
 
-            [[ "$tls_active" == "true" ]] || {
-              echo "Production migration is blocked: ${connection_name} must use TLS." >&2
+            # Neon terminates client TLS at its proxy layer. The authoritative proof
+            # for the GitHub-runner-to-Neon segment is therefore libpq client state,
+            # not server-side pg_stat_ssl. sslmode=verify-full + the runner CA bundle
+            # enforces encryption, CA validation and hostname verification.
+            conninfo="$(psql "$url" -X -v ON_ERROR_STOP=1 -c '\conninfo' 2>&1)" || {
+              echo "Production migration is blocked: ${connection_name} failed verified TLS connection." >&2
               exit 1
             }
-            case "$tls_version" in
-              TLSv1.2|TLSv1.3) ;;
-              *)
-                echo "Production migration is blocked: ${connection_name} must negotiate TLSv1.2 or TLSv1.3; found '${tls_version:-unknown}'." >&2
-                exit 1
-                ;;
-            esac
-            [[ -n "$tls_cipher" ]] || {
-              echo "Production migration is blocked: ${connection_name} did not report a TLS cipher." >&2
+
+            grep -Eq 'SSL connection \(protocol: TLSv1\.[23], cipher: [^,)]+' <<<"$conninfo" || {
+              echo "Production migration is blocked: ${connection_name} did not report TLSv1.2/TLSv1.3 with a cipher from the libpq client." >&2
               exit 1
             }
-          done
+          }
+
+          verify_client_tls ADMIN_DATABASE_URL "$ADMIN_DATABASE_URL"
+          verify_client_tls MIGRATOR_DATABASE_URL "$MIGRATOR_DATABASE_URL"
+          verify_client_tls APP_DATABASE_URL "$APP_DATABASE_URL"
 
           missing_roles="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
             with required(role_name) as (
@@ -352,7 +353,7 @@ jobs:
             echo "- Free-tier risk acknowledgement: explicit"
             echo "- Restore/history window observed before migration: ${{ steps.production.outputs.history_seconds }} seconds"
             echo "- Pre-migration checkpoint retained: ${{ steps.checkpoint.outputs.name }} (${{ steps.checkpoint.outputs.id }})"
-            echo "- TLS: verified for admin, migrator and runtime connections"
+            echo "- TLS: verified client-side for admin, migrator and runtime connections"
             echo "- TLS protocol policy: TLSv1.2 or TLSv1.3 only"
             echo "- Server authentication: CA + hostname verification (sslmode=verify-full)"
             echo "- Versioned migrations: ${EXPECTED_MIGRATIONS}"
