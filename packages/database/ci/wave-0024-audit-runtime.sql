@@ -1,4 +1,6 @@
-SELECT set_config('app.tenant_id', '74000000-0000-4000-8000-000000000001', false);
+BEGIN;
+
+SELECT set_config('app.tenant_id', '74000000-0000-4000-8000-000000000001', true);
 
 INSERT INTO audit_events (
   id, tenant_id, action, outcome, source, entity_type, entity_id,
@@ -76,7 +78,7 @@ BEGIN
 END
 $block$;
 
-SELECT set_config('app.tenant_id', '74000000-0000-4000-8000-000000000002', false);
+SELECT set_config('app.tenant_id', '74000000-0000-4000-8000-000000000002', true);
 
 DO $block$
 DECLARE
@@ -94,7 +96,7 @@ BEGIN
 END
 $block$;
 
-SELECT set_config('app.tenant_id', '74000000-0000-4000-8000-000000000001', false);
+SELECT set_config('app.tenant_id', '74000000-0000-4000-8000-000000000001', true);
 
 DO $block$
 DECLARE
@@ -115,3 +117,5 @@ BEGIN
   END IF;
 END
 $block$;
+
+ROLLBACK;
