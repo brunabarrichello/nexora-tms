@@ -1,6 +1,7 @@
 import { CanActivate, ExecutionContext, ForbiddenException, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 
+import { isTenantPermissionKey, type TenantPermissionKey } from './rbac-catalog.js';
 import { TenantPermissionService } from './tenant-permission.service.js';
 
 export const REQUIRED_TENANT_PERMISSION = 'nexora:required-tenant-permission';
@@ -13,13 +14,13 @@ export class TenantPermissionGuard implements CanActivate {
   ) {}
 
   async canActivate(executionContext: ExecutionContext): Promise<boolean> {
-    const permissionKey = this.reflector.getAllAndOverride<string>(REQUIRED_TENANT_PERMISSION, [
-      executionContext.getHandler(),
-      executionContext.getClass(),
-    ]);
+    const permissionKey = this.reflector.getAllAndOverride<TenantPermissionKey>(
+      REQUIRED_TENANT_PERMISSION,
+      [executionContext.getHandler(), executionContext.getClass()],
+    );
 
-    if (!permissionKey) {
-      throw new ForbiddenException('An explicit tenant permission is required for this operation');
+    if (!permissionKey || !isTenantPermissionKey(permissionKey)) {
+      throw new ForbiddenException('An explicit catalog tenant permission is required');
     }
 
     if (!(await this.permissions.hasPermission(permissionKey))) {
