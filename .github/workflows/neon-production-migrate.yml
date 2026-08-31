@@ -4,7 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type MIGRATE-PRODUCTION to apply versioned migrations to the canonical production branch
+        description: Type MIGRATE-PRODUCTION to apply versioned migrations to canonical Production
+        required: true
+        type: string
+      free_tier_acknowledgement:
+        description: Type ACCEPT-FREE-TIER-RISKS to acknowledge the Free-tier restore and network limitations
         required: true
         type: string
       release_sha:
@@ -21,22 +25,27 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
-  MIN_PRODUCTION_HISTORY_SECONDS: 604800
+  MIN_FREE_HISTORY_SECONDS: 21600
+  FREE_BRANCH_LIMIT: 10
 
 jobs:
   migrate:
-    name: Migrate canonical Neon production branch
+    name: Migrate canonical Neon Production on Free tier
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     environment: production
 
     steps:
-      - name: Validate explicit production migration confirmation
+      - name: Validate explicit Production migration confirmation
         shell: bash
         run: |
           set -euo pipefail
           [[ "${{ inputs.confirmation }}" == "MIGRATE-PRODUCTION" ]] || {
             echo "Explicit confirmation MIGRATE-PRODUCTION is required." >&2
+            exit 1
+          }
+          [[ "${{ inputs.free_tier_acknowledgement }}" == "ACCEPT-FREE-TIER-RISKS" ]] || {
+            echo "Explicit acknowledgement ACCEPT-FREE-TIER-RISKS is required for the Free-tier Production profile." >&2
             exit 1
           }
           [[ "${{ inputs.release_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || {
@@ -87,7 +96,10 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
 
-      - name: Resolve canonical root/default/protected production branch
+      - name: Validate local migration artifacts before touching Production
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Resolve canonical root/default Production and Free-tier capacity
         id: production
         shell: bash
         env:
@@ -95,13 +107,16 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${NEON_API_KEY:-}" || {
-            echo "NEON_API_KEY is not configured for the protected production environment." >&2
+            echo "NEON_API_KEY is not configured for the protected GitHub production environment." >&2
             exit 1
           }
 
           branches_json="$(curl -fsS \
             -H "Authorization: Bearer ${NEON_API_KEY}" \
             "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
+          project_json="$(curl -fsS \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
 
           production_json="$(jq -ec '[.branches[] | select(.name == "production")][0]' <<<"$branches_json")" || {
             echo "Canonical Neon production branch does not exist." >&2
@@ -110,8 +125,9 @@ jobs:
 
           branch_id="$(jq -er '.id' <<<"$production_json")"
           parent_id="$(jq -r '.parent_id // ""' <<<"$production_json")"
-          is_default="$(jq -er '.default' <<<"$production_json")"
-          is_protected="$(jq -er '.protected' <<<"$production_json")"
+          is_default="$(jq -r '.default' <<<"$production_json")"
+          branch_count="$(jq '.branches | length' <<<"$branches_json")"
+          history_seconds="$(jq -er '.project.history_retention_seconds' <<<"$project_json")"
 
           [[ -z "$parent_id" ]] || {
             echo "Production migration is blocked: production must be a root branch." >&2
@@ -121,101 +137,20 @@ jobs:
             echo "Production migration is blocked: production must be the default branch." >&2
             exit 1
           }
-          [[ "$is_protected" == "true" ]] || {
-            echo "Production migration is blocked: production branch protection is required." >&2
+          [[ "$history_seconds" -ge "$MIN_FREE_HISTORY_SECONDS" ]] || {
+            echo "Production migration is blocked: expected at least the Free-tier restore window (${MIN_FREE_HISTORY_SECONDS}s), found ${history_seconds}s." >&2
+            exit 1
+          }
+          [[ "$branch_count" -lt "$FREE_BRANCH_LIMIT" ]] || {
+            echo "Production migration is blocked: ${branch_count}/${FREE_BRANCH_LIMIT} Neon branches are in use and one slot is required for the pre-migration checkpoint." >&2
             exit 1
           }
 
           echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
+          echo "branch_count=$branch_count" >> "$GITHUB_OUTPUT"
+          echo "history_seconds=$history_seconds" >> "$GITHUB_OUTPUT"
 
-      - name: Verify production retention and permanent network perimeter
-        shell: bash
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          set -euo pipefail
-          project_json="$(curl -fsS \
-            -H "Authorization: Bearer ${NEON_API_KEY}" \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
-
-          history_seconds="$(jq -er '.project.history_retention_seconds' <<<"$project_json")"
-          block_public="$(jq -er '.project.settings.block_public_connections' <<<"$project_json")"
-          protected_only="$(jq -er '.project.settings.allowed_ips.protected_branches_only' <<<"$project_json")"
-          allowed_ip_count="$(jq -er '.project.settings.allowed_ips.ips | length' <<<"$project_json")"
-
-          [[ "$history_seconds" -ge "$MIN_PRODUCTION_HISTORY_SECONDS" ]] || {
-            echo "Production migration is blocked: history window must be at least 7 days (${MIN_PRODUCTION_HISTORY_SECONDS}s), found ${history_seconds}s." >&2
-            exit 1
-          }
-          [[ "$block_public" == "false" ]] || {
-            echo "Production migration is blocked: this workflow requires public connectivity constrained by explicit IP Allow entries." >&2
-            exit 1
-          }
-          [[ "$protected_only" == "true" ]] || {
-            echo "Production migration is blocked: IP Allow must be scoped to protected branches only." >&2
-            exit 1
-          }
-          [[ "$allowed_ip_count" -gt 0 ]] || {
-            echo "Production migration is blocked: the permanent Railway static egress allowlist is empty." >&2
-            exit 1
-          }
-
-      - name: Temporarily allow this GitHub runner IPv4
-        id: runner_perimeter
-        shell: bash
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          set -euo pipefail
-
-          runner_ip="$(curl -fsS --max-time 10 https://api.ipify.org)"
-          python3 - "$runner_ip" <<'PY'
-          import ipaddress
-          import sys
-          address = ipaddress.ip_address(sys.argv[1])
-          if address.version != 4:
-              raise SystemExit("GitHub runner did not resolve to an IPv4 address.")
-          PY
-          runner_cidr="${runner_ip}/32"
-
-          project_json="$(curl -fsS \
-            -H "Authorization: Bearer ${NEON_API_KEY}" \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
-          current_ips="$(jq -c '.project.settings.allowed_ips.ips' <<<"$project_json")"
-          protected_only="$(jq -er '.project.settings.allowed_ips.protected_branches_only' <<<"$project_json")"
-
-          [[ "$protected_only" == "true" ]] || {
-            echo "Refusing temporary runner access because protected-branch-only IP Allow is not enabled." >&2
-            exit 1
-          }
-
-          if jq -e --arg cidr "$runner_cidr" 'index($cidr) != null' <<<"$current_ips" >/dev/null; then
-            echo "Runner IPv4 is already present in the allowlist; no temporary entry will be removed later."
-            echo "added=false" >> "$GITHUB_OUTPUT"
-          else
-            updated_ips="$(jq -c --arg cidr "$runner_cidr" '. + [$cidr] | unique' <<<"$current_ips")"
-            payload="$(jq -cn --argjson ips "$updated_ips" '{project:{settings:{allowed_ips:{ips:$ips,protected_branches_only:true}}}}')"
-
-            curl -fsS -X PATCH \
-              -H "Authorization: Bearer ${NEON_API_KEY}" \
-              -H "Content-Type: application/json" \
-              -d "$payload" \
-              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}" >/dev/null
-
-            verify_json="$(curl -fsS \
-              -H "Authorization: Bearer ${NEON_API_KEY}" \
-              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
-            jq -e --arg cidr "$runner_cidr" '.project.settings.allowed_ips.ips | index($cidr) != null' <<<"$verify_json" >/dev/null || {
-              echo "Temporary GitHub runner /32 was not applied." >&2
-              exit 1
-            }
-            echo "added=true" >> "$GITHUB_OUTPUT"
-          fi
-
-          echo "runner_cidr=$runner_cidr" >> "$GITHUB_OUTPUT"
-          echo "GitHub runner network access is constrained to one IPv4 /32 for this migration window."
-
-      - name: Resolve production connection strings without creating branches
+      - name: Resolve Production connection strings
         id: connections
         shell: bash
         env:
@@ -241,7 +176,7 @@ jobs:
           app_url="$(connection_uri nexora_app)"
 
           for value in "$admin_url" "$migrator_url" "$app_url"; do
-            test -n "$value" || { echo "Failed to resolve a required production connection string." >&2; exit 1; }
+            test -n "$value" || { echo "Failed to resolve a required Production connection string." >&2; exit 1; }
             echo "::add-mask::$value"
           done
 
@@ -249,12 +184,23 @@ jobs:
           echo "migrator_url=$migrator_url" >> "$GITHUB_OUTPUT"
           echo "app_url=$app_url" >> "$GITHUB_OUTPUT"
 
-      - name: Validate production roles and migration capability
+      - name: Verify TLS, roles and migration capability
         shell: bash
         env:
           ADMIN_DATABASE_URL: ${{ steps.connections.outputs.admin_url }}
+          MIGRATOR_DATABASE_URL: ${{ steps.connections.outputs.migrator_url }}
+          APP_DATABASE_URL: ${{ steps.connections.outputs.app_url }}
         run: |
           set -euo pipefail
+
+          for url in "$ADMIN_DATABASE_URL" "$MIGRATOR_DATABASE_URL" "$APP_DATABASE_URL"; do
+            ssl_used="$(psql "$url" -v ON_ERROR_STOP=1 -Atqc "select coalesce((select ssl::text from pg_stat_ssl where pid = pg_backend_pid()), 'false')")"
+            [[ "$ssl_used" == "true" ]] || {
+              echo "Production migration is blocked: every database session must use TLS." >&2
+              exit 1
+            }
+          done
+
           missing_roles="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
             with required(role_name) as (
               values ('nexora_owner'), ('nexora_migrator'), ('nexora_app'), ('nexora_worker')
@@ -264,13 +210,53 @@ jobs:
              where not exists (select 1 from pg_roles p where p.rolname = r.role_name);
           ")"
           [[ -z "$missing_roles" ]] || {
-            echo "Missing required production roles: $missing_roles" >&2
+            echo "Missing required Production roles: $missing_roles" >&2
             exit 1
           }
+
+          posture="$(psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "
+            select count(*)
+              from pg_roles
+             where (rolname = 'nexora_owner' and rolcanlogin = false and rolsuper = false and rolbypassrls = false and rolcreatedb = false and rolcreaterole = false)
+                or (rolname in ('nexora_migrator','nexora_app','nexora_worker') and rolcanlogin = true and rolsuper = false and rolbypassrls = false and rolcreatedb = false and rolcreaterole = false);
+          ")"
+          [[ "$posture" == "4" ]] || {
+            echo "Production migration is blocked: minimum-privilege role posture is not satisfied." >&2
+            exit 1
+          }
+
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT CREATE ON DATABASE neondb TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
+
+      - name: Create retained pre-migration Neon checkpoint
+        id: checkpoint
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          PRODUCTION_BRANCH_ID: ${{ steps.production.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          checkpoint_name="production-pre-migration-${GITHUB_RUN_ID}"
+          payload="$(jq -cn --arg name "$checkpoint_name" --arg parent "$PRODUCTION_BRANCH_ID" '{branch:{name:$name,parent_id:$parent}}')"
+
+          response="$(curl -fsS -X POST \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
+
+          checkpoint_id="$(jq -er '.branch.id' <<<"$response")"
+          checkpoint_parent="$(jq -er '.branch.parent_id' <<<"$response")"
+          [[ "$checkpoint_parent" == "$PRODUCTION_BRANCH_ID" ]] || {
+            echo "Pre-migration checkpoint was not created from canonical Production." >&2
+            exit 1
+          }
+
+          echo "name=$checkpoint_name" >> "$GITHUB_OUTPUT"
+          echo "id=$checkpoint_id" >> "$GITHUB_OUTPUT"
+          echo "Created retained checkpoint ${checkpoint_name} (${checkpoint_id}) before any schema migration."
 
       - name: Apply pinned versioned Drizzle migrations
         shell: bash
@@ -284,7 +270,6 @@ jobs:
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
-          pnpm --filter @nexora/database db:check
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
           expected="$(jq '.entries | length' packages/database/migrations/meta/_journal.json)"
           actual="$(psql "$OWNER_DATABASE_URL" -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
@@ -310,66 +295,26 @@ jobs:
           set -euo pipefail
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-runtime.sql
 
-      - name: Remove temporary GitHub runner IPv4
-        if: ${{ always() && steps.runner_perimeter.outputs.added == 'true' }}
-        shell: bash
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          RUNNER_CIDR: ${{ steps.runner_perimeter.outputs.runner_cidr }}
-        run: |
-          set -euo pipefail
-          test -n "${RUNNER_CIDR:-}" || {
-            echo "Runner CIDR output is missing; refusing ambiguous allowlist mutation." >&2
-            exit 1
-          }
-
-          project_json="$(curl -fsS \
-            -H "Authorization: Bearer ${NEON_API_KEY}" \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
-          current_ips="$(jq -c '.project.settings.allowed_ips.ips' <<<"$project_json")"
-          updated_ips="$(jq -c --arg cidr "$RUNNER_CIDR" 'map(select(. != $cidr))' <<<"$current_ips")"
-
-          [[ "$(jq 'length' <<<"$updated_ips")" -gt 0 ]] || {
-            echo "Refusing to remove the temporary runner entry because it would leave Production with an empty permanent allowlist." >&2
-            exit 1
-          }
-
-          payload="$(jq -cn --argjson ips "$updated_ips" '{project:{settings:{allowed_ips:{ips:$ips,protected_branches_only:true}}}}')"
-          curl -fsS -X PATCH \
-            -H "Authorization: Bearer ${NEON_API_KEY}" \
-            -H "Content-Type: application/json" \
-            -d "$payload" \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}" >/dev/null
-
-          verify_json="$(curl -fsS \
-            -H "Authorization: Bearer ${NEON_API_KEY}" \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}")"
-          if jq -e --arg cidr "$RUNNER_CIDR" '.project.settings.allowed_ips.ips | index($cidr) != null' <<<"$verify_json" >/dev/null; then
-            echo "Temporary GitHub runner /32 remains in the allowlist after cleanup." >&2
-            exit 1
-          fi
-          [[ "$(jq -er '.project.settings.allowed_ips.protected_branches_only' <<<"$verify_json")" == "true" ]] || {
-            echo "Protected-branch-only IP Allow was not preserved during cleanup." >&2
-            exit 1
-          }
-          echo "Temporary GitHub runner /32 removed; permanent Railway perimeter preserved."
-
       - name: Production migration summary
         shell: bash
         run: |
           {
-            echo "## Neon Production migration passed"
+            echo "## Neon Production migration passed — Free-tier profile"
             echo ""
             echo "- Branch: production"
-            echo "- Branch type: root/default/protected"
-            echo "- Minimum history window: >= 7 days"
-            echo "- Permanent network perimeter: restricted to approved static egress IPs"
-            echo "- Migration runner access: one temporary IPv4 /32, automatically removed when added by this run"
+            echo "- Branch type: root/default"
             echo "- Release SHA: ${{ inputs.release_sha }}"
+            echo "- Free-tier risk acknowledgement: explicit"
+            echo "- Restore/history window observed before migration: ${{ steps.production.outputs.history_seconds }} seconds"
+            echo "- Pre-migration checkpoint retained: ${{ steps.checkpoint.outputs.name }} (${{ steps.checkpoint.outputs.id }})"
+            echo "- TLS: verified for admin, migrator and runtime connections"
             echo "- Versioned migrations: ${EXPECTED_MIGRATIONS}"
             echo "- Migration ledger: verified"
             echo "- Wave 0024 schema/audit invariants: verified"
             echo "- Runtime RLS and tenant isolation: verified"
+            echo "- Paid branch protection/IP Allow: not required by Free-tier profile"
             echo "- Railway variables changed: no"
             echo "- API redeployed: no"
+            echo ""
+            echo "Keep the checkpoint until Railway/API Production qualification is complete; remove old checkpoints deliberately to remain within the 10-branch Free limit."
           } >> "$GITHUB_STEP_SUMMARY"

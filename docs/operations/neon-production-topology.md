@@ -6,127 +6,146 @@ Jira: NEX-88 / NEX-93
 
 The canonical Neon Production database is the project's **root and default branch named `production`**.
 
-This aligns the Nexora topology with Neon's production guidance and ensures Production can be protected, used as the source of truth for downstream environments, and participate correctly in snapshot/restore workflows.
+The project will operate using **Free-tier provider plans only** unless this architecture decision is explicitly changed later. Production therefore uses compensating controls rather than paid Neon branch protection/IP Allow and Railway static outbound IPs.
 
-## Required topology
+## Canonical topology
 
 ```text
-production  [root, default, protected]
-├─ staging / sanitized staging strategy
-├─ development / lower-environment strategy
-└─ temporary preview/test branches as applicable
+production  [root, default, Free-tier constrained]
+├─ staging
+├─ development
+├─ production-pre-migration-<run-id>  [retained rollback checkpoint when present]
+└─ temporary preview/test branches as capacity permits
 ```
 
-Lower environments must never be substituted for Production.
+Current canonical Production branch ID: `br-silent-feather-a5ku7uyi`.
 
-## Normalization status
+The bootstrap-created child is preserved as `production-bootstrap-legacy-33356656275` until a deliberate cleanup decision is recorded.
 
-The one-time topology normalization is complete.
+## Free-tier constraints accepted
 
-Current canonical state:
+The active Neon Free plan provides a short Instant Restore/history window and a 10-branch project limit. It does not provide the paid Production controls previously targeted by this project, such as platform-enforced protected branches and IP Allow/private networking.
 
-- `production` is the root/default branch;
-- canonical branch ID: `br-silent-feather-a5ku7uyi`;
-- the bootstrap-created child was preserved as `production-bootstrap-legacy-33356656275`;
-- the preserved legacy child had no recorded writes at normalization;
-- `development` and `staging` remain children of the same canonical Production root;
-- no Production migrations, Railway database-variable changes, or API promotion were part of normalization.
+Railway Free also does not provide Static Outbound IPs. Therefore the application reaches Neon through its public endpoint.
 
-The historical workflow `.github/workflows/neon-production-topology.yml` remains manual-only and exists as an audited record of the normalization mechanism. It must not be used as a substitute for the current hardening and migration gates.
+These limitations are **known residual risks**, not equivalent controls. They are accepted for the current Nexora development/early-production profile because the project owner explicitly chose Free-tier-only infrastructure.
 
-## Pre-migration platform gates
+The architecture must not describe this posture as equivalent to Scale/Pro or as a fully hardened mission-critical Production environment.
 
-The Production migration workflow must refuse to run unless all conditions are objectively true:
+## Compensating controls
 
-- canonical branch name is `production`;
-- branch is root (`parent_id` absent);
-- branch is default;
-- branch is protected;
-- history window is at least 7 days;
-- an explicit IP Allow perimeter exists;
-- IP Allow is scoped to protected branches only;
-- the release SHA is an exact commit contained in Git `main` history.
+The Free-tier Production profile requires all of the following:
 
-## Plan policy
+- Neon `production` remains the root/default source of truth;
+- GitHub `main` remains protected by the repository ruleset and required CI;
+- Production-changing workflows use the GitHub `production` environment and explicit manual confirmations;
+- release migrations are pinned to an exact 40-character SHA contained in Git `main` history;
+- database sessions used by qualification/migration must prove TLS is active;
+- `nexora_owner`, `nexora_migrator`, `nexora_app` and `nexora_worker` retain minimum-privilege posture;
+- `nexora_app` and `nexora_worker` must never receive owner/superuser/BYPASSRLS privileges;
+- RLS and tenant-isolation smoke tests remain mandatory after Production migrations;
+- migration ledger count must match the versioned Drizzle journal;
+- one Neon branch slot must be available before a Production migration;
+- immediately before schema migration, the workflow creates and retains `production-pre-migration-<run-id>` from canonical Production;
+- the checkpoint remains until database + Railway/API Production qualification succeeds;
+- old checkpoints and stale PR branches are removed deliberately so the project remains below the 10-branch Free limit;
+- Railway Production must use the `nexora_app` runtime credential, never owner/migrator credentials;
+- Production credentials remain in provider/GitHub secret stores and are never committed to the repository.
 
-Neon Free is not approved for Nexora Production. The target Production posture is:
+## Free baseline workflow
 
-- **Neon Scale** for protected branches, a 30-day Instant Restore target, IP Allow/private networking capabilities, and production-oriented platform controls;
-- **Railway Pro** when Railway Static Outbound IP is used as the application egress control feeding the Neon IP allowlist.
+`.github/workflows/neon-production-free-baseline.yml` is the manual, read-only qualification gate.
 
-The baseline remains:
+It requires exact confirmation:
 
-- history/PITR window: minimum 7 days;
-- preferred Production target: 30 days;
-- engineering RPO target: <= 15 minutes;
-- engineering RTO target: <= 60 minutes;
-- NEX-93 must execute and evidence a real restore qualification before final Go-Live.
+`QUALIFY-PRODUCTION-FREE`
 
-## Production hardening workflow
+It validates:
 
-`.github/workflows/neon-production-hardening.yml` is the protected, manual post-upgrade gate.
+1. canonical `production` exists;
+2. `production` is root and default;
+3. the observed history window is at least the Free-tier baseline currently expected by the repository;
+4. branch usage does not exceed the Free project limit;
+5. admin and runtime sessions use TLS;
+6. the four canonical Nexora database roles retain minimum privilege;
+7. no migrations, Railway variable changes, or API deployments are performed.
+
+Its summary intentionally reports whether branch protection, public blocking and IP allowlist controls are present instead of falsely requiring paid capabilities.
+
+## Production migration workflow
+
+`.github/workflows/neon-production-migrate.yml` is the only approved repository path for Production schema promotion.
 
 It requires:
 
-- GitHub environment `production`;
-- exact confirmation `HARDEN-PRODUCTION`;
-- one or more Railway Production Static Outbound IPv4 addresses;
-- each permanent egress entry must be an individual IPv4 address or `/32` CIDR.
+- `MIGRATE-PRODUCTION`;
+- `ACCEPT-FREE-TIER-RISKS`;
+- exact `release_sha` contained in Git `main` history;
+- canonical root/default Production;
+- at least the expected Free-tier restore/history window;
+- one free Neon branch slot for the rollback checkpoint;
+- TLS and canonical role posture.
 
-It then:
+Before applying any versioned schema migration, the workflow creates a retained checkpoint branch from Production. It then applies the pinned Drizzle migration chain and validates:
 
-1. verifies canonical `production` is root/default;
-2. sets the Production restore target to 30 days;
-3. configures the supplied Railway static egress addresses as the permanent Neon allowlist;
-4. scopes IP Allow to protected branches only, leaving lower unprotected branches available for their separate CI strategy;
-5. marks canonical `production` as protected;
-6. re-reads and verifies retention, topology, branch protection, and the exact permanent allowlist;
-7. applies no database migration;
-8. changes no Railway `DATABASE_URL`;
-9. deploys no API.
+- migration ledger;
+- Wave 0024 audit schema and immutability;
+- runtime RLS;
+- cross-tenant isolation.
 
-The workflow is intentionally safe to keep versioned before the billing upgrade: execution will not qualify until the target Neon capabilities are actually available.
+The checkpoint is **not** automatically deleted. It is a compensating rollback control for the short Free-tier history horizon and is removed only after release qualification or a later deliberate cleanup.
 
-## Migration access through the protected perimeter
+## Disaster recovery policy under Free tier
 
-The permanent Production allowlist is intended to contain Railway Production Static Outbound IPv4 `/32` entries. Broad GitHub Actions address ranges are not approved.
+Provider restore/history is constrained by the active Free plan. The project therefore uses two complementary mechanisms:
 
-`Neon Production Migrate` runs from a GitHub-hosted runner, so the migration workflow uses a narrowly scoped temporary exception:
+1. Neon Instant Restore/history for incidents inside the provider's current Free window;
+2. retained pre-migration checkpoint branches for controlled Production schema releases.
 
-1. verify Production is root/default/protected and the permanent perimeter already exists;
-2. determine the current runner's public IPv4;
-3. add only that single IPv4 as a temporary `/32` through the Neon management API when it is not already present;
-4. perform the pinned migration, migration-ledger check, audit invariants, and runtime RLS/tenant-isolation checks;
-5. in an `always()` cleanup step, re-read the current allowlist and remove only the temporary runner `/32` that this run added;
-6. preserve all permanent Railway entries and `protected_branches_only=true`.
+A checkpoint branch is not a substitute for an independent backup and does not protect against total provider/project loss. NEX-93 must explicitly test and document the actual recovery capability and residual gaps.
 
-If a workflow is externally force-cancelled before cleanup can execute, rerun `Neon Production Hardening` with the approved Railway static IP set before any subsequent Production operation. That workflow reconciles the permanent allowlist exactly.
+Engineering targets remain goals for drills, not provider guarantees:
 
-This design keeps the application perimeter stable while allowing a short, auditable migration window without broad network exposure.
+- RTO target: <= 60 minutes;
+- RPO target: <= 15 minutes for incidents recoverable inside the available history window;
+- migration rollback checkpoint: mandatory before Production DDL;
+- configuration RPO: zero unversioned application/infrastructure changes.
 
-## Production promotion sequence
+## Railway Free Production rule
 
-The exact Phase 1 order is:
+Railway Production remains separate from database qualification.
+
+After Neon Production migration and RLS/smoke pass:
+
+1. obtain the canonical `nexora_app` Production connection string without exposing it in chat/logs;
+2. set Railway Production `DATABASE_URL` only to canonical Neon `production`;
+3. deploy the same pinned application release SHA;
+4. verify `/health`;
+5. verify authentication/environment audience behavior;
+6. verify tenant context and database access;
+7. verify critical domain APIs and Web-to-API contracts.
+
+Dynamic Railway outbound networking is accepted under the Free profile because Neon IP Allow cannot be used. TLS and database credentials are therefore mandatory controls.
+
+## Promotion sequence
 
 ```text
 Git feature/PR/main
 → release candidate
 → development qualification
 → staging acceptance
-→ Neon Scale available
-→ Railway Pro Static Outbound IP allocated (no DB cutover yet)
-→ Neon Production Hardening
-→ verify 30-day history + root/default/protected + permanent IP Allow
-→ protected Neon Production Migrate with pinned release SHA
-→ migration ledger + audit invariants + RLS/tenant-isolation smoke
-→ obtain canonical Production runtime connection for nexora_app
-→ configure Railway Production DATABASE_URL
-→ deploy the same pinned application release
+→ Neon Production Free Baseline
+→ retained pre-migration checkpoint
+→ pinned Production migration
+→ ledger + audit + RLS/tenant-isolation smoke
+→ Railway Production DATABASE_URL -> canonical nexora_app connection
+→ deploy same release SHA
 → /health + auth + tenant + DB + Web↔API qualification
+→ retain checkpoint until qualification evidence is complete
 ```
 
-Allocating Railway static egress is a network prerequisite only; it does **not** authorize pointing the application at Production before database qualification succeeds.
+A successful branch operation, workflow, deployment, or HTTP 200 is not by itself a qualified Production release.
 
-## Promotion rule
+## Future upgrade
 
-Database topology, database qualification, and application promotion are separate gates. A successful branch operation, deploy event, or HTTP 200 is not by itself a qualified Production release.
+Scale/Pro capabilities may be reconsidered later, but they are **not blockers** under the current Free-tier-only architecture decision. Any future paid-plan adoption must be treated as a new architecture/governance change rather than silently reintroduced as a prerequisite.
