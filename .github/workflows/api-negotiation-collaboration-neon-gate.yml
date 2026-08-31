@@ -64,7 +64,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
           role: neondb_owner
@@ -97,7 +97,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
           role: nexora_migrator
@@ -157,7 +157,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
           role: nexora_app
