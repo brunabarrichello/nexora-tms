@@ -1,10 +1,10 @@
-import { Body, Controller, Get, Param, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post } from '@nestjs/common';
 
-import { TenantRuntimeGateGuard } from '../tenant-runtime-gate.guard.js';
+import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { DriverService, type Driver, type DriverAuditEntry } from './driver.service.js';
 
 @Controller('api/v1/capacity/drivers')
-@UseGuards(TenantRuntimeGateGuard)
+@TenantAuthorized('capacity.read')
 export class DriverController {
   constructor(private readonly drivers: DriverService) {}
 
@@ -14,6 +14,7 @@ export class DriverController {
   }
 
   @Post()
+  @TenantAuthorized('capacity.write')
   create(@Body() body: unknown): Promise<Driver> {
     return this.drivers.create(body);
   }
@@ -29,6 +30,7 @@ export class DriverController {
   }
 
   @Patch(':id')
+  @TenantAuthorized('capacity.write')
   update(@Param('id') id: string, @Body() body: unknown): Promise<Driver> {
     return this.drivers.update(id, body);
   }
