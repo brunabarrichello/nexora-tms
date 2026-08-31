@@ -1,0 +1,120 @@
+name: Neon Production Checkpoint Cleanup
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/neon-production-checkpoint-cleanup.yml'
+
+permissions:
+  contents: read
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+  CHECKPOINT_BRANCH_ID: br-frosty-leaf-a5dtrvr6
+  CHECKPOINT_BRANCH_NAME: production-pre-migration-33382150510
+  EXPECTED_PARENT_BRANCH_ID: br-silent-feather-a5ku7uyi
+
+jobs:
+  cleanup:
+    name: Delete qualified Production checkpoint
+    runs-on: ubuntu-24.04
+    environment: production
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || {
+            echo "NEON_API_KEY is not configured." >&2
+            exit 1
+          }
+
+      - name: Verify exact checkpoint identity
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          response="$(curl --fail-with-body --silent --show-error \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${CHECKPOINT_BRANCH_ID}" \
+            -H 'accept: application/json' \
+            -H "authorization: Bearer ${NEON_API_KEY}")"
+
+          actual_id="$(jq -r '.branch.id // empty' <<<"$response")"
+          actual_name="$(jq -r '.branch.name // empty' <<<"$response")"
+          actual_parent_id="$(jq -r '.branch.parent_id // empty' <<<"$response")"
+
+          [[ "$actual_id" == "$CHECKPOINT_BRANCH_ID" ]] || {
+            echo "Checkpoint ID mismatch; refusing deletion." >&2
+            exit 1
+          }
+          [[ "$actual_name" == "$CHECKPOINT_BRANCH_NAME" ]] || {
+            echo "Checkpoint name mismatch; refusing deletion." >&2
+            exit 1
+          }
+          [[ "$actual_parent_id" == "$EXPECTED_PARENT_BRANCH_ID" ]] || {
+            echo "Checkpoint parent mismatch; refusing deletion." >&2
+            exit 1
+          }
+
+          echo "Exact Production checkpoint identity verified."
+
+      - name: Delete exact checkpoint
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          curl --fail-with-body --silent --show-error \
+            --request DELETE \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${CHECKPOINT_BRANCH_ID}" \
+            -H 'accept: application/json' \
+            -H "authorization: Bearer ${NEON_API_KEY}" \
+            >/dev/null
+
+          echo "Exact Production checkpoint deletion requested successfully."
+
+      - name: Verify checkpoint is absent
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+
+          branches="$(curl --fail-with-body --silent --show-error \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            -H 'accept: application/json' \
+            -H "authorization: Bearer ${NEON_API_KEY}")"
+
+          jq -e \
+            --arg id "$CHECKPOINT_BRANCH_ID" \
+            --arg name "$CHECKPOINT_BRANCH_NAME" \
+            '[.branches[] | select(.id == $id or .name == $name)] | length == 0' \
+            <<<"$branches" >/dev/null || {
+              echo "Checkpoint still exists after deletion request." >&2
+              exit 1
+            }
+
+          remaining="$(jq '.branches | length' <<<"$branches")"
+          echo "Checkpoint absence verified. Remaining Neon branches: ${remaining}."
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo "## Production checkpoint cleanup passed"
+            echo ""
+            echo "- Deleted branch name: ${CHECKPOINT_BRANCH_NAME}"
+            echo "- Deleted branch ID: ${CHECKPOINT_BRANCH_ID}"
+            echo "- Expected parent: ${EXPECTED_PARENT_BRANCH_ID}"
+            echo "- Post-delete absence verification: passed"
+            echo "- No schema migration or Railway/Vercel mutation performed"
+          } >> "$GITHUB_STEP_SUMMARY"
