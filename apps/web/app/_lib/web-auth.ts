@@ -41,17 +41,20 @@ interface TokenResponse {
 }
 
 export function readWebAuthConfig(environment: NodeJS.ProcessEnv = process.env): WebAuthConfig {
-  const domainValue = requireValue(environment, 'AUTH0_DOMAIN');
+  const domainValue =
+    optionalValue(environment, 'AUTH0_DOMAIN') ??
+    optionalValue(environment, 'OIDC_ISSUER_URL') ??
+    requireValue(environment, 'AUTH0_DOMAIN');
   const auth0Domain = new URL(
     domainValue.startsWith('https://') || domainValue.startsWith('http://')
       ? domainValue
       : `https://${domainValue}`,
   );
   if (auth0Domain.protocol !== 'https:' && auth0Domain.hostname !== 'localhost') {
-    throw new Error('AUTH0_DOMAIN must use HTTPS');
+    throw new Error('AUTH0_DOMAIN/OIDC_ISSUER_URL must use HTTPS');
   }
 
-  const appBaseUrl = new URL(requireValue(environment, 'APP_BASE_URL'));
+  const appBaseUrl = resolveAppBaseUrl(environment);
   if (appBaseUrl.protocol !== 'https:' && appBaseUrl.hostname !== 'localhost') {
     throw new Error('APP_BASE_URL must use HTTPS outside localhost');
   }
@@ -69,7 +72,10 @@ export function readWebAuthConfig(environment: NodeJS.ProcessEnv = process.env):
     sessionSecret: sessionSecret.toLowerCase(),
     appBaseUrl,
     apiBaseUrl,
-    apiAudience: requireValue(environment, 'NEXORA_API_AUDIENCE'),
+    apiAudience:
+      optionalValue(environment, 'NEXORA_API_AUDIENCE') ??
+      optionalValue(environment, 'OIDC_AUDIENCE') ??
+      requireValue(environment, 'NEXORA_API_AUDIENCE'),
     databaseConnection: optionalValue(environment, 'AUTH0_DATABASE_CONNECTION'),
   };
 }
@@ -269,6 +275,17 @@ export function safeReturnTo(value: string | null | undefined): string {
   } catch {
     return '/';
   }
+}
+
+function resolveAppBaseUrl(environment: NodeJS.ProcessEnv): URL {
+  const explicit = optionalValue(environment, 'APP_BASE_URL');
+  if (explicit) return new URL(explicit);
+
+  const vercelHost =
+    optionalValue(environment, 'VERCEL_BRANCH_URL') ?? optionalValue(environment, 'VERCEL_URL');
+  if (vercelHost) return new URL(`https://${vercelHost}`);
+
+  throw new Error('APP_BASE_URL is required outside Vercel');
 }
 
 function randomBase64Url(size: number): string {
