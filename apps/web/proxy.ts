@@ -1,16 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-import {
-  WEB_SESSION_COOKIE,
-  type WebSession,
-  isWebSessionActive,
-  openAuthValue,
-  readWebAuthConfig,
-} from './app/_lib/web-auth';
+import { auth0 } from './app/_lib/auth0';
+import { safeReturnTo } from './app/_lib/web-auth';
 
 const PUBLIC_PREFIXES = ['/login', '/auth/'];
 
-export function proxy(request: NextRequest): NextResponse {
+export async function proxy(request: NextRequest): Promise<NextResponse> {
+  // The official SDK owns the Auth0 routes, transaction cookie, state and PKCE.
+  const authResponse = await auth0.middleware(request);
   const { pathname } = request.nextUrl;
 
   if (
@@ -19,33 +16,23 @@ export function proxy(request: NextRequest): NextResponse {
     pathname === '/favicon.ico' ||
     /\.[a-zA-Z0-9]+$/.test(pathname)
   ) {
-    return NextResponse.next();
+    return authResponse;
   }
 
   try {
-    const config = readWebAuthConfig();
-    const sealed = request.cookies.get(WEB_SESSION_COOKIE)?.value;
-    const session = openAuthValue<WebSession>(sealed, config.sessionSecret);
-    if (session && isWebSessionActive(session)) return NextResponse.next();
+    const session = await auth0.getSession(request);
+    if (session) return authResponse;
   } catch {
-    // Authentication configuration errors fail closed for protected routes.
+    // SDK/configuration failures fail closed for protected application routes.
   }
 
   const loginUrl = request.nextUrl.clone();
   loginUrl.pathname = '/login';
   loginUrl.search = '';
-  loginUrl.searchParams.set('returnTo', `${pathname}${request.nextUrl.search}`);
-  const response = NextResponse.redirect(loginUrl);
-  response.cookies.set(WEB_SESSION_COOKIE, '', {
-    httpOnly: true,
-    secure: request.nextUrl.protocol === 'https:',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: 0,
-  });
-  return response;
+  loginUrl.searchParams.set('returnTo', safeReturnTo(`${pathname}${request.nextUrl.search}`));
+  return NextResponse.redirect(loginUrl);
 }
 
 export const config = {
-  matcher: '/:path*',
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|sitemap.xml|robots.txt).*)'],
 };

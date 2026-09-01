@@ -1,5 +1,3 @@
-import Link from 'next/link';
-
 type LoginSearchParams = Promise<Readonly<Record<string, string | string[] | undefined>>>;
 
 export default async function LoginPage({
@@ -19,14 +17,14 @@ export default async function LoginPage({
           <span className="eyebrow">Identidade Nexora</span>
           <h1>Entrar no Nexora TMS</h1>
           <p>
-            A autenticação é executada pelo Auth0 usando Authorization Code com PKCE. O Nexora Web
-            mantém somente a sessão segura da aplicação; credenciais e recuperação permanecem no
-            provedor de identidade.
+            A autenticação é executada pelo Auth0 como Regular Web Application. O SDK oficial do
+            Auth0 para Next.js gerencia Authorization Code + PKCE e a sessão Web segura no servidor;
+            o Nexora continua sendo a autoridade para usuário interno, tenant, papéis e permissões.
           </p>
         </div>
-        <Link className="button button-primary" href={loginHref}>
+        <a className="button button-primary" href={loginHref}>
           Entrar com Auth0
-        </Link>
+        </a>
       </section>
 
       {loggedOut ? (

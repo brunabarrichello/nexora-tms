@@ -1,12 +1,6 @@
-import { cookies, headers } from 'next/headers';
+import { headers } from 'next/headers';
 
-import {
-  WEB_SESSION_COOKIE,
-  type WebSession,
-  isWebSessionActive,
-  openAuthValue,
-  readWebAuthConfig,
-} from './web-auth';
+import { auth0 } from './auth0';
 
 export type ApiResult<T> =
   | { readonly kind: 'ready'; readonly data: T }
@@ -42,36 +36,51 @@ async function apiRequest<T>(
     return { kind: 'error', message: 'O caminho solicitado para a API é inválido.' };
   }
 
-  let authConfig;
-  try {
-    authConfig = readWebAuthConfig();
-  } catch {
+  const apiBaseUrlValue = process.env.NEXORA_API_BASE_URL?.trim();
+  if (!apiBaseUrlValue) {
     return {
       kind: 'unconfigured',
-      message: 'A autenticação Web/API ainda não foi configurada para este ambiente.',
+      message: 'A integração Web/API ainda não foi configurada para este ambiente.',
     };
   }
 
-  const cookieStore = await cookies();
-  const session = openAuthValue<WebSession>(
-    cookieStore.get(WEB_SESSION_COOKIE)?.value,
-    authConfig.sessionSecret,
-  );
-  if (!session || !isWebSessionActive(session)) {
+  let apiBaseUrl: URL;
+  try {
+    apiBaseUrl = new URL(apiBaseUrlValue);
+  } catch {
+    return {
+      kind: 'unconfigured',
+      message: 'A URL da API configurada para este ambiente é inválida.',
+    };
+  }
+
+  let accessToken: string;
+  try {
+    const session = await auth0.getSession();
+    if (!session) {
+      return {
+        kind: 'unauthorized',
+        message: 'A sessão Web não está autenticada. Entre novamente no Nexora.',
+      };
+    }
+
+    const token = await auth0.getAccessToken();
+    accessToken = token.token;
+  } catch {
     return {
       kind: 'unauthorized',
-      message: 'A sessão Web expirou ou não está autenticada. Entre novamente no Nexora.',
+      message: 'A sessão Web expirou ou não pôde obter autorização para a API.',
     };
   }
 
   const incomingHeaders = await headers();
   const outgoingHeaders = new Headers(init.headers);
   outgoingHeaders.set('Accept', 'application/json');
-  outgoingHeaders.set('Authorization', `Bearer ${session.accessToken}`);
+  outgoingHeaders.set('Authorization', `Bearer ${accessToken}`);
   const correlationId = incomingHeaders.get('x-correlation-id');
   if (correlationId) outgoingHeaders.set('x-correlation-id', correlationId);
 
-  const baseUrl = authConfig.apiBaseUrl.toString();
+  const baseUrl = apiBaseUrl.toString();
   const url = new URL(path, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined && value !== '') url.searchParams.set(key, value);
