@@ -49,12 +49,18 @@ export function readWebAuthConfig(
       ? domainValue
       : `https://${domainValue}`,
   );
-  if (auth0Domain.protocol !== 'https:' && auth0Domain.hostname !== 'localhost') {
+  if (
+    auth0Domain.protocol !== 'https:' &&
+    auth0Domain.hostname !== 'localhost'
+  ) {
     throw new Error('AUTH0_DOMAIN must use HTTPS');
   }
 
   const appBaseUrl = new URL(requireValue(environment, 'APP_BASE_URL'));
-  if (appBaseUrl.protocol !== 'https:' && appBaseUrl.hostname !== 'localhost') {
+  if (
+    appBaseUrl.protocol !== 'https:' &&
+    appBaseUrl.hostname !== 'localhost'
+  ) {
     throw new Error('APP_BASE_URL must use HTTPS outside localhost');
   }
 
@@ -115,7 +121,9 @@ export function transactionStateMatches(
   if (transaction.expiresAt <= now) return false;
   const expected = Buffer.from(transaction.state);
   const supplied = Buffer.from(suppliedState);
-  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
+  return (
+    expected.length === supplied.length && timingSafeEqual(expected, supplied)
+  );
 }
 
 export async function exchangeAuthorizationCode(
@@ -176,7 +184,11 @@ export async function resolveNexoraUser(
     authenticated?: unknown;
     userId?: unknown;
   };
-  if (payload.authenticated !== true || typeof payload.userId !== 'string' || !payload.userId) {
+  if (
+    payload.authenticated !== true ||
+    typeof payload.userId !== 'string' ||
+    !payload.userId
+  ) {
     throw new Error('Nexora identity response is invalid');
   }
   return payload.userId;
@@ -188,7 +200,10 @@ export function createWebSession(
   userId: string,
   now = Date.now(),
 ): WebSession {
-  const safetyWindowMs = Math.min(30_000, Math.max(1_000, expiresInSeconds * 100));
+  const safetyWindowMs = Math.min(
+    30_000,
+    Math.max(1_000, expiresInSeconds * 100),
+  );
   return {
     accessToken,
     userId,
@@ -200,7 +215,11 @@ export function isWebSessionActive(
   session: WebSession,
   now = Date.now(),
 ): boolean {
-  return session.expiresAt > now && Boolean(session.accessToken) && Boolean(session.userId);
+  return (
+    session.expiresAt > now &&
+    Boolean(session.accessToken) &&
+    Boolean(session.userId)
+  );
 }
 
 export function buildLogoutUrl(config: WebAuthConfig): URL {
@@ -222,20 +241,27 @@ export async function requestPasswordRecovery(
   }
 
   const normalizedEmail = email.trim();
-  if (!normalizedEmail || normalizedEmail.length > 254 || !normalizedEmail.includes('@')) {
+  if (
+    !normalizedEmail ||
+    normalizedEmail.length > 254 ||
+    !normalizedEmail.includes('@')
+  ) {
     return;
   }
 
-  const response = await fetch(new URL('/dbconnections/change_password', config.auth0Domain), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-    body: JSON.stringify({
-      client_id: config.clientId,
-      email: normalizedEmail,
-      connection: config.databaseConnection,
-    }),
-    cache: 'no-store',
-  });
+  const response = await fetch(
+    new URL('/dbconnections/change_password', config.auth0Domain),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        client_id: config.clientId,
+        email: normalizedEmail,
+        connection: config.databaseConnection,
+      }),
+      cache: 'no-store',
+    },
+  );
 
   // Do not expose whether an account exists. Provider-side errors are intentionally collapsed.
   if (response.status >= 500) {
@@ -260,7 +286,9 @@ export function openAuthValue<T>(
   if (!sealed) return undefined;
   try {
     const [version, ivValue, encryptedValue, tagValue] = sealed.split('.');
-    if (version !== 'v1' || !ivValue || !encryptedValue || !tagValue) return undefined;
+    if (version !== 'v1' || !ivValue || !encryptedValue || !tagValue) {
+      return undefined;
+    }
     const decipher = createDecipheriv(
       'aes-256-gcm',
       sessionKey(secretHex),
@@ -309,7 +337,10 @@ function requireValue(environment: NodeJS.ProcessEnv, name: string): string {
   return value;
 }
 
-function optionalValue(environment: NodeJS.ProcessEnv, name: string): string | undefined {
+function optionalValue(
+  environment: NodeJS.ProcessEnv,
+  name: string,
+): string | undefined {
   const value = environment[name]?.trim();
   return value || undefined;
 }
