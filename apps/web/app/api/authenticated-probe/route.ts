@@ -10,14 +10,9 @@ type AuthenticatedUserProbe = {
 export const dynamic = 'force-dynamic';
 
 export async function GET(): Promise<NextResponse> {
-  try {
-    const result = await apiGet<AuthenticatedUserProbe>('/api/v1/auth/me');
+  const result = await apiGet<AuthenticatedUserProbe>('/api/v1/auth/me');
 
-    return NextResponse.json({
-      authenticated: result.authenticated === true,
-      identityLinked: Boolean(result.userId),
-    });
-  } catch {
+  if (result.kind !== 'ready') {
     return NextResponse.json(
       {
         authenticated: false,
@@ -26,4 +21,9 @@ export async function GET(): Promise<NextResponse> {
       { status: 502 },
     );
   }
+
+  return NextResponse.json({
+    authenticated: result.data.authenticated === true,
+    identityLinked: Boolean(result.data.userId),
+  });
 }
