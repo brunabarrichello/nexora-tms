@@ -50,11 +50,13 @@ export async function requestPasswordRecovery(
     cache: 'no-store',
   });
 
-  // Account enumeration is intentionally prevented. Only provider availability
-  // failures become a visible generic error.
-  if (response.status >= 500) {
-    throw new Error('Auth0 recovery service is unavailable');
-  }
+  // Auth0 documents 404 as "user not found". Treat it like success so the Web
+  // flow never reveals whether an account exists. Other non-success statuses
+  // represent provider/configuration/rate-limit failures and must not be masked
+  // as a successfully submitted recovery request.
+  if (response.ok || response.status === 404) return;
+
+  throw new Error('Auth0 recovery request was rejected');
 }
 
 export function safeReturnTo(value: string | null | undefined): string {
