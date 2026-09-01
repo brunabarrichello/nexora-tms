@@ -72,3 +72,11 @@ test('Nexora does not reimplement PKCE, token exchange or Web-session cryptograp
   assert.match(sdkClient, /@auth0\/nextjs-auth0\/server/);
   assert.match(sdkClient, /enableAccessTokenEndpoint:\s*false/);
 });
+
+test('logout requires an explicit form submission instead of a prefetchable anchor', async () => {
+  const appShell = await readFile(new URL('../_components/app-shell.tsx', import.meta.url), 'utf8');
+
+  assert.doesNotMatch(appShell, /<a[^>]*href=["']\/auth\/logout["']/);
+  assert.match(appShell, /<form[^>]*action=["']\/auth\/logout["'][^>]*method=["']get["']/);
+  assert.match(appShell, /<button[^>]*className=["']button["'][^>]*type=["']submit["']/);
+});
