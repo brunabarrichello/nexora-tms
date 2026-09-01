@@ -1,0 +1,112 @@
+name: NEX-70 HTTP gates
+
+on:
+  push:
+    branches:
+      - feat/nex-70-web-auth0-pkce
+    paths:
+      - .github/workflows/nex70-http-gates.yml
+
+permissions:
+  contents: read
+
+jobs:
+  noninteractive-http-gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate Development and Staging Auth0 entry/recovery gates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          probe_login() {
+            local name="$1"
+            local base="$2"
+            local headers code location provider_code
+            headers="$(mktemp)"
+
+            code="$(curl -sS --max-time 20 -o /dev/null -D "$headers" -w '%{http_code}' "$base/auth/login")"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, ""); sub(/^location:[[:space:]]*/, ""); print; exit}' "$headers")"
+
+            case "$code" in
+              302|303|307|308) ;;
+              *) echo "FAIL $name login: expected redirect, got HTTP $code"; exit 1 ;;
+            esac
+
+            if [[ "$location" != https://* ]] || [[ "$location" != *"/authorize"* ]]; then
+              echo "FAIL $name login: did not redirect to an HTTPS /authorize endpoint"
+              exit 1
+            fi
+
+            if ! grep -qi '^set-cookie:' "$headers"; then
+              echo "FAIL $name login: no transaction cookie was set"
+              exit 1
+            fi
+
+            provider_code="$(curl -sS --max-time 20 -o /dev/null -w '%{http_code}' "$location")"
+            case "$provider_code" in
+              200|302|303|307|308) ;;
+              *) echo "FAIL $name Auth0 authorize endpoint: HTTP $provider_code"; exit 1 ;;
+            esac
+
+            echo "PASS $name login initiation: app redirect + transaction cookie + Auth0 authorize reachable"
+            rm -f "$headers"
+          }
+
+          probe_protected() {
+            local name="$1"
+            local base="$2"
+            local headers code location
+            headers="$(mktemp)"
+
+            code="$(curl -sS --max-time 20 -o /dev/null -D "$headers" -w '%{http_code}' "$base/viagens")"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, ""); sub(/^location:[[:space:]]*/, ""); print; exit}' "$headers")"
+
+            case "$code" in
+              302|303|307|308) ;;
+              *) echo "FAIL $name protected route: expected unauthenticated redirect, got HTTP $code"; exit 1 ;;
+            esac
+
+            if [[ "$location" != *"/auth/login"* ]] && [[ "$location" != *"/login"* ]]; then
+              echo "FAIL $name protected route: redirect target is not an auth/login route"
+              exit 1
+            fi
+
+            echo "PASS $name protected route fails closed when unauthenticated"
+            rm -f "$headers"
+          }
+
+          probe_recovery() {
+            local name="$1"
+            local base="$2"
+            local headers code location email
+            headers="$(mktemp)"
+            email="nexora-http-gate-${name}-${GITHUB_RUN_ID}@example.invalid"
+
+            code="$(curl -sS --max-time 20 -o /dev/null -D "$headers" -w '%{http_code}' \
+              --data-urlencode "email=$email" \
+              "$base/auth/recovery")"
+            location="$(awk 'BEGIN{IGNORECASE=1} /^location:/ {sub(/\r$/, ""); sub(/^location:[[:space:]]*/, ""); print; exit}' "$headers")"
+
+            if [[ "$code" != "303" ]]; then
+              echo "FAIL $name recovery: expected HTTP 303, got HTTP $code"
+              exit 1
+            fi
+
+            if [[ "$location" != *"/login?recovery=sent"* ]]; then
+              echo "FAIL $name recovery: provider/configuration rejected the request"
+              exit 1
+            fi
+
+            echo "PASS $name recovery provider/configuration gate with synthetic non-user email"
+            rm -f "$headers"
+          }
+
+          probe_login development https://nexora-tms-web-development-development.up.railway.app
+          probe_protected development https://nexora-tms-web-development-development.up.railway.app
+          probe_recovery development https://nexora-tms-web-development-development.up.railway.app
+
+          probe_login staging https://nexora-tms-web-staging-staging.up.railway.app
+          probe_protected staging https://nexora-tms-web-staging-staging.up.railway.app
+          probe_recovery staging https://nexora-tms-web-staging-staging.up.railway.app
