@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Verify sanitized Development identity and tenant/RBAC fixture
+      - name: Qualify Development runtime database access and fixture
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -26,12 +26,15 @@ jobs:
             sudo apt-get update >/dev/null
             sudo apt-get install -y postgresql-client >/dev/null
           fi
-          MIGRATOR_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name nexora_migrator)"
-          echo "::add-mask::$MIGRATOR_URL"
-          if [[ "$MIGRATOR_URL" == *'?'* ]]; then OWNER_URL="${MIGRATOR_URL}&options=-c%20role%3Dnexora_owner"; else OWNER_URL="${MIGRATOR_URL}?options=-c%20role%3Dnexora_owner"; fi
-          echo "::add-mask::$OWNER_URL"
-          result="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT json_build_object('users',(SELECT count(*) FROM users WHERE id='57000000-0000-4000-8000-000000000101'),'tenants',(SELECT count(*) FROM tenants WHERE id IN ('57000000-0000-4000-8000-000000000001','57000000-0000-4000-8000-000000000002')),'auth0_identity_count',(SELECT count(*) FROM external_identities WHERE user_id='57000000-0000-4000-8000-000000000101' AND provider='auth0'),'membership_active',EXISTS(SELECT 1 FROM memberships WHERE tenant_id='57000000-0000-4000-8000-000000000001' AND user_id='57000000-0000-4000-8000-000000000101' AND status='active'),'tenant_read_granted',EXISTS(SELECT 1 FROM membership_roles mr JOIN role_permissions rp ON rp.tenant_id=mr.tenant_id AND rp.role_id=mr.role_id JOIN permissions p ON p.id=rp.permission_id WHERE mr.tenant_id='57000000-0000-4000-8000-000000000001' AND mr.membership_id='57000000-0000-4000-8000-000000000121' AND p.key='tenant.read')); ")"
+
+          ADMIN_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name neondb_owner)"
+          echo "::add-mask::$ADMIN_URL"
+
+          psql "$ADMIN_URL" -X -v ON_ERROR_STOP=1 -c "GRANT CONNECT ON DATABASE nexora TO nexora_app;" >/dev/null
+
+          result="$(psql "$ADMIN_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT json_build_object('runtime_database_connect',has_database_privilege('nexora_app','nexora','CONNECT'),'users',(SELECT count(*) FROM users WHERE id='57000000-0000-4000-8000-000000000101'),'tenants',(SELECT count(*) FROM tenants WHERE id IN ('57000000-0000-4000-8000-000000000001','57000000-0000-4000-8000-000000000002')),'auth0_identity_count',(SELECT count(*) FROM external_identities WHERE user_id='57000000-0000-4000-8000-000000000101' AND provider='auth0'),'membership_active',EXISTS(SELECT 1 FROM memberships WHERE tenant_id='57000000-0000-4000-8000-000000000001' AND user_id='57000000-0000-4000-8000-000000000101' AND status='active'),'tenant_read_granted',EXISTS(SELECT 1 FROM membership_roles mr JOIN role_permissions rp ON rp.tenant_id=mr.tenant_id AND rp.role_id=mr.role_id JOIN permissions p ON p.id=rp.permission_id WHERE mr.tenant_id='57000000-0000-4000-8000-000000000001' AND mr.membership_id='57000000-0000-4000-8000-000000000121' AND p.key='tenant.read')); ")"
           echo "$result"
+          [[ "$result" == *'"runtime_database_connect" : true'* ]]
           [[ "$result" == *'"users" : 1'* ]]
           [[ "$result" == *'"tenants" : 2'* ]]
           [[ "$result" == *'"auth0_identity_count" : 1'* ]]
