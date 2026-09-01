@@ -78,9 +78,11 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
               <input type="search" placeholder="Buscar no Nexora" />
             </label>
             <span className="tenant-chip">Tenant: contexto autenticado</span>
-            <a className="button" href="/auth/logout">
-              Sair
-            </a>
+            <form action="/auth/logout" method="get">
+              <button className="button" type="submit">
+                Sair
+              </button>
+            </form>
             <div className="avatar" aria-label="Sessão autenticada">
               NX
             </div>
