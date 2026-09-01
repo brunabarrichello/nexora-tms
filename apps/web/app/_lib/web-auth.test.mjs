@@ -2,11 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import {
-  readPasswordRecoveryConfig,
-  requestPasswordRecovery,
-  safeReturnTo,
-} from './web-auth.ts';
+import { readPasswordRecoveryConfig, requestPasswordRecovery, safeReturnTo } from './web-auth.ts';
 
 test('password recovery config normalizes the Auth0 domain and requires the database connection', () => {
   const resolved = readPasswordRecoveryConfig({
