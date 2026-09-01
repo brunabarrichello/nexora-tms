@@ -1,0 +1,56 @@
+name: NEX-70 Development Identity Inventory
+
+on:
+  push:
+    branches:
+      - feat/nex-70-web-auth0-pkce
+    paths:
+      - .github/workflows/nex70-development-identity-inventory.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Inspect sanitized Development identity inventory
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo 'NEON_API_KEY missing' >&2; exit 1; }
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update >/dev/null
+            sudo apt-get install -y postgresql-client >/dev/null
+          fi
+
+          MIGRATOR_URL="$(npx --yes neonctl@v2 connection-string development \
+            --project-id raspy-river-76339604 \
+            --database-name neondb \
+            --role-name nexora_migrator)"
+          echo "::add-mask::$MIGRATOR_URL"
+          if [[ "$MIGRATOR_URL" == *'?'* ]]; then
+            OWNER_URL="${MIGRATOR_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_URL="${MIGRATOR_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_URL"
+
+          echo '--- USERS ---'
+          psql "$OWNER_URL" -X -A -F '|' -v ON_ERROR_STOP=1 -c \
+            "SELECT id::text, coalesce(display_name,''), status::text FROM users ORDER BY created_at, id;"
+
+          echo '--- TENANTS ---'
+          psql "$OWNER_URL" -X -A -F '|' -v ON_ERROR_STOP=1 -c \
+            "SELECT id::text, slug, name, status::text FROM tenants ORDER BY created_at, id;"
+
+          echo '--- MEMBERSHIPS ---'
+          psql "$OWNER_URL" -X -A -F '|' -v ON_ERROR_STOP=1 -c \
+            "SELECT user_id::text, tenant_id::text, status::text FROM memberships ORDER BY user_id, tenant_id;"
+
+          echo '--- EXTERNAL IDENTITY PROVIDERS (subjects intentionally omitted) ---'
+          psql "$OWNER_URL" -X -A -F '|' -v ON_ERROR_STOP=1 -c \
+            "SELECT user_id::text, provider, count(*)::int FROM external_identities GROUP BY user_id, provider ORDER BY user_id, provider;"
