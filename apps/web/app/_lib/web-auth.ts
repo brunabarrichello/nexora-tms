@@ -40,27 +40,19 @@ interface TokenResponse {
   readonly token_type?: unknown;
 }
 
-export function readWebAuthConfig(
-  environment: NodeJS.ProcessEnv = process.env,
-): WebAuthConfig {
+export function readWebAuthConfig(environment: NodeJS.ProcessEnv = process.env): WebAuthConfig {
   const domainValue = requireValue(environment, 'AUTH0_DOMAIN');
   const auth0Domain = new URL(
     domainValue.startsWith('https://') || domainValue.startsWith('http://')
       ? domainValue
       : `https://${domainValue}`,
   );
-  if (
-    auth0Domain.protocol !== 'https:' &&
-    auth0Domain.hostname !== 'localhost'
-  ) {
+  if (auth0Domain.protocol !== 'https:' && auth0Domain.hostname !== 'localhost') {
     throw new Error('AUTH0_DOMAIN must use HTTPS');
   }
 
   const appBaseUrl = new URL(requireValue(environment, 'APP_BASE_URL'));
-  if (
-    appBaseUrl.protocol !== 'https:' &&
-    appBaseUrl.hostname !== 'localhost'
-  ) {
+  if (appBaseUrl.protocol !== 'https:' && appBaseUrl.hostname !== 'localhost') {
     throw new Error('APP_BASE_URL must use HTTPS outside localhost');
   }
 
@@ -82,10 +74,7 @@ export function readWebAuthConfig(
   };
 }
 
-export function createAuthTransaction(
-  returnTo: string,
-  now = Date.now(),
-): AuthTransaction {
+export function createAuthTransaction(returnTo: string, now = Date.now()): AuthTransaction {
   return {
     state: randomBase64Url(32),
     codeVerifier: randomBase64Url(64),
@@ -94,17 +83,11 @@ export function createAuthTransaction(
   };
 }
 
-export function buildAuthorizationUrl(
-  config: WebAuthConfig,
-  transaction: AuthTransaction,
-): URL {
+export function buildAuthorizationUrl(config: WebAuthConfig, transaction: AuthTransaction): URL {
   const url = new URL('/authorize', config.auth0Domain);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', config.clientId);
-  url.searchParams.set(
-    'redirect_uri',
-    new URL('/auth/callback', config.appBaseUrl).toString(),
-  );
+  url.searchParams.set('redirect_uri', new URL('/auth/callback', config.appBaseUrl).toString());
   url.searchParams.set('scope', 'openid profile email');
   url.searchParams.set('audience', config.apiAudience);
   url.searchParams.set('state', transaction.state);
@@ -121,9 +104,7 @@ export function transactionStateMatches(
   if (transaction.expiresAt <= now) return false;
   const expected = Buffer.from(transaction.state);
   const supplied = Buffer.from(suppliedState);
-  return (
-    expected.length === supplied.length && timingSafeEqual(expected, supplied)
-  );
+  return expected.length === supplied.length && timingSafeEqual(expected, supplied);
 }
 
 export async function exchangeAuthorizationCode(
@@ -184,11 +165,7 @@ export async function resolveNexoraUser(
     authenticated?: unknown;
     userId?: unknown;
   };
-  if (
-    payload.authenticated !== true ||
-    typeof payload.userId !== 'string' ||
-    !payload.userId
-  ) {
+  if (payload.authenticated !== true || typeof payload.userId !== 'string' || !payload.userId) {
     throw new Error('Nexora identity response is invalid');
   }
   return payload.userId;
@@ -200,10 +177,7 @@ export function createWebSession(
   userId: string,
   now = Date.now(),
 ): WebSession {
-  const safetyWindowMs = Math.min(
-    30_000,
-    Math.max(1_000, expiresInSeconds * 100),
-  );
+  const safetyWindowMs = Math.min(30_000, Math.max(1_000, expiresInSeconds * 100));
   return {
     accessToken,
     userId,
@@ -211,57 +185,37 @@ export function createWebSession(
   };
 }
 
-export function isWebSessionActive(
-  session: WebSession,
-  now = Date.now(),
-): boolean {
-  return (
-    session.expiresAt > now &&
-    Boolean(session.accessToken) &&
-    Boolean(session.userId)
-  );
+export function isWebSessionActive(session: WebSession, now = Date.now()): boolean {
+  return session.expiresAt > now && Boolean(session.accessToken) && Boolean(session.userId);
 }
 
 export function buildLogoutUrl(config: WebAuthConfig): URL {
   const url = new URL('/v2/logout', config.auth0Domain);
   url.searchParams.set('client_id', config.clientId);
-  url.searchParams.set(
-    'returnTo',
-    new URL('/login?logged_out=1', config.appBaseUrl).toString(),
-  );
+  url.searchParams.set('returnTo', new URL('/login?logged_out=1', config.appBaseUrl).toString());
   return url;
 }
 
-export async function requestPasswordRecovery(
-  config: WebAuthConfig,
-  email: string,
-): Promise<void> {
+export async function requestPasswordRecovery(config: WebAuthConfig, email: string): Promise<void> {
   if (!config.databaseConnection) {
     throw new Error('AUTH0_DATABASE_CONNECTION is required for password recovery');
   }
 
   const normalizedEmail = email.trim();
-  if (
-    !normalizedEmail ||
-    normalizedEmail.length > 254 ||
-    !normalizedEmail.includes('@')
-  ) {
+  if (!normalizedEmail || normalizedEmail.length > 254 || !normalizedEmail.includes('@')) {
     return;
   }
 
-  const response = await fetch(
-    new URL('/dbconnections/change_password', config.auth0Domain),
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({
-        client_id: config.clientId,
-        email: normalizedEmail,
-        connection: config.databaseConnection,
-      }),
-      cache: 'no-store',
-    },
-  );
+  const response = await fetch(new URL('/dbconnections/change_password', config.auth0Domain), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({
+      client_id: config.clientId,
+      email: normalizedEmail,
+      connection: config.databaseConnection,
+    }),
+    cache: 'no-store',
+  });
 
   // Do not expose whether an account exists. Provider-side errors are intentionally collapsed.
   if (response.status >= 500) {
@@ -279,10 +233,7 @@ export function sealAuthValue(value: unknown, secretHex: string): string {
   return `v1.${iv.toString('base64url')}.${encrypted.toString('base64url')}.${tag.toString('base64url')}`;
 }
 
-export function openAuthValue<T>(
-  sealed: string | undefined,
-  secretHex: string,
-): T | undefined {
+export function openAuthValue<T>(sealed: string | undefined, secretHex: string): T | undefined {
   if (!sealed) return undefined;
   try {
     const [version, ivValue, encryptedValue, tagValue] = sealed.split('.');
@@ -337,10 +288,7 @@ function requireValue(environment: NodeJS.ProcessEnv, name: string): string {
   return value;
 }
 
-function optionalValue(
-  environment: NodeJS.ProcessEnv,
-  name: string,
-): string | undefined {
+function optionalValue(environment: NodeJS.ProcessEnv, name: string): string | undefined {
   const value = environment[name]?.trim();
   return value || undefined;
 }
