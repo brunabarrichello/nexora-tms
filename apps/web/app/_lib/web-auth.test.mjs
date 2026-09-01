@@ -2,7 +2,11 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-import { readPasswordRecoveryConfig, safeReturnTo } from './web-auth.ts';
+import {
+  readPasswordRecoveryConfig,
+  requestPasswordRecovery,
+  safeReturnTo,
+} from './web-auth.ts';
 
 test('password recovery config normalizes the Auth0 domain and requires the database connection', () => {
   const resolved = readPasswordRecoveryConfig({
@@ -23,6 +27,35 @@ test('password recovery config normalizes the Auth0 domain and requires the data
       }),
     /AUTH0_DATABASE_CONNECTION is required/,
   );
+});
+
+test('password recovery preserves account non-enumeration while failing closed on provider errors', async (t) => {
+  const config = {
+    auth0Domain: new URL('https://tenant.example.auth0.com'),
+    clientId: 'client-id',
+    databaseConnection: 'Username-Password-Authentication',
+  };
+
+  const originalFetch = globalThis.fetch;
+  t.after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  globalThis.fetch = async () => new Response('sent', { status: 200 });
+  await assert.doesNotReject(() => requestPasswordRecovery(config, 'user@example.com'));
+
+  // Auth0 documents 404 as "user not found"; keep the same outward behavior to
+  // avoid revealing account existence.
+  globalThis.fetch = async () => new Response('not found', { status: 404 });
+  await assert.doesNotReject(() => requestPasswordRecovery(config, 'missing@example.com'));
+
+  for (const status of [400, 401, 403, 429, 500, 503]) {
+    globalThis.fetch = async () => new Response('rejected', { status });
+    await assert.rejects(
+      () => requestPasswordRecovery(config, 'user@example.com'),
+      /Auth0 recovery request was rejected/,
+    );
+  }
 });
 
 test('returnTo accepts only same-origin relative application paths', () => {
