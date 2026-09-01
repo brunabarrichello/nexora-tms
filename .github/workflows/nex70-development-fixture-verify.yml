@@ -1,4 +1,4 @@
-name: NEX-70 Development Migrator Transport
+name: NEX-70 Development Identity Verify
 
 on:
   push:
@@ -11,36 +11,29 @@ permissions:
   contents: read
 
 jobs:
-  transport:
+  verify:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Encrypt Development migrator connection for one-shot provisioning
+      - name: Verify sanitized Development identity and tenant/RBAC fixture
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
           test -n "${NEON_API_KEY:-}"
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update >/dev/null
+            sudo apt-get install -y postgresql-client >/dev/null
+          fi
           MIGRATOR_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name nexora_migrator)"
-          test -n "$MIGRATOR_URL"
           echo "::add-mask::$MIGRATOR_URL"
-          cat > /tmp/nex70-public.pem <<'PEM'
-          -----BEGIN PUBLIC KEY-----
-          MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAm7DB+J+L1AViuhfQRiAE
-          5yEVBFiDJzUm3MVtcgq5KV0RzyPrMav13EYOwR2FAHcgf65wg+F+Hs+kx25euyUH
-          JhH9hGgS6iT55znR0/0W4vFnw/3hZr1gB1XpWG3ykwzxPffF0Aosn6pmOSQnldJy
-          B1flaxPTRmUOiZ11SUP1cpPegG72VOpr8kC1nzxLNj9m/obseh5R2UpnAuXyo7gC
-          +Q840IdCRvI8asmOqN3o6Uc/xo3Pf4Xm7fSyI6H15l+Lh6jFi+tuMfuCtjt7Zg6n
-          ab/u7t/G0IpXr/gFeUJkuzjBkGQS7DOgf34JcTvrnBBap2BmewtRbRk86/Ot2Iw8
-          1joIT1J+zUpfTIxb9WMpfe321EKSasu00xz/CKQ8VCvMHxfNDjSu1hlplb3Q1MYj
-          WCRQTM2puB2eSz1Y7e85xl2DTJCcaXRjGr8h8QIz5BHSZyQXwmHxwTIkEyfdjSGK
-          Iw1ePv/w3apTFwpi4ZNmxJJyLAVWfdLkEfQzYt/PZCi1hLcbmypqqa9wpXLOGgVQ
-          2V49fMvups3iCMaVFzzbnKVqs7MAFchYfpcVnoYFtf9dzwsE+d2EfNChKFEqs+na
-          LpCvRVoTv5t50jclNZbV4kk3WeIyxWZ9sgYqc5ubHRJx3ax20yOadYQ1AeqU1wqe
-          LDl6xZv156kqkimWq1JYisUCAwEAAQ==
-          -----END PUBLIC KEY-----
-          PEM
-          CIPHER="$(printf '%s' "$MIGRATOR_URL" | openssl pkeyutl -encrypt -pubin -inkey /tmp/nex70-public.pem -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 | base64 -w0)"
-          test -n "$CIPHER"
-          echo "NEX70_ENCRYPTED_MIGRATOR_URL=$CIPHER"
+          if [[ "$MIGRATOR_URL" == *'?'* ]]; then OWNER_URL="${MIGRATOR_URL}&options=-c%20role%3Dnexora_owner"; else OWNER_URL="${MIGRATOR_URL}?options=-c%20role%3Dnexora_owner"; fi
+          echo "::add-mask::$OWNER_URL"
+          result="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT json_build_object('users',(SELECT count(*) FROM users WHERE id='57000000-0000-4000-8000-000000000101'),'tenants',(SELECT count(*) FROM tenants WHERE id IN ('57000000-0000-4000-8000-000000000001','57000000-0000-4000-8000-000000000002')),'auth0_identity_count',(SELECT count(*) FROM external_identities WHERE user_id='57000000-0000-4000-8000-000000000101' AND provider='auth0'),'membership_active',EXISTS(SELECT 1 FROM memberships WHERE tenant_id='57000000-0000-4000-8000-000000000001' AND user_id='57000000-0000-4000-8000-000000000101' AND status='active'),'tenant_read_granted',EXISTS(SELECT 1 FROM membership_roles mr JOIN role_permissions rp ON rp.tenant_id=mr.tenant_id AND rp.role_id=mr.role_id JOIN permissions p ON p.id=rp.permission_id WHERE mr.tenant_id='57000000-0000-4000-8000-000000000001' AND mr.membership_id='57000000-0000-4000-8000-000000000121' AND p.key='tenant.read')); ")"
+          echo "$result"
+          [[ "$result" == *'"users" : 1'* ]]
+          [[ "$result" == *'"tenants" : 2'* ]]
+          [[ "$result" == *'"auth0_identity_count" : 1'* ]]
+          [[ "$result" == *'"membership_active" : true'* ]]
+          [[ "$result" == *'"tenant_read_granted" : true'* ]]
