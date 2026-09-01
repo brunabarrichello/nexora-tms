@@ -7,6 +7,7 @@ import {
   createWebSession,
   isWebSessionActive,
   openAuthValue,
+  readWebAuthConfig,
   safeReturnTo,
   sealAuthValue,
   transactionStateMatches,
@@ -35,6 +36,22 @@ test('authorization URL binds state, API audience and PKCE S256', () => {
   assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
   assert.notEqual(url.searchParams.get('code_challenge'), transaction.codeVerifier);
   assert.equal(transaction.returnTo, '/cargas');
+});
+
+test('Web auth reuses OIDC issuer/audience and Vercel branch URL when explicit aliases are absent', () => {
+  const resolved = readWebAuthConfig({
+    OIDC_ISSUER_URL: 'https://tenant.example.auth0.com/',
+    OIDC_AUDIENCE: 'urn:nexora:tms:api:development',
+    VERCEL_BRANCH_URL: 'nexora-dev.example.vercel.app',
+    NEXORA_API_BASE_URL: 'https://api.example.com',
+    AUTH0_CLIENT_ID: 'client-id',
+    AUTH0_CLIENT_SECRET: 'client-secret',
+    AUTH0_SECRET: '44'.repeat(32),
+  });
+
+  assert.equal(resolved.auth0Domain.toString(), 'https://tenant.example.auth0.com/');
+  assert.equal(resolved.apiAudience, 'urn:nexora:tms:api:development');
+  assert.equal(resolved.appBaseUrl.toString(), 'https://nexora-dev.example.vercel.app/');
 });
 
 test('state comparison fails closed for mismatch and expired transaction', () => {
