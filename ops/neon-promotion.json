@@ -1,6 +1,6 @@
 {
-  "environment": "staging",
-  "wave": "0024",
-  "migration": "0024_dry_owl",
-  "sourceMainSha": "24898122e6a7939c02d24eb5ea82a98078bfc21a"
+  "environment": "development",
+  "wave": "0024-async",
+  "migration": "0027_nex90_lease_reaper",
+  "sourceMainSha": "e08c7a53e37380aa8c8c0dee5d1c2716b47ed1f3"
 }
