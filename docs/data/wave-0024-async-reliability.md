@@ -30,6 +30,7 @@ The API owns creation of asynchronous intent while a tenant transaction is open.
 `apps/worker` will consume the persistence model under `nexora_worker` in NEX-91.
 
 - poll due work;
+- reap exhausted final-attempt leases before normal claiming;
 - call the database claim primitives;
 - execute an idempotent handler;
 - call success/failure primitives;
@@ -153,6 +154,28 @@ Worker-only completion primitives:
 
 They require the active lease owner, clear the lease atomically, persist terminal success and append a correlated audit event. Repeating completion after terminal state is a no-op (`false`).
 
+## Expired final-attempt lease recovery
+
+A crash can occur after a Worker acquires its final permitted attempt but before it records success or failure. Without explicit recovery, that row would have no remaining claimable attempt after the lease expires.
+
+Migration `0027_nex90_lease_reaper.sql` adds Worker-only reaper primitives:
+
+- `nexora_reap_expired_outbox_leases(worker_id, batch_size)`;
+- `nexora_reap_expired_durable_job_leases(worker_id, batch_size)`.
+
+The reapers:
+
+1. only select rows whose lease is expired and attempt counter is already exhausted;
+2. use `FOR UPDATE SKIP LOCKED` with bounded batches;
+3. terminalize them as logical dead-letter;
+4. clear lease/lock state;
+5. preserve tenant, payload, correlation and idempotency identity;
+6. append correlated failure audit events;
+7. are idempotent after terminalization;
+8. deliberately ignore expired rows that still have attempts remaining, because normal claim recovery owns those rows.
+
+This closes the crash window between the last claim and persistence of its terminal result.
+
 ## Dead-letter and controlled reprocessing
 
 Dead-letter is a state, not a second queue and not deletion.
@@ -183,13 +206,15 @@ Processing transitions persist audit envelopes in the existing append-only `audi
 - `async.outbox.processed`;
 - `async.outbox.retry_scheduled`;
 - `async.outbox.dead_lettered`;
+- `async.outbox.lease_expired_dead_lettered`;
 - `async.outbox.requeued`;
 - `async.job.succeeded`;
 - `async.job.retry_scheduled`;
 - `async.job.dead_lettered`;
+- `async.job.lease_expired_dead_lettered`;
 - `async.job.requeued`.
 
-The events retain tenant, entity id, correlation id, request id and idempotency key. `nexora_worker` receives INSERT-only audit access through a worker-specific RLS policy; it cannot mutate immutable audit history.
+The events retain tenant, entity id, correlation id, request id and idempotency key. `nexora_worker` receives INSERT-only audit access through a worker-specific RLS policy; it cannot read or mutate immutable audit history. Audit verification is therefore performed through the owner connection in CI, rather than widening Worker privileges for testing convenience.
 
 Runtime structured logs, counters, latency metrics, health/readiness and alerting are operational behavior of `apps/worker` and remain NEX-91. NEX-90 supplies every correlation/state field required for those signals.
 
@@ -207,7 +232,7 @@ Runtime structured logs, counters, latency metrics, health/readiness and alertin
 - explicit cross-tenant RLS policy only on `outbox_events` and `durable_jobs`;
 - `SELECT`, `INSERT`, `UPDATE` on async tables;
 - `INSERT` only on `audit_events`;
-- `EXECUTE` only on claim/complete/fail primitives;
+- `EXECUTE` on claim/complete/fail/reaper primitives;
 - no owner requeue execution;
 - no `DELETE`;
 - no `BYPASSRLS`.
@@ -218,7 +243,7 @@ Runtime structured logs, counters, latency metrics, health/readiness and alertin
 
 `Neon Async Reliability Gate` creates an isolated temporary Neon branch and validates:
 
-- full migration replay;
+- full migration replay through 0027;
 - table constraints and RLS;
 - minimum privileges and function execution boundaries;
 - tenant A/B isolation for `nexora_app`;
@@ -230,8 +255,11 @@ Runtime structured logs, counters, latency metrics, health/readiness and alertin
 - duplicate completion rejection;
 - bounded retry scheduling;
 - retry → reclaim → success;
-- dead-letter transitions;
-- execution audit metadata;
+- explicit dead-letter transitions;
+- exhausted final-attempt expired-lease terminalization;
+- preservation of retryable expired leases for normal reclaim;
+- reaper idempotency;
+- execution/reaper audit metadata through owner verification;
 - owner-only controlled reprocessing while preserving idempotency;
 - ephemeral branch cleanup;
 - no Production mutation.
@@ -245,7 +273,7 @@ NEX-90 is the persistence/reliability contract. It does **not** declare `apps/wo
 NEX-91 consumes, rather than reimplements, the NEX-90 primitives and owns:
 
 - worker database connection lifecycle;
-- continuously running poll loop;
+- continuously running poll/reaper/claim loop;
 - handler registry;
 - handler idempotency against real side effects;
 - runtime error classification/jitter policy;
