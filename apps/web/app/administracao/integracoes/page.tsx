@@ -37,9 +37,11 @@ export default function Page() {
         { href: '/administracao/integracoes', label: 'Adapters' },
         { href: '/administracao/integracoes/webhooks', label: 'Webhooks' },
         { href: '/administracao/integracoes/entregas', label: 'Entregas' },
+        { href: '/administracao/integracoes/processamento', label: 'Processamento' },
       ]}
       integrationNotes={[
         'Secrets permanecerão exclusivamente em secret stores; a interface mostrará apenas metadados seguros.',
+        'Falhas de Outbox/Durable Jobs e reprocessamento administrativo são operados na aba Processamento.',
       ]}
     />
   );
