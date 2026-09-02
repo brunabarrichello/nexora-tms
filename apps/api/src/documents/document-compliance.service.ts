@@ -102,9 +102,7 @@ export class DocumentComplianceService {
       );
       const id = result.rows[0]?.id;
       if (!id) {
-        throw new ConflictException(
-          'document compliance policy could not be persisted',
-        );
+        throw new ConflictException('document compliance policy could not be persisted');
       }
       return this.requirePolicy(client, id);
     });
@@ -132,11 +130,7 @@ export class DocumentComplianceService {
     const override = parseComplianceOverride(input);
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
-      await this.requireSubject(
-        client,
-        override.subjectScope,
-        override.subjectId,
-      );
+      await this.requireSubject(client, override.subjectScope, override.subjectId);
       const policy = await client.query<{
         subject_scope: string;
         enabled: boolean;
@@ -150,19 +144,13 @@ export class DocumentComplianceService {
       );
       const row = policy.rows[0];
       if (!row) {
-        throw new NotFoundException(
-          'active compliance policy not found for document type',
-        );
+        throw new NotFoundException('active compliance policy not found for document type');
       }
       if (row.subject_scope !== override.subjectScope) {
-        throw new ConflictException(
-          'document type policy does not match override subject scope',
-        );
+        throw new ConflictException('document type policy does not match override subject scope');
       }
       if (!row.enabled) {
-        throw new ConflictException(
-          'document type policy is not enabled for requested context',
-        );
+        throw new ConflictException('document type policy is not enabled for requested context');
       }
 
       const result = await client.query<DocumentComplianceRecord>(
@@ -185,9 +173,7 @@ export class DocumentComplianceService {
       );
       const created = result.rows[0];
       if (!created) {
-        throw new ConflictException(
-          'document compliance override could not be persisted',
-        );
+        throw new ConflictException('document compliance override could not be persisted');
       }
       return created;
     });
@@ -250,10 +236,9 @@ export class DocumentComplianceService {
       driver: 'drivers',
       asset: 'capacity_assets',
     };
-    const result = await client.query(
-      `SELECT 1 FROM ${table[scope]} WHERE id=$1::uuid LIMIT 1`,
-      [id],
-    );
+    const result = await client.query(`SELECT 1 FROM ${table[scope]} WHERE id=$1::uuid LIMIT 1`, [
+      id,
+    ]);
     if (result.rowCount !== 1) {
       throw new NotFoundException(`${scope} not found in current tenant`);
     }

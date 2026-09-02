@@ -34,10 +34,7 @@ test('parses a blocking document compliance policy with safe defaults', () => {
 });
 
 test('requires at least one enforcement context', () => {
-  assert.throws(
-    () => parseCompliancePolicy({ documentTypeId: typeId }),
-    BadRequestException,
-  );
+  assert.throws(() => parseCompliancePolicy({ documentTypeId: typeId }), BadRequestException);
 });
 
 test('rejects warning windows beyond one year', () => {

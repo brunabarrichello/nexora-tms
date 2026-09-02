@@ -17,10 +17,7 @@ test('Compliance controller requires document read permission by default', () =>
 
 test('Policy and override mutations require tenant administration', () => {
   assert.equal(
-    reflector.get(
-      REQUIRED_TENANT_PERMISSION,
-      DocumentComplianceController.prototype.upsertPolicy,
-    ),
+    reflector.get(REQUIRED_TENANT_PERMISSION, DocumentComplianceController.prototype.upsertPolicy),
     'tenant.manage',
   );
   assert.equal(

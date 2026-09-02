@@ -28,9 +28,7 @@ export interface DocumentCompliancePolicyRecord {
   readonly isActive?: unknown;
 }
 
-export type DocumentSearchParams = Promise<
-  Record<string, string | string[] | undefined>
->;
+export type DocumentSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export type DocumentTargetKind = 'party' | 'driver' | 'asset' | 'request';
 export interface DocumentTargetOption {
@@ -51,9 +49,7 @@ export function singleValues(
 }
 
 export function documentText(value: unknown, fallback = '—'): string {
-  return value === undefined || value === null || value === ''
-    ? fallback
-    : String(value);
+  return value === undefined || value === null || value === '' ? fallback : String(value);
 }
 
 export function documentDate(value: unknown): string {
@@ -66,9 +62,7 @@ export function documentDate(value: unknown): string {
 export function documentDateTime(value: unknown): string {
   if (!value) return '—';
   const date = new Date(String(value));
-  return Number.isNaN(date.getTime())
-    ? String(value)
-    : date.toLocaleString('pt-BR');
+  return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString('pt-BR');
 }
 
 export function documentBytes(value: unknown): string {
@@ -119,8 +113,7 @@ export function policyWarningDays(
 ): number {
   const documentTypeId = String(item.document_type_id ?? '');
   const policy = policies.find(
-    (candidate) =>
-      candidate.documentTypeId === documentTypeId && candidate.isActive !== false,
+    (candidate) => candidate.documentTypeId === documentTypeId && candidate.isActive !== false,
   );
   const configured = Number(policy?.warningDays);
   return Number.isFinite(configured) && configured >= 0 ? configured : fallback;
@@ -132,16 +125,12 @@ export function policyAwareStatus(
 ): string {
   const current = effectiveStatus(item);
   if (current !== 'valid') return current;
-  return isExpiringWithin(item, policyWarningDays(item, policies))
-    ? 'expiring_soon'
-    : current;
+  return isExpiringWithin(item, policyWarningDays(item, policies)) ? 'expiring_soon' : current;
 }
 
 export function isExpiringWithin(item: DocumentRecord, days: number): boolean {
   if (!item.expires_on) return false;
-  const expiry = new Date(
-    `${String(item.expires_on).slice(0, 10)}T00:00:00Z`,
-  ).getTime();
+  const expiry = new Date(`${String(item.expires_on).slice(0, 10)}T00:00:00Z`).getTime();
   if (Number.isNaN(expiry)) return false;
   const now = Date.now();
   const upper = now + days * 86_400_000;
