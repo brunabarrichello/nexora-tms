@@ -116,7 +116,7 @@ A tela não expõe preferências ou canais externos porque pertencem ao NEX-57.
 
 O `Neon In-App Notifications Gate` deve provar em branch efêmera:
 
-- replay completo das migrations `0041/0042`;
+- replay completo das migrations `0041/0042/0043`;
 - RLS e least privilege;
 - função protegida de emissão;
 - presença dos quatro produtores de domínio;
