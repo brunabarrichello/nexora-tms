@@ -138,7 +138,10 @@ BEGIN
       '77000000-0000-4000-8000-000000000501','Cross-tenant override must fail',clock_timestamp()+interval '1 day',
       '77000000-0000-4000-8000-000000000102'
     );
-    RAISE EXCEPTION 'Cross-tenant compliance override must be rejected by RLS';
-  EXCEPTION WHEN insufficient_privilege THEN NULL;
+    RAISE EXCEPTION USING
+      ERRCODE='N4701',
+      MESSAGE='Cross-tenant compliance override was not rejected';
+  EXCEPTION
+    WHEN insufficient_privilege OR SQLSTATE 'P0001' THEN NULL;
   END;
 END $$;
