@@ -309,6 +309,13 @@
       "when": 1788381600000,
       "tag": "0043_nex54_notification_function_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1788385200000,
+      "tag": "0044_nex55_async_admin_reprocessing",
+      "breakpoints": true
     }
   ]
 }
