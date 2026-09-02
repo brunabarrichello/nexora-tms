@@ -12,10 +12,10 @@ export interface CreateCustomerReceivableInput {
 }
 
 export interface UpdateCustomerReceivableInput {
-  readonly dueAt?: string;
-  readonly fiscalDocumentId?: string | null;
-  readonly fiscalReference?: string | null;
-  readonly notes?: string | null;
+  dueAt?: string;
+  fiscalDocumentId?: string | null;
+  fiscalReference?: string | null;
+  notes?: string | null;
 }
 
 export interface CancelCustomerReceivableInput {
