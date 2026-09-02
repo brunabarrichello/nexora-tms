@@ -73,3 +73,19 @@ jobs:
       - name: Verify Drizzle artifacts are versioned
         if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
         run: git diff --exit-code -- packages/database/migrations
+
+      - name: NEX-70 sanitized Staging Auth0 token probe
+        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'feat/nex-70-web-auth0-pkce' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --max-time 20 'https://nexora-tms-web-staging-staging.up.railway.app/auth/token-client-probe')"
+          printf '%s\n' "$response"
+          python - <<'PY' "$response"
+          import json, sys
+          p=json.loads(sys.argv[1])
+          assert p.get('probeReady') is True
+          assert isinstance(p.get('tokenEndpointStatus'), int)
+          assert isinstance(p.get('providerError'), str)
+          assert isinstance(p.get('clientAuthenticationAccepted'), bool)
+          PY
