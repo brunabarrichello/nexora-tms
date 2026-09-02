@@ -4,12 +4,7 @@ import { loadWorkerConfig } from './config.js';
 import { HandlerRegistry } from './handlers.js';
 import { StructuredLogger } from './logger.js';
 import { WorkerRuntime } from './runtime.js';
-import type {
-  AsyncStore,
-  DurableJobWorkItem,
-  FailureStatus,
-  OutboxWorkItem,
-} from './store.js';
+import type { AsyncStore, DurableJobWorkItem, FailureStatus, OutboxWorkItem } from './store.js';
 
 class FakeStore implements AsyncStore {
   private delivered = false;

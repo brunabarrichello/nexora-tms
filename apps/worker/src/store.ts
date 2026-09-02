@@ -35,7 +35,11 @@ export interface AsyncStore {
   close(): Promise<void>;
   reapExpiredLeases(workerId: string, batchSize: number): Promise<{ outbox: number; jobs: number }>;
   claimOutbox(workerId: string, batchSize: number, leaseSeconds: number): Promise<OutboxWorkItem[]>;
-  claimJobs(workerId: string, batchSize: number, leaseSeconds: number): Promise<DurableJobWorkItem[]>;
+  claimJobs(
+    workerId: string,
+    batchSize: number,
+    leaseSeconds: number,
+  ): Promise<DurableJobWorkItem[]>;
   completeOutbox(id: string, workerId: string): Promise<boolean>;
   completeJob(id: string, workerId: string): Promise<boolean>;
   failOutbox(
@@ -95,7 +99,11 @@ export class PgAsyncStore implements AsyncStore {
     return result.rows[0] ?? { outbox: 0, jobs: 0 };
   }
 
-  async claimOutbox(workerId: string, batchSize: number, leaseSeconds: number): Promise<OutboxWorkItem[]> {
+  async claimOutbox(
+    workerId: string,
+    batchSize: number,
+    leaseSeconds: number,
+  ): Promise<OutboxWorkItem[]> {
     const result = await this.pool.query<OutboxWorkItem>(
       'select * from nexora_claim_outbox_events($1, $2, $3)',
       [workerId, batchSize, leaseSeconds],
@@ -103,7 +111,11 @@ export class PgAsyncStore implements AsyncStore {
     return result.rows;
   }
 
-  async claimJobs(workerId: string, batchSize: number, leaseSeconds: number): Promise<DurableJobWorkItem[]> {
+  async claimJobs(
+    workerId: string,
+    batchSize: number,
+    leaseSeconds: number,
+  ): Promise<DurableJobWorkItem[]> {
     const result = await this.pool.query<DurableJobWorkItem>(
       'select * from nexora_claim_durable_jobs($1, $2, $3)',
       [workerId, batchSize, leaseSeconds],

@@ -30,7 +30,9 @@ export class WorkerHealthServer {
 
       if (request.url === '/ready') {
         response.statusCode = snapshot.ready ? 200 : 503;
-        response.end(JSON.stringify({ status: snapshot.ready ? 'ready' : 'not_ready', ...snapshot }));
+        response.end(
+          JSON.stringify({ status: snapshot.ready ? 'ready' : 'not_ready', ...snapshot }),
+        );
         return;
       }
 

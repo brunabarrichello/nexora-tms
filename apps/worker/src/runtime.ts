@@ -89,8 +89,11 @@ export class WorkerRuntime {
       ready,
       startedAt: this.startedAt === null ? null : new Date(this.startedAt).toISOString(),
       lastSuccessfulPollAt:
-        this.lastSuccessfulPollAt === null ? null : new Date(this.lastSuccessfulPollAt).toISOString(),
-      lastPollErrorAt: this.lastPollErrorAt === null ? null : new Date(this.lastPollErrorAt).toISOString(),
+        this.lastSuccessfulPollAt === null
+          ? null
+          : new Date(this.lastSuccessfulPollAt).toISOString(),
+      lastPollErrorAt:
+        this.lastPollErrorAt === null ? null : new Date(this.lastPollErrorAt).toISOString(),
       consecutivePollFailures: this.consecutivePollFailures,
       claimedOutbox: this.claimedOutbox,
       claimedJobs: this.claimedJobs,
@@ -125,7 +128,10 @@ export class WorkerRuntime {
 
   private async tick(now: number): Promise<void> {
     if (now >= this.nextReaperAt) {
-      const reaped = await this.store.reapExpiredLeases(this.config.workerId, this.config.batchSize);
+      const reaped = await this.store.reapExpiredLeases(
+        this.config.workerId,
+        this.config.batchSize,
+      );
       this.reapedOutbox += reaped.outbox;
       this.reapedJobs += reaped.jobs;
       this.nextReaperAt = now + this.config.reaperIntervalMs;
@@ -237,7 +243,11 @@ export class WorkerRuntime {
     this.recordFailure(status, error, common);
   }
 
-  private recordFailure(status: FailureStatus, error: unknown, common: Record<string, unknown>): void {
+  private recordFailure(
+    status: FailureStatus,
+    error: unknown,
+    common: Record<string, unknown>,
+  ): void {
     if (status === null) {
       this.logger.warn('worker.failure.lease_lost', { ...common, ...errorFields(error) });
       return;
@@ -279,7 +289,10 @@ export class WorkerRuntime {
     };
   }
 
-  private async processWithConcurrency<T>(items: T[], processItem: (item: T) => Promise<void>): Promise<void> {
+  private async processWithConcurrency<T>(
+    items: T[],
+    processItem: (item: T) => Promise<void>,
+  ): Promise<void> {
     if (items.length === 0) {
       return;
     }
