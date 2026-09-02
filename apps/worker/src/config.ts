@@ -8,6 +8,7 @@ export interface WorkerConfig {
   reaperIntervalMs: number;
   batchSize: number;
   leaseSeconds: number;
+  handlerTimeoutMs: number;
   maxConcurrency: number;
   baseBackoffSeconds: number;
   maxBackoffSeconds: number;
@@ -43,6 +44,15 @@ export function loadWorkerConfig(env: Environment = process.env): WorkerConfig {
   }
 
   const pollIntervalMs = readInteger(env, 'WORKER_POLL_INTERVAL_MS', 1_000, 100, 60_000);
+  const leaseSeconds = readInteger(env, 'WORKER_LEASE_SECONDS', 30, 2, 3_600);
+  const maximumHandlerTimeoutMs = leaseSeconds * 1_000 - 1_000;
+  const handlerTimeoutMs = readInteger(
+    env,
+    'WORKER_HANDLER_TIMEOUT_MS',
+    Math.min(10_000, maximumHandlerTimeoutMs),
+    100,
+    maximumHandlerTimeoutMs,
+  );
 
   return {
     databaseUrl,
@@ -53,7 +63,8 @@ export function loadWorkerConfig(env: Environment = process.env): WorkerConfig {
     pollIntervalMs,
     reaperIntervalMs: readInteger(env, 'WORKER_REAPER_INTERVAL_MS', 15_000, 1_000, 300_000),
     batchSize: readInteger(env, 'WORKER_BATCH_SIZE', 20, 1, 500),
-    leaseSeconds: readInteger(env, 'WORKER_LEASE_SECONDS', 30, 1, 3_600),
+    leaseSeconds,
+    handlerTimeoutMs,
     maxConcurrency: readInteger(env, 'WORKER_MAX_CONCURRENCY', 8, 1, 100),
     baseBackoffSeconds: readInteger(env, 'WORKER_BASE_BACKOFF_SECONDS', 5, 1, 3_600),
     maxBackoffSeconds: readInteger(env, 'WORKER_MAX_BACKOFF_SECONDS', 900, 1, 86_400),
