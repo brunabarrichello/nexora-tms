@@ -89,4 +89,74 @@ BEGIN
   RETURN NEW;
 END
 $$;--> statement-breakpoint
-REVOKE ALL ON FUNCTION "nexora_carrier_payment_obligation_guard"() FROM PUBLIC;
+REVOKE ALL ON FUNCTION "nexora_carrier_payment_obligation_guard"() FROM PUBLIC;--> statement-breakpoint
+
+CREATE OR REPLACE FUNCTION "nexora_carrier_payment_transaction_guard"()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_obligation record;
+  v_settled numeric(14,2);
+  v_related record;
+BEGIN
+  SELECT contracted_amount,status
+    INTO v_obligation
+    FROM carrier_payment_obligations
+   WHERE tenant_id=NEW.tenant_id
+     AND id=NEW.obligation_id
+   FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'carrier payment obligation not found' USING ERRCODE='P0001';
+  END IF;
+
+  IF v_obligation.status='cancelled' THEN
+    RAISE EXCEPTION 'cannot record transaction on cancelled carrier payment obligation' USING ERRCODE='P0001';
+  END IF;
+
+  IF NEW.kind='reversal' THEN
+    SELECT id,amount,kind,obligation_id,occurred_at
+      INTO v_related
+      FROM carrier_payment_transactions
+     WHERE tenant_id=NEW.tenant_id
+       AND id=NEW.related_transaction_id;
+
+    IF NOT FOUND OR v_related.obligation_id <> NEW.obligation_id OR v_related.kind NOT IN ('advance','payment') THEN
+      RAISE EXCEPTION 'reversal must reference an advance or payment from the same obligation' USING ERRCODE='P0001';
+    END IF;
+
+    IF NEW.amount <> v_related.amount THEN
+      RAISE EXCEPTION 'reversal amount must equal original transaction amount' USING ERRCODE='P0001';
+    END IF;
+
+    IF NEW.occurred_at < v_related.occurred_at THEN
+      RAISE EXCEPTION 'reversal cannot occur before original transaction' USING ERRCODE='P0001';
+    END IF;
+
+    IF EXISTS (
+      SELECT 1 FROM carrier_payment_transactions r
+       WHERE r.tenant_id=NEW.tenant_id
+         AND r.related_transaction_id=NEW.related_transaction_id
+         AND r.kind='reversal'
+    ) THEN
+      RAISE EXCEPTION 'transaction has already been reversed' USING ERRCODE='P0001';
+    END IF;
+  ELSE
+    SELECT coalesce(sum(CASE WHEN kind IN ('advance','payment') THEN amount ELSE -amount END),0)::numeric(14,2)
+      INTO v_settled
+      FROM carrier_payment_transactions
+     WHERE tenant_id=NEW.tenant_id
+       AND obligation_id=NEW.obligation_id;
+
+    IF v_settled + NEW.amount > v_obligation.contracted_amount THEN
+      RAISE EXCEPTION 'carrier payment transaction exceeds obligation balance' USING ERRCODE='P0001';
+    END IF;
+  END IF;
+
+  RETURN NEW;
+END
+$$;--> statement-breakpoint
+REVOKE ALL ON FUNCTION "nexora_carrier_payment_transaction_guard"() FROM PUBLIC;

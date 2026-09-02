@@ -139,10 +139,22 @@ async function run(): Promise<void> {
       );
     });
 
+    await assert.rejects(
+      paymentsA.createTransaction(obligation.id, {
+        kind: 'reversal',
+        amount: settlement.amount,
+        relatedTransactionId: settlement.id,
+        occurredAt: '2026-09-10T12:00:00Z',
+        notes: 'chronologically invalid reversal',
+      }),
+      /cannot occur before original transaction/,
+    );
+
     const settlementReversal = await paymentsA.createTransaction(obligation.id, {
       kind: 'reversal',
       amount: settlement.amount,
       relatedTransactionId: settlement.id,
+      occurredAt: '2026-09-12T12:00:00Z',
       notes: 'reverse final settlement for correction',
     });
     assert.equal(settlementReversal.relatedTransactionId, settlement.id);
@@ -157,6 +169,7 @@ async function run(): Promise<void> {
         kind: 'reversal',
         amount: settlement.amount,
         relatedTransactionId: settlement.id,
+        occurredAt: '2026-09-12T13:00:00Z',
       }),
       /already been reversed|record already exists/,
     );
@@ -165,6 +178,7 @@ async function run(): Promise<void> {
       kind: 'reversal',
       amount: advance.amount,
       relatedTransactionId: advance.id,
+      occurredAt: '2026-09-13T12:00:00Z',
       notes: 'reverse advance',
     });
 
