@@ -38,7 +38,7 @@ Cada linha representa uma entrega interna para um usuário específico e registr
 - `delivered_at`;
 - `read_at`.
 
-A única mutação permitida ao runtime é preencher `read_at`. Uma notificação lida não volta para não lida.
+A única mutação permitida ao runtime é preencher `read_at`. Uma notificação lida não volta para não lida. Repetir a operação de leitura é idempotente e preserva o primeiro `read_at`.
 
 ## Targeting
 
