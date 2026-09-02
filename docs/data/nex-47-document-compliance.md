@@ -126,6 +126,8 @@ On every relevant PR it:
 
 The normal CI remains responsible for lint, formatting, typecheck, tests, build, Docker Compose validation and Drizzle artifact checks.
 
+NEX-47 is qualified for merge only when both normal CI and Neon Documents Gate pass on the same user-authored PR head.
+
 ## Production
 
 NEX-47 qualification does not apply migrations or deploy code to Production. Production remains frozen until a separate promotion decision and approved SHA.
