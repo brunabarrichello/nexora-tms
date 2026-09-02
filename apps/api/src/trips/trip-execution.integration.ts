@@ -153,6 +153,11 @@ async function run(): Promise<void> {
       metadata: { estimatedMinutes: 20 },
     });
 
+    const pickupDocument = await executionA.linkDocument(TRIP_A, {
+      tripStopId: PICKUP_STOP,
+      documentId: DOCUMENT_A,
+      relationType: 'pickup_proof',
+    });
     const deliveryDocument = await executionA.linkDocument(TRIP_A, {
       tripStopId: DELIVERY_STOP,
       documentId: DOCUMENT_A,
@@ -171,6 +176,42 @@ async function run(): Promise<void> {
       relationType: 'fuel_receipt',
     });
 
+    await assert.rejects(
+      executionA.createProof(TRIP_A, {
+        tripDocumentId: String(pickupDocument.id),
+        proofType: 'pickup',
+        capturedAt: '2026-08-20T08:05:00Z',
+        source: 'mobile',
+        notes: 'Proof without stop must fail',
+      }),
+      /pickup proof requires a trip stop/,
+    );
+
+    await assert.rejects(
+      executionA.createProof(TRIP_A, {
+        tripStopId: PICKUP_STOP,
+        tripDocumentId: String(pickupDocument.id),
+        proofType: 'delivery',
+        capturedAt: '2026-08-20T08:06:00Z',
+        source: 'mobile',
+        notes: 'Delivery proof at pickup stop must fail',
+      }),
+      /delivery proof requires a delivery stop/,
+    );
+
+    const pickupProof = await executionA.createProof(TRIP_A, {
+      tripStopId: PICKUP_STOP,
+      tripDocumentId: String(pickupDocument.id),
+      proofType: 'pickup',
+      capturedAt: '2026-08-20T08:08:00Z',
+      source: 'mobile',
+      notes: 'Signed pickup receipt',
+    });
+    assert.equal(pickupProof.trip_stop_id, PICKUP_STOP);
+    assert.equal(pickupProof.proof_type, 'pickup');
+    assert.equal(pickupProof.captured_by_user_id, USER_A);
+    assert.equal(pickupProof.notes, 'Signed pickup receipt');
+
     const deliveryProof = await executionA.createProof(TRIP_A, {
       tripStopId: DELIVERY_STOP,
       tripDocumentId: String(deliveryDocument.id),
@@ -179,6 +220,9 @@ async function run(): Promise<void> {
       source: 'mobile',
       notes: 'Signed delivery receipt',
     });
+    assert.equal(deliveryProof.trip_stop_id, DELIVERY_STOP);
+    assert.equal(deliveryProof.proof_type, 'delivery');
+    assert.equal(deliveryProof.captured_by_user_id, USER_A);
 
     await executionA.createCheckin(TRIP_A, {
       tripStopId: DELIVERY_STOP,
@@ -197,6 +241,7 @@ async function run(): Promise<void> {
       status: 'accepted',
     });
     assert.equal(pod.status, 'accepted');
+    assert.equal(pod.created_by_user_id, USER_A);
 
     const expense = await executionA.createExpense(TRIP_A, {
       tripDocumentId: String(expenseDocument.id),
@@ -238,6 +283,7 @@ async function run(): Promise<void> {
 
     assert.ok((await executionA.listEvents(TRIP_A)).length >= 3);
     assert.equal((await executionA.listLocations(TRIP_A)).length, 2);
+    assert.equal((await executionA.listProofs(TRIP_A)).length, 2);
     assert.equal((await executionA.listDeliveryProofs(TRIP_A)).length, 1);
 
     await database.withTenantContext(contextA.require(), async (client) => {
@@ -255,6 +301,7 @@ async function run(): Promise<void> {
 
     assert.equal((await tripsB.list()).length, 0);
     await assert.rejects(executionB.listEvents(TRIP_A), /Trip not found in current tenant/);
+    await assert.rejects(executionB.listProofs(TRIP_A), /Trip not found in current tenant/);
     await assert.rejects(
       executionB.getTrackingSnapshot(TRIP_A),
       /Trip not found in current tenant/,
@@ -265,6 +312,13 @@ async function run(): Promise<void> {
     const completedTracking = await executionA.getTrackingSnapshot(TRIP_A);
     assert.equal(completedTracking.hasPosition, true);
     assert.equal(completedTracking.tripStatus, 'completed');
+
+    const retainedProofs = await executionA.listProofs(TRIP_A);
+    assert.equal(retainedProofs.length, 2);
+    assert.ok(retainedProofs.some((proof) => proof.id === pickupProof.id));
+    assert.ok(retainedProofs.some((proof) => proof.id === deliveryProof.id));
+    assert.equal((await executionA.listDeliveryProofs(TRIP_A)).length, 1);
+
     await assert.rejects(
       executionA.createEvent(TRIP_A, {
         eventType: 'note',
