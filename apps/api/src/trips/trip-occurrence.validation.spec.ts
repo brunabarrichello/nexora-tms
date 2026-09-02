@@ -42,17 +42,17 @@ test('trip occurrence input rejects incomplete coordinate pair', () => {
 
 test('treatment requires a note and can explicitly clear responsibility', () => {
   assert.throws(() => parseTripOccurrenceTreatment({}), /note must be a string/);
-  const parsed = parseTripOccurrenceTreatment({ note: 'Transferred to operations', responsibleUserId: null });
+  const parsed = parseTripOccurrenceTreatment({
+    note: 'Transferred to operations',
+    responsibleUserId: null,
+  });
   assert.equal(parsed.changesResponsible, true);
   assert.equal(parsed.responsibleUserId, null);
 });
 
 test('status and document relation validate stable domains', () => {
   assert.equal(parseTripOccurrenceStatus({ status: 'resolved' }).status, 'resolved');
-  assert.equal(
-    parseTripOccurrenceDocument({ documentId: DOCUMENT_ID }).relationType,
-    'evidence',
-  );
+  assert.equal(parseTripOccurrenceDocument({ documentId: DOCUMENT_ID }).relationType, 'evidence');
   assert.throws(() => parseTripOccurrenceStatus({ status: 'closed' }), /status is invalid/);
   assert.throws(
     () => parseTripOccurrenceDocument({ documentId: DOCUMENT_ID, relationType: 'receipt' }),

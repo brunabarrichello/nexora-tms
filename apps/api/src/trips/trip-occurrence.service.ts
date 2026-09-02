@@ -316,7 +316,11 @@ export class TripOccurrenceService {
     return trip;
   }
 
-  private async requireStop(client: TenantQueryClient, tripId: string, stopId: string): Promise<void> {
+  private async requireStop(
+    client: TenantQueryClient,
+    tripId: string,
+    stopId: string,
+  ): Promise<void> {
     const id = requireUuid(stopId, 'tripStopId');
     const result = await client.query(
       `SELECT 1 FROM trip_stops WHERE id=$1::uuid AND trip_id=$2::uuid`,
@@ -344,10 +348,7 @@ export class TripOccurrenceService {
     return occurrence;
   }
 
-  private async requireActiveResponsible(
-    client: TenantQueryClient,
-    userId: string,
-  ): Promise<void> {
+  private async requireActiveResponsible(client: TenantQueryClient, userId: string): Promise<void> {
     const result = await client.query(
       `SELECT 1
          FROM memberships m
@@ -360,7 +361,9 @@ export class TripOccurrenceService {
       [userId],
     );
     if (result.rowCount !== 1) {
-      throw new ConflictException('Responsible user must be an active member of the current tenant');
+      throw new ConflictException(
+        'Responsible user must be an active member of the current tenant',
+      );
     }
   }
 }
@@ -368,8 +371,8 @@ export class TripOccurrenceService {
 function hasPgCode(error: unknown, code: string): boolean {
   return Boolean(
     error &&
-      typeof error === 'object' &&
-      'code' in error &&
-      (error as { code?: unknown }).code === code,
+    typeof error === 'object' &&
+    'code' in error &&
+    (error as { code?: unknown }).code === code,
   );
 }

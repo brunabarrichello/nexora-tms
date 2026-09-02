@@ -96,9 +96,10 @@ async function run(): Promise<void> {
 
     await database.withTenantContext(contextA.require(), async (client) => {
       await assert.rejects(
-        client.query(`UPDATE trip_occurrence_history SET note='tampered' WHERE occurrence_id=$1::uuid`, [
-          occurrence.id,
-        ]),
+        client.query(
+          `UPDATE trip_occurrence_history SET note='tampered' WHERE occurrence_id=$1::uuid`,
+          [occurrence.id],
+        ),
         /permission denied/i,
       );
     });

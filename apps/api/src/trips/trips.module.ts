@@ -13,12 +13,7 @@ import { TripsService } from './trips.service.js';
 @Module({
   imports: [AuthenticationModule, TenancyModule],
   controllers: [TripsController, TripExecutionController, TripOccurrenceController],
-  providers: [
-    TripsService,
-    TripExecutionService,
-    TripOccurrenceService,
-    TenantRuntimeGateGuard,
-  ],
+  providers: [TripsService, TripExecutionService, TripOccurrenceService, TenantRuntimeGateGuard],
   exports: [TripsService, TripExecutionService, TripOccurrenceService],
 })
 export class TripsModule {}
