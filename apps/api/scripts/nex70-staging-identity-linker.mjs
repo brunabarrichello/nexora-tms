@@ -11,35 +11,40 @@ const adminRole = 'neondb_owner';
 const userId = '58000000-0000-4000-8000-000000000101';
 
 const subject = process.env.NEX70_AUTH_SUB?.trim();
+const protectedConnectionString = process.env.LINK_DATABASE_URL?.trim();
 const neonApiKey = process.env.NEON_API_KEY?.trim();
 
-if (!subject || !neonApiKey) {
-  throw new Error('Required protected inputs are missing');
+if (!subject) {
+  throw new Error('Protected identity input is missing');
 }
 
-const connectionString = execFileSync(
-  'npx',
-  [
-    '--yes',
-    'neonctl@v2',
-    'connection-string',
-    branchName,
-    '--project-id',
-    projectId,
-    '--database-name',
-    databaseName,
-    '--role-name',
-    adminRole,
-  ],
-  {
-    encoding: 'utf8',
-    env: { ...process.env, NEON_API_KEY: neonApiKey },
-    stdio: ['ignore', 'pipe', 'pipe'],
-  },
-).trim();
+const connectionString =
+  protectedConnectionString ||
+  (neonApiKey
+    ? execFileSync(
+        'npx',
+        [
+          '--yes',
+          'neonctl@v2',
+          'connection-string',
+          branchName,
+          '--project-id',
+          projectId,
+          '--database-name',
+          databaseName,
+          '--role-name',
+          adminRole,
+        ],
+        {
+          encoding: 'utf8',
+          env: { ...process.env, NEON_API_KEY: neonApiKey },
+          stdio: ['ignore', 'pipe', 'pipe'],
+        },
+      ).trim()
+    : '');
 
 if (!connectionString) {
-  throw new Error('Staging connection could not be resolved');
+  throw new Error('Protected Staging database connection is missing');
 }
 
 const client = new Client({ connectionString, application_name: 'nex70-staging-identity-linker' });
