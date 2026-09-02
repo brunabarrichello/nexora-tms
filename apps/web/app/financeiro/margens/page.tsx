@@ -32,6 +32,7 @@ export default async function Page() {
       title="Margens operacionais"
       description="Receita, custo e margem por carga, recalculados automaticamente quando a contratação é confirmada."
       status={result.kind === 'ready' ? 'API conectada' : 'API indisponível'}
+      filters={[]}
       columns={[
         { key: 'customer', label: 'Cliente' },
         { key: 'cargo', label: 'Carga' },
