@@ -13,26 +13,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.24.0
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24.20.0
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Apply and qualify pending Development migration
+      - name: Verify Development negative bearer gates and audit sink
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -40,55 +23,21 @@ jobs:
           set -euo pipefail
           test -n "${NEON_API_KEY:-}"
 
-          MIGRATOR_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name nexora_migrator)"
-          RUNTIME_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name nexora_app)"
-          echo "::add-mask::$MIGRATOR_URL"
-          echo "::add-mask::$RUNTIME_URL"
+          API_BASE_URL='https://nexora-tms-api-development.up.railway.app'
+          OWNER_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name neondb_owner)"
+          echo "::add-mask::$OWNER_URL"
 
-          if [[ "$MIGRATOR_URL" == *"?"* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_DATABASE_URL="${MIGRATOR_URL}?options=-c%20role%3Dnexora_owner"
-          fi
-          echo "::add-mask::$OWNER_DATABASE_URL"
+          before="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pretenant_auth_events WHERE event_type IN ('auth.bearer.missing','auth.bearer.rejected');")"
 
-          roles="$(psql "$OWNER_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT session_user || ':' || current_user;")"
-          [[ "$roles" == 'nexora_migrator:nexora_owner' ]]
+          missing_status="$(curl --silent --show-error -o /tmp/missing.json -w '%{http_code}' "$API_BASE_URL/api/v1/auth/me")"
+          invalid_status="$(curl --silent --show-error -o /tmp/invalid.json -w '%{http_code}' "$API_BASE_URL/api/v1/auth/me" -H 'Authorization: Bearer not-a-valid-jwt')"
 
-          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          [[ "$missing_status" == '401' ]]
+          [[ "$invalid_status" == '401' ]]
 
-          expected="$(jq '.entries | length' packages/database/migrations/meta/_journal.json)"
-          actual="$(psql "$OWNER_DATABASE_URL" -X -At -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM drizzle.__drizzle_migrations;')"
-          audit_table="$(psql "$RUNTIME_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.pretenant_auth_events') IS NOT NULL;")"
-          audit_insert_privilege="$(psql "$RUNTIME_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT has_table_privilege(current_user, 'public.pretenant_auth_events', 'INSERT');")"
-          identity_rows="$(psql "$RUNTIME_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM external_identities JOIN users ON users.id=external_identities.user_id WHERE external_identities.user_id='57000000-0000-4000-8000-000000000101' AND external_identities.provider='auth0' AND users.status='active';")"
+          sleep 2
+          after="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pretenant_auth_events WHERE event_type IN ('auth.bearer.missing','auth.bearer.rejected');")"
+          delta=$((after - before))
 
-          audit_insert_rollback=false
-          if psql "$RUNTIME_URL" -X -v ON_ERROR_STOP=1 >/dev/null <<'SQL'
-          BEGIN;
-          INSERT INTO pretenant_auth_events
-            (id, event_type, outcome, provider_key, subject_fingerprint, user_id, request_id, correlation_id)
-          VALUES
-            ('57000000-0000-4000-8000-000000000199'::uuid,
-             'auth.identity.accepted',
-             'success',
-             'auth0',
-             repeat('0', 64),
-             '57000000-0000-4000-8000-000000000101'::uuid,
-             'nex70-audit-probe',
-             'nex70-audit-probe');
-          ROLLBACK;
-          SQL
-          then
-            audit_insert_rollback=true
-          fi
-
-          printf '{"migration_rows":%s,"expected_migrations":%s,"audit_table":%s,"audit_insert_privilege":%s,"audit_insert_rollback":%s,"identity_rows":%s}\n' \
-            "$actual" "$expected" "$audit_table" "$audit_insert_privilege" "$audit_insert_rollback" "$identity_rows"
-
-          [[ "$actual" == "$expected" ]]
-          [[ "$expected" == '26' ]]
-          [[ "$audit_table" == 't' ]]
-          [[ "$audit_insert_privilege" == 't' ]]
-          [[ "$audit_insert_rollback" == 'true' ]]
-          [[ "$identity_rows" == '1' ]]
+          printf '{"missing_bearer_status":%s,"invalid_bearer_status":%s,"audit_event_delta":%s}\n' "$missing_status" "$invalid_status" "$delta"
+          (( delta >= 2 ))
