@@ -150,14 +150,18 @@ export default async function Page({
                   <option value="">Nenhum</option>
                   {reversible.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {kindLabel(item.kind)} — {money(item.amount, obligation.currencyCode)} — {dateTime(item.occurredAt)}
+                      {kindLabel(item.kind)} — {money(item.amount, obligation.currencyCode)} —{' '}
+                      {dateTime(item.occurredAt)}
                     </option>
                   ))}
                 </select>
               </label>
               <label className="form-field field-wide">
                 <span>Comprovante (Document ID)</span>
-                <input name="proofDocumentId" placeholder="UUID de documento já enviado ao Document Core" />
+                <input
+                  name="proofDocumentId"
+                  placeholder="UUID de documento já enviado ao Document Core"
+                />
               </label>
               <label className="form-field field-wide">
                 <span>Observações</span>
@@ -172,7 +176,11 @@ export default async function Page({
               <p>O banco rejeita automaticamente lançamentos acima do saldo disponível.</p>
             </div>
             <div className="sticky-actions">
-              <button className="button button-primary" type="submit" disabled={obligation.effectiveStatus === 'cancelled'}>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={obligation.effectiveStatus === 'cancelled'}
+              >
                 Registrar lançamento
               </button>
             </div>
@@ -193,7 +201,12 @@ export default async function Page({
             <div className="field-grid">
               <label className="form-field">
                 <span>Vencimento *</span>
-                <input name="dueDate" type="date" defaultValue={inputDate(obligation.dueAt)} required />
+                <input
+                  name="dueDate"
+                  type="date"
+                  defaultValue={inputDate(obligation.dueAt)}
+                  required
+                />
               </label>
               <label className="form-field">
                 <span>Viagem (UUID)</span>
@@ -212,7 +225,11 @@ export default async function Page({
               <p>Viagem: {obligation.tripCode ?? 'não vinculada'}</p>
             </div>
             <div className="sticky-actions">
-              <button className="button button-secondary" type="submit" disabled={obligation.effectiveStatus === 'cancelled'}>
+              <button
+                className="button button-secondary"
+                type="submit"
+                disabled={obligation.effectiveStatus === 'cancelled'}
+              >
                 Atualizar obrigação
               </button>
             </div>
@@ -239,7 +256,9 @@ export default async function Page({
           kind: kindLabel(item.kind),
           amount: money(item.amount, obligation.currencyCode),
           proof: item.proofDocumentTitle ?? item.proofDocumentId ?? '—',
-          notes: item.notes ?? (item.relatedTransactionId ? `Reverte ${item.relatedTransactionId}` : '—'),
+          notes:
+            item.notes ??
+            (item.relatedTransactionId ? `Reverte ${item.relatedTransactionId}` : '—'),
         }))}
         totalRows={transactions.length}
         emptyTitle="Nenhum lançamento"
@@ -313,26 +332,33 @@ function inputDate(value: string): string {
 }
 
 function kindLabel(value: string): string {
-  return { advance: 'Adiantamento', payment: 'Pagamento', reversal: 'Reversão' }[value] ?? value;
+  const labels: Record<string, string> = {
+    advance: 'Adiantamento',
+    payment: 'Pagamento',
+    reversal: 'Reversão',
+  };
+  return labels[value] ?? value;
 }
 
 function statusLabel(value: string): string {
-  return {
+  const labels: Record<string, string> = {
     open: 'Em aberto',
     partially_paid: 'Parcialmente pago',
     overdue: 'Vencido',
     paid: 'Pago',
     cancelled: 'Cancelado',
-  }[value] ?? value;
+  };
+  return labels[value] ?? value;
 }
 
 function eventLabel(value: string): string {
-  return {
+  const labels: Record<string, string> = {
     created: 'Criada',
     due_at_changed: 'Vencimento alterado',
     notes_changed: 'Observação alterada',
     cancelled: 'Cancelada',
     status_changed: 'Status alterado',
     transaction_recorded: 'Lançamento registrado',
-  }[value] ?? value;
+  };
+  return labels[value] ?? value;
 }
