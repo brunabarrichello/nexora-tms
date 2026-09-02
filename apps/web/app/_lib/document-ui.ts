@@ -15,6 +15,15 @@ export interface ReferenceDocumentTypePage {
   readonly page: { readonly total: number; readonly limit: number; readonly offset: number };
 }
 
+export interface DocumentCompliancePolicyRecord {
+  readonly documentTypeId: string;
+  readonly warningDays?: unknown;
+  readonly requiredForContracting?: unknown;
+  readonly requiredForTrip?: unknown;
+  readonly blockWhenExpiringSoon?: unknown;
+  readonly isActive?: unknown;
+}
+
 export type DocumentSearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export type DocumentTargetKind = 'party' | 'driver' | 'asset' | 'request';
@@ -66,6 +75,7 @@ export function documentStatusLabel(value: unknown): string {
     draft: 'Rascunho',
     pending: 'Pendente',
     valid: 'Válido',
+    expiring_soon: 'A vencer',
     rejected: 'Reprovado',
     expired: 'Vencido',
     archived: 'Arquivado',
@@ -88,6 +98,29 @@ export function documentTabs() {
 
 export function effectiveStatus(item: DocumentRecord): string {
   return documentText(item.effective_status ?? item.status, 'draft');
+}
+
+export function policyWarningDays(
+  item: DocumentRecord,
+  policies: readonly DocumentCompliancePolicyRecord[],
+  fallback = 30,
+): number {
+  const documentTypeId = String(item.document_type_id ?? '');
+  const policy = policies.find(
+    (candidate) =>
+      candidate.documentTypeId === documentTypeId && candidate.isActive !== false,
+  );
+  const configured = Number(policy?.warningDays);
+  return Number.isFinite(configured) && configured >= 0 ? configured : fallback;
+}
+
+export function policyAwareStatus(
+  item: DocumentRecord,
+  policies: readonly DocumentCompliancePolicyRecord[],
+): string {
+  const current = effectiveStatus(item);
+  if (current !== 'valid') return current;
+  return isExpiringWithin(item, policyWarningDays(item, policies)) ? 'expiring_soon' : current;
 }
 
 export function isExpiringWithin(item: DocumentRecord, days: number): boolean {
