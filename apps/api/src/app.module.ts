@@ -9,6 +9,7 @@ import { HealthController } from './health.controller.js';
 import { MasterDataModule } from './master-data/master-data.module.js';
 import { MatchingModule } from './matching/matching.module.js';
 import { NegotiationModule } from './negotiation/negotiation.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { AuthenticationModule } from './security/authentication.module.js';
 import { TenantRuntimeGateModule } from './tenant-runtime-gate.module.js';
 import { TenancyModule } from './tenancy/tenancy.module.js';
@@ -27,6 +28,7 @@ import { TripsModule } from './trips/trips.module.js';
     DocumentsModule,
     TripsModule,
     FinanceModule,
+    NotificationsModule,
   ],
   controllers: [ApiController, HealthController],
 })
