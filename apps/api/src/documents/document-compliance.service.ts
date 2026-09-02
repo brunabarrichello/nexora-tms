@@ -59,7 +59,9 @@ export class DocumentComplianceService {
         [policy.documentTypeId],
       );
       const subjectScope = type.rows[0]?.subject_scope;
-      if (!subjectScope) throw new NotFoundException('document type not found in current tenant');
+      if (!subjectScope) {
+        throw new NotFoundException('document type not found in current tenant');
+      }
       if (!['party', 'driver', 'asset'].includes(subjectScope)) {
         throw new ConflictException(
           'blocking compliance policy only supports party, driver or asset document types',
@@ -99,7 +101,11 @@ export class DocumentComplianceService {
         ],
       );
       const id = result.rows[0]?.id;
-      if (!id) throw new ConflictException('document compliance policy could not be persisted');
+      if (!id) {
+        throw new ConflictException(
+          'document compliance policy could not be persisted',
+        );
+      }
       return this.requirePolicy(client, id);
     });
   }
@@ -126,8 +132,15 @@ export class DocumentComplianceService {
     const override = parseComplianceOverride(input);
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
-      await this.requireSubject(client, override.subjectScope, override.subjectId);
-      const policy = await client.query<{ subject_scope: string; enabled: boolean }>(
+      await this.requireSubject(
+        client,
+        override.subjectScope,
+        override.subjectId,
+      );
+      const policy = await client.query<{
+        subject_scope: string;
+        enabled: boolean;
+      }>(
         `SELECT dt.subject_scope,
                 (CASE WHEN $2::text='contracting' THEN p.required_for_contracting ELSE p.required_for_trip END) AS enabled
            FROM document_compliance_policies p
@@ -136,11 +149,21 @@ export class DocumentComplianceService {
         [override.documentTypeId, override.context],
       );
       const row = policy.rows[0];
-      if (!row) throw new NotFoundException('active compliance policy not found for document type');
-      if (row.subject_scope !== override.subjectScope)
-        throw new ConflictException('document type policy does not match override subject scope');
-      if (!row.enabled)
-        throw new ConflictException('document type policy is not enabled for requested context');
+      if (!row) {
+        throw new NotFoundException(
+          'active compliance policy not found for document type',
+        );
+      }
+      if (row.subject_scope !== override.subjectScope) {
+        throw new ConflictException(
+          'document type policy does not match override subject scope',
+        );
+      }
+      if (!row.enabled) {
+        throw new ConflictException(
+          'document type policy is not enabled for requested context',
+        );
+      }
 
       const result = await client.query<DocumentComplianceRecord>(
         `INSERT INTO document_compliance_overrides (
@@ -161,7 +184,11 @@ export class DocumentComplianceService {
         ],
       );
       const created = result.rows[0];
-      if (!created) throw new ConflictException('document compliance override could not be persisted');
+      if (!created) {
+        throw new ConflictException(
+          'document compliance override could not be persisted',
+        );
+      }
       return created;
     });
   }
@@ -207,7 +234,9 @@ export class DocumentComplianceService {
         WHERE p.id=$1::uuid`,
       [id],
     );
-    if (!result.rows[0]) throw new NotFoundException('document compliance policy not found');
+    if (!result.rows[0]) {
+      throw new NotFoundException('document compliance policy not found');
+    }
     return result.rows[0];
   }
 
@@ -221,7 +250,12 @@ export class DocumentComplianceService {
       driver: 'drivers',
       asset: 'capacity_assets',
     };
-    const result = await client.query(`SELECT 1 FROM ${table[scope]} WHERE id=$1::uuid LIMIT 1`, [id]);
-    if (result.rowCount !== 1) throw new NotFoundException(`${scope} not found in current tenant`);
+    const result = await client.query(
+      `SELECT 1 FROM ${table[scope]} WHERE id=$1::uuid LIMIT 1`,
+      [id],
+    );
+    if (result.rowCount !== 1) {
+      throw new NotFoundException(`${scope} not found in current tenant`);
+    }
   }
 }
