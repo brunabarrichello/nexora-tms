@@ -49,7 +49,9 @@ export default async function Page() {
         stage: item.stage === 'contracted' ? 'Contratado' : 'Planejado',
         revenue: money(item.revenueAmount, item.currencyCode),
         cost: money(item.totalCostAmount, item.costCurrencyCode),
-        margin: item.currencyConsistent ? money(item.marginAmount, item.currencyCode) : 'Moedas distintas',
+        margin: item.currencyConsistent
+          ? money(item.marginAmount, item.currencyCode)
+          : 'Moedas distintas',
         marginPercent: percent(item.marginPercentage),
       }))}
       totalRows={items.length}
