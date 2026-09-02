@@ -63,6 +63,14 @@ class FakeStore implements AsyncStore {
     this.failedJobIds.push(id);
     return 'retry_wait';
   }
+
+  async getWebhookDelivery(): Promise<null> {
+    return null;
+  }
+
+  async recordWebhookAttempt(): Promise<boolean> {
+    return true;
+  }
 }
 
 function workerConfig(overrides: Record<string, string> = {}) {
