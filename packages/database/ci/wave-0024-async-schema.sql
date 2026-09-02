@@ -71,15 +71,19 @@ BEGIN
      OR NOT has_function_privilege('nexora_worker', 'public.nexora_fail_outbox_event(uuid,text,text,integer,integer)', 'EXECUTE')
      OR NOT has_function_privilege('nexora_worker', 'public.nexora_claim_durable_jobs(text,integer,integer)', 'EXECUTE')
      OR NOT has_function_privilege('nexora_worker', 'public.nexora_complete_durable_job(uuid,text)', 'EXECUTE')
-     OR NOT has_function_privilege('nexora_worker', 'public.nexora_fail_durable_job(uuid,text,text,integer,integer)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'nexora_worker is missing async processing function privileges';
+     OR NOT has_function_privilege('nexora_worker', 'public.nexora_fail_durable_job(uuid,text,text,integer,integer)', 'EXECUTE')
+     OR NOT has_function_privilege('nexora_worker', 'public.nexora_reap_expired_outbox_leases(text,integer)', 'EXECUTE')
+     OR NOT has_function_privilege('nexora_worker', 'public.nexora_reap_expired_durable_job_leases(text,integer)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'nexora_worker is missing async processing/reaper function privileges';
   END IF;
 
   IF has_function_privilege('nexora_app', 'public.nexora_claim_outbox_events(text,integer,integer)', 'EXECUTE')
      OR has_function_privilege('nexora_app', 'public.nexora_claim_durable_jobs(text,integer,integer)', 'EXECUTE')
      OR has_function_privilege('nexora_app', 'public.nexora_complete_outbox_event(uuid,text)', 'EXECUTE')
-     OR has_function_privilege('nexora_app', 'public.nexora_complete_durable_job(uuid,text)', 'EXECUTE') THEN
-    RAISE EXCEPTION 'nexora_app unexpectedly received worker execution privileges';
+     OR has_function_privilege('nexora_app', 'public.nexora_complete_durable_job(uuid,text)', 'EXECUTE')
+     OR has_function_privilege('nexora_app', 'public.nexora_reap_expired_outbox_leases(text,integer)', 'EXECUTE')
+     OR has_function_privilege('nexora_app', 'public.nexora_reap_expired_durable_job_leases(text,integer)', 'EXECUTE') THEN
+    RAISE EXCEPTION 'nexora_app unexpectedly received worker execution/reaper privileges';
   END IF;
 
   IF has_function_privilege('nexora_worker', 'public.nexora_requeue_dead_lettered_outbox_event(uuid,timestamp with time zone)', 'EXECUTE')
