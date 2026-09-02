@@ -6,6 +6,7 @@ import { DocumentsModule } from './documents/documents.module.js';
 import { FinanceModule } from './finance/finance.module.js';
 import { FreightModule } from './freight/freight.module.js';
 import { HealthController } from './health.controller.js';
+import { IntegrationsModule } from './integrations/integrations.module.js';
 import { MasterDataModule } from './master-data/master-data.module.js';
 import { MatchingModule } from './matching/matching.module.js';
 import { NegotiationModule } from './negotiation/negotiation.module.js';
@@ -31,6 +32,7 @@ import { TripsModule } from './trips/trips.module.js';
     FinanceModule,
     NotificationsModule,
     ReliabilityModule,
+    IntegrationsModule,
   ],
   controllers: [ApiController, HealthController],
 })
