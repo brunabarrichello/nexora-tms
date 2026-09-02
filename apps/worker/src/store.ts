@@ -1,4 +1,5 @@
-import { Pool } from 'pg';
+import { Pool, type PoolConfig } from 'pg';
+import type { WorkerDatabaseConfig } from './config.js';
 
 export interface OutboxWorkItem {
   id: string;
@@ -58,13 +59,28 @@ export interface AsyncStore {
   ): Promise<FailureStatus>;
 }
 
+function databasePoolConfig(database: WorkerDatabaseConfig): PoolConfig {
+  if (database.kind === 'url') {
+    return { connectionString: database.url };
+  }
+
+  return {
+    host: database.host,
+    port: database.port,
+    database: database.database,
+    user: database.user,
+    password: database.password,
+    ssl: { rejectUnauthorized: true },
+  };
+}
+
 export class PgAsyncStore implements AsyncStore {
   private readonly pool: Pool;
 
-  constructor(databaseUrl: string, maxConnections: number) {
+  constructor(database: WorkerDatabaseConfig, maxConnections: number) {
     this.pool = new Pool({
+      ...databasePoolConfig(database),
       application_name: 'nexora-tms-worker',
-      connectionString: databaseUrl,
       max: Math.max(2, maxConnections + 2),
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 10_000,
@@ -78,6 +94,9 @@ export class PgAsyncStore implements AsyncStore {
     const row = result.rows[0];
     if (!row) {
       throw new Error('Worker database identity query returned no rows');
+    }
+    if (row.role !== 'nexora_worker') {
+      throw new Error(`Worker database identity mismatch: expected nexora_worker, got ${row.role}`);
     }
     return row;
   }
