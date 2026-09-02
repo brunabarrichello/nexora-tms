@@ -1,0 +1,126 @@
+name: NEX-91 Staging Worker Smoke
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/nex91-staging-worker-smoke.yml'
+
+permissions:
+  contents: read
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  smoke:
+    name: Verify real Staging Worker processing
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Resolve Staging admin connection
+        id: admin
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: staging
+          database: neondb
+          role: neondb_owner
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+
+      - name: Enqueue and verify real Worker smoke
+        shell: bash
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+
+          tenant_id="$(psql "$ADMIN_DATABASE_URL" -Atq -v ON_ERROR_STOP=1 -c "select id from tenants order by id limit 1")"
+          test -n "$tenant_id" || { echo "Staging has no tenant fixture available for Worker smoke." >&2; exit 1; }
+
+          smoke_key="nex91-staging-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          correlation_id="nex91-staging-smoke-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          request_id="github-actions-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+          job_id="$(psql "$ADMIN_DATABASE_URL" -Atq -v ON_ERROR_STOP=1 \
+            -v tenant_id="$tenant_id" \
+            -v smoke_key="$smoke_key" \
+            -v correlation_id="$correlation_id" \
+            -v request_id="$request_id" <<'SQL'
+          insert into durable_jobs (
+            tenant_id, job_type, payload, idempotency_key, correlation_id, request_id
+          ) values (
+            :'tenant_id'::uuid,
+            'nexora.worker.smoke',
+            jsonb_build_object('gate','NEX-91','environment','staging'),
+            :'smoke_key',
+            :'correlation_id',
+            :'request_id'
+          ) returning id;
+          SQL
+          )"
+          test -n "$job_id"
+
+          status=""
+          for attempt in $(seq 1 60); do
+            status="$(psql "$ADMIN_DATABASE_URL" -Atq -v ON_ERROR_STOP=1 -v job_id="$job_id" <<'SQL'
+          select status from durable_jobs where id = :'job_id'::uuid;
+          SQL
+          )"
+            case "$status" in
+              succeeded) break ;;
+              dead_lettered|cancelled) echo "Worker smoke entered terminal failure state: $status" >&2; exit 1 ;;
+            esac
+            sleep 1
+          done
+          [[ "$status" == "succeeded" ]] || { echo "Worker smoke did not complete within the bounded window; final status=$status" >&2; exit 1; }
+
+          audit_count="$(psql "$ADMIN_DATABASE_URL" -Atq -v ON_ERROR_STOP=1 -v job_id="$job_id" -v correlation_id="$correlation_id" <<'SQL'
+          select count(*)
+            from audit_events
+           where entity_type = 'durable_job'
+             and entity_id = :'job_id'
+             and action = 'async.job.succeeded'
+             and outcome = 'success'
+             and correlation_id = :'correlation_id';
+          SQL
+          )"
+          [[ "$audit_count" == "1" ]] || { echo "Expected exactly one correlated async.job.succeeded audit event, got $audit_count" >&2; exit 1; }
+
+          job_state="$(psql "$ADMIN_DATABASE_URL" -Atq -F '|' -v ON_ERROR_STOP=1 -v job_id="$job_id" <<'SQL'
+          select status, attempt, coalesce(locked_by,''), finished_at is not null
+            from durable_jobs
+           where id = :'job_id'::uuid;
+          SQL
+          )"
+          [[ "$job_state" == "succeeded|1||t" ]] || { echo "Unexpected terminal job state: $job_state" >&2; exit 1; }
+
+          echo "NEX91_STAGING_SMOKE=PASS"
+          echo "NEX91_JOB_STATE=$job_state"
+          echo "NEX91_AUDIT=async.job.succeeded"
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '### NEX-91 Staging Worker Smoke'
+            echo '- real Staging durable job: processed'
+            echo '- handler type: nexora.worker.smoke'
+            echo '- persisted terminal status: succeeded'
+            echo '- attempt count: 1'
+            echo '- lock released: yes'
+            echo '- correlated audit event: async.job.succeeded'
+            echo '- Production: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
