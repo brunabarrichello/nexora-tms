@@ -274,6 +274,20 @@
       "when": 1788377100000,
       "tag": "0038_nex52_accounts_receivable",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788378000000,
+      "tag": "0039_nex53_finance_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788378900000,
+      "tag": "0040_nex53_finance_reconciliation_hardening",
+      "breakpoints": true
     }
   ]
 }
