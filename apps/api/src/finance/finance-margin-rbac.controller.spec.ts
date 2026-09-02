@@ -18,18 +18,24 @@ test('finance margin controller requires finance.read', () => {
 
 test('finance access is not granted to dispatcher or viewer templates', () => {
   assert.equal(
-    TENANT_ROLE_TEMPLATES.DISPATCHER.permissions.includes(TENANT_PERMISSIONS.FINANCE_READ),
+    (TENANT_ROLE_TEMPLATES.DISPATCHER.permissions as readonly string[]).includes(
+      TENANT_PERMISSIONS.FINANCE_READ,
+    ),
     false,
   );
   assert.equal(
-    TENANT_ROLE_TEMPLATES.VIEWER.permissions.includes(TENANT_PERMISSIONS.FINANCE_READ),
+    (TENANT_ROLE_TEMPLATES.VIEWER.permissions as readonly string[]).includes(
+      TENANT_PERMISSIONS.FINANCE_READ,
+    ),
     false,
   );
 });
 
 test('finance manager receives finance read access', () => {
   assert.equal(
-    TENANT_ROLE_TEMPLATES.FINANCE_MANAGER.permissions.includes(TENANT_PERMISSIONS.FINANCE_READ),
+    (TENANT_ROLE_TEMPLATES.FINANCE_MANAGER.permissions as readonly string[]).includes(
+      TENANT_PERMISSIONS.FINANCE_READ,
+    ),
     true,
   );
 });
