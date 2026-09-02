@@ -1,0 +1,29 @@
+name: NEX-70 Staging Auth0 token probe
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    if: github.head_ref == 'feat/nex-70-web-auth0-pkce' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe token client authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error --max-time 20 'https://nexora-tms-web-staging-staging.up.railway.app/auth/token-client-probe')"
+          printf '%s\n' "$response"
+          python - <<'PY' "$response"
+          import json, sys
+          p=json.loads(sys.argv[1])
+          assert p.get('probeReady') is True
+          assert isinstance(p.get('tokenEndpointStatus'), int)
+          assert isinstance(p.get('providerError'), str)
+          assert isinstance(p.get('clientAuthenticationAccepted'), bool)
+          PY
