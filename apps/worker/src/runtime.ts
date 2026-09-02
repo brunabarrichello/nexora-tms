@@ -1,6 +1,6 @@
 import type { WorkerConfig } from './config.js';
 import { errorFields, type StructuredLogger } from './logger.js';
-import type { HandlerContext, HandlerRegistry } from './handlers.js';
+import type { HandlerContext, HandlerRegistry, WorkHandler } from './handlers.js';
 import type { AsyncStore, DurableJobWorkItem, FailureStatus, OutboxWorkItem } from './store.js';
 
 export interface WorkerSnapshot {
@@ -19,9 +19,20 @@ export interface WorkerSnapshot {
   reapedJobs: number;
 }
 
+class HandlerTimeoutError extends Error {
+  constructor(timeoutMs: number) {
+    super(`Worker handler exceeded ${timeoutMs}ms execution deadline`);
+    this.name = 'HandlerTimeoutError';
+  }
+}
+
+type HandlerContextInput = Omit<HandlerContext, 'signal'>;
+
 export class WorkerRuntime {
   private running = false;
   private loopPromise: Promise<void> | null = null;
+  private delayTimer: NodeJS.Timeout | null = null;
+  private delayResolve: (() => void) | null = null;
   private startedAt: number | null = null;
   private lastSuccessfulPollAt: number | null = null;
   private lastPollErrorAt: number | null = null;
@@ -59,6 +70,7 @@ export class WorkerRuntime {
       pollIntervalMs: this.config.pollIntervalMs,
       batchSize: this.config.batchSize,
       leaseSeconds: this.config.leaseSeconds,
+      handlerTimeoutMs: this.config.handlerTimeoutMs,
       maxConcurrency: this.config.maxConcurrency,
     });
 
@@ -72,6 +84,7 @@ export class WorkerRuntime {
     }
 
     this.running = false;
+    this.wakeDelay();
     await this.loopPromise;
     this.loopPromise = null;
     await this.store.close();
@@ -170,7 +183,7 @@ export class WorkerRuntime {
 
     try {
       const handler = this.handlers.resolveOutbox(item);
-      await handler(this.outboxContext(item));
+      await this.executeHandler(handler, this.outboxContext(item));
       const completed = await this.store.completeOutbox(item.id, this.config.workerId);
       if (!completed) {
         this.logger.warn('worker.completion.lease_lost', common);
@@ -199,7 +212,7 @@ export class WorkerRuntime {
 
     try {
       const handler = this.handlers.resolveJob(item);
-      await handler(this.jobContext(item));
+      await this.executeHandler(handler, this.jobContext(item));
       const completed = await this.store.completeJob(item.id, this.config.workerId);
       if (!completed) {
         this.logger.warn('worker.completion.lease_lost', common);
@@ -210,6 +223,27 @@ export class WorkerRuntime {
       this.logger.info('worker.work.completed', common);
     } catch (error) {
       await this.recordJobFailure(item, error, common);
+    }
+  }
+
+  private async executeHandler(handler: WorkHandler, context: HandlerContextInput): Promise<void> {
+    const controller = new AbortController();
+    let timeout: NodeJS.Timeout | null = null;
+    const timeoutError = new HandlerTimeoutError(this.config.handlerTimeoutMs);
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timeout = setTimeout(() => {
+        controller.abort(timeoutError);
+        reject(timeoutError);
+      }, this.config.handlerTimeoutMs);
+    });
+
+    try {
+      await Promise.race([handler({ ...context, signal: controller.signal }), timeoutPromise]);
+    } finally {
+      if (timeout !== null) {
+        clearTimeout(timeout);
+      }
     }
   }
 
@@ -265,7 +299,7 @@ export class WorkerRuntime {
     });
   }
 
-  private outboxContext(item: OutboxWorkItem): HandlerContext {
+  private outboxContext(item: OutboxWorkItem): HandlerContextInput {
     return {
       tenantId: item.tenant_id,
       payload: item.payload,
@@ -277,7 +311,7 @@ export class WorkerRuntime {
     };
   }
 
-  private jobContext(item: DurableJobWorkItem): HandlerContext {
+  private jobContext(item: DurableJobWorkItem): HandlerContextInput {
     return {
       tenantId: item.tenant_id,
       payload: item.payload,
@@ -322,6 +356,25 @@ export class WorkerRuntime {
     if (!this.running || milliseconds <= 0) {
       return;
     }
-    await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+
+    await new Promise<void>((resolve) => {
+      this.delayResolve = resolve;
+      this.delayTimer = setTimeout(resolve, milliseconds);
+    });
+
+    this.delayResolve = null;
+    if (this.delayTimer !== null) {
+      clearTimeout(this.delayTimer);
+      this.delayTimer = null;
+    }
+  }
+
+  private wakeDelay(): void {
+    if (this.delayTimer !== null) {
+      clearTimeout(this.delayTimer);
+      this.delayTimer = null;
+    }
+    this.delayResolve?.();
+    this.delayResolve = null;
   }
 }
