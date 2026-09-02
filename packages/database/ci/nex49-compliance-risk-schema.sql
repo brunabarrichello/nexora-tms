@@ -75,6 +75,17 @@ INSERT INTO drivers (
   '75000000-0000-4000-8000-000000000101','75000000-0000-4000-8000-000000000101'
 );
 
+INSERT INTO capacity_assets (
+  id,tenant_id,carrier_party_id,asset_kind,identifier,plate,vehicle_type,body_type,
+  capacity_weight_kg,status,created_by_user_id,updated_by_user_id
+) VALUES (
+  '75000000-0000-4000-8000-000000000351',
+  '75000000-0000-4000-8000-000000000001',
+  '75000000-0000-4000-8000-000000000201',
+  'vehicle','NEX49-ASSET-1','ABC1D23','Truck','Box',12000,'inactive',
+  '75000000-0000-4000-8000-000000000101','75000000-0000-4000-8000-000000000101'
+);
+
 INSERT INTO document_types (
   id,tenant_id,code,name,subject_scope,has_expiry,requires_validation
 ) VALUES (
