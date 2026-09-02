@@ -55,6 +55,56 @@ $block$;
 
 DO $block$
 DECLARE
+  v_count integer;
+BEGIN
+  SELECT count(*) INTO v_count
+    FROM audit_events
+   WHERE action IN (
+     'async.outbox.lease_expired_dead_lettered',
+     'async.job.lease_expired_dead_lettered'
+   )
+     AND actor_type = 'service'
+     AND actor_external_id = 'worker-ci-reaper'
+     AND entity_id IN (
+       '79000000-0000-4000-8000-000000000121',
+       '79000000-0000-4000-8000-000000000321'
+     );
+  IF v_count <> 2 THEN
+    RAISE EXCEPTION 'Expected two lease-reaper audit events, found %', v_count;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM audit_events
+     WHERE entity_id = '79000000-0000-4000-8000-000000000121'
+       AND action = 'async.outbox.lease_expired_dead_lettered'
+       AND outcome = 'failure'
+       AND source = 'worker'
+       AND correlation_id = 'corr-reaper-final'
+       AND request_id = 'req-reaper-final'
+       AND idempotency_key = 'nex90-reaper-outbox-final'
+  ) THEN
+    RAISE EXCEPTION 'Outbox lease-reaper audit metadata is incomplete';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+      FROM audit_events
+     WHERE entity_id = '79000000-0000-4000-8000-000000000321'
+       AND action = 'async.job.lease_expired_dead_lettered'
+       AND outcome = 'failure'
+       AND source = 'worker'
+       AND correlation_id = 'corr-reaper-final'
+       AND request_id = 'req-reaper-final'
+       AND idempotency_key = 'nex90-reaper-job-final'
+  ) THEN
+    RAISE EXCEPTION 'Durable-job lease-reaper audit metadata is incomplete';
+  END IF;
+END
+$block$;
+
+DO $block$
+DECLARE
   v_ok boolean;
   v_outbox_key text;
   v_job_key text;
