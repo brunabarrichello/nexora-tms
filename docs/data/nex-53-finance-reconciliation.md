@@ -185,4 +185,6 @@ A idempotência externa é preservada por índices únicos por tenant/lote.
 - isolamento cross-tenant;
 - cleanup da branch.
 
+Na qualificação inicial, o gate confirmou migrations, segurança e build e revelou duas melhorias de execução que foram corrigidas antes do head final: testes SQL negativos passaram a usar transações independentes e consultas no mesmo `PoolClient` passaram a ser sequenciais, evitando estado `25P02` e a depreciação de queries concorrentes do `pg`.
+
 Production permanece congelada durante a qualificação.
