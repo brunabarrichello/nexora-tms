@@ -20,7 +20,9 @@ export default async function Page({
   const values = singleValues(await searchParams);
   const [result, policyResult] = await Promise.all([
     apiGet<readonly DocumentRecord[]>('/api/v1/documents'),
-    apiGet<readonly DocumentCompliancePolicyRecord[]>('/api/v1/document-compliance/policies'),
+    apiGet<readonly DocumentCompliancePolicyRecord[]>(
+      '/api/v1/document-compliance/policies',
+    ),
   ]);
   const items = result.kind === 'ready' ? result.data : [];
   const policies = policyResult.kind === 'ready' ? policyResult.data : [];
@@ -31,10 +33,18 @@ export default async function Page({
       ![item.title, item.document_type_name, item.external_reference]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q))
-    )
+    ) {
       return false;
-    if (values.status && policyAwareStatus(item, policies) !== values.status) return false;
-    if (values.scope && String(item.subject_scope ?? '') !== values.scope) return false;
+    }
+    if (
+      values.status &&
+      policyAwareStatus(item, policies) !== values.status
+    ) {
+      return false;
+    }
+    if (values.scope && String(item.subject_scope ?? '') !== values.scope) {
+      return false;
+    }
     return true;
   });
 
@@ -48,25 +58,39 @@ export default async function Page({
       metrics={[
         {
           label: 'Válidos',
-          value: String(items.filter((item) => policyAwareStatus(item, policies) === 'valid').length),
+          value: String(
+            items.filter(
+              (item) => policyAwareStatus(item, policies) === 'valid',
+            ).length,
+          ),
           helper: 'Fora da janela de alerta configurada.',
         },
         {
           label: 'A vencer',
           value: String(
-            items.filter((item) => policyAwareStatus(item, policies) === 'expiring_soon').length,
+            items.filter(
+              (item) => policyAwareStatus(item, policies) === 'expiring_soon',
+            ).length,
           ),
           helper: 'Janela definida pela política do tipo documental.',
         },
         {
           label: 'Pendentes',
-          value: String(items.filter((item) => policyAwareStatus(item, policies) === 'pending').length),
+          value: String(
+            items.filter(
+              (item) => policyAwareStatus(item, policies) === 'pending',
+            ).length,
+          ),
           helper: 'Aguardando validação ou versão.',
         },
         {
           label: 'Bloqueantes',
           value: String(
-            items.filter((item) => ['rejected', 'expired'].includes(policyAwareStatus(item, policies))).length,
+            items.filter((item) =>
+              ['rejected', 'expired'].includes(
+                policyAwareStatus(item, policies),
+              ),
+            ).length,
           ),
           helper: 'Reprovados ou vencidos; enforcement depende da política.',
         },
@@ -87,7 +111,15 @@ export default async function Page({
         {
           label: 'Escopo',
           name: 'scope',
-          options: ['party', 'driver', 'asset', 'request', 'trip', 'financial', 'other'],
+          options: [
+            'party',
+            'driver',
+            'asset',
+            'request',
+            'trip',
+            'financial',
+            'other',
+          ],
         },
       ]}
       columns={[
@@ -113,10 +145,14 @@ export default async function Page({
       filterValues={values}
       totalRows={filtered.length}
       emptyTitle={
-        result.kind === 'ready' ? 'Nenhum documento encontrado' : 'Documentos indisponíveis'
+        result.kind === 'ready'
+          ? 'Nenhum documento encontrado'
+          : 'Documentos indisponíveis'
       }
       emptyDescription={
-        result.kind === 'ready' ? 'Crie o primeiro documento ou ajuste os filtros.' : result.message
+        result.kind === 'ready'
+          ? 'Crie o primeiro documento ou ajuste os filtros.'
+          : result.message
       }
       integrationNotes={[
         'A janela “A vencer” usa warningDays da política tenant-scoped do tipo documental; 30 dias é apenas fallback para tipos ainda sem política.',
