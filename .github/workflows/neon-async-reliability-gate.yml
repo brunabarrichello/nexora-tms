@@ -210,6 +210,15 @@ jobs:
           echo "::add-mask::$WORKER_DATABASE_URL"
           psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-worker-runtime.sql
 
+      - name: Verify exhausted expired lease reaping
+        env:
+          WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$WORKER_DATABASE_URL"
+          psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-lease-reaper.sql
+
       - name: Verify execution audit and owner-only controlled reprocessing
         shell: bash
         run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-owner-reprocess.sql
@@ -228,6 +237,8 @@ jobs:
             echo '- atomic SKIP LOCKED claim primitives: verified'
             echo '- lease ownership and duplicate completion protection: verified'
             echo '- bounded retry backoff and dead-letter transitions: verified'
+            echo '- exhausted final-attempt expired leases are terminalized and audited: verified'
+            echo '- retryable expired leases remain reclaimable: verified'
             echo '- worker execution audit correlation: verified'
             echo '- owner-only controlled reprocessing with preserved idempotency: verified'
             echo '- destructive DELETE privileges: absent'
