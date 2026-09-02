@@ -65,9 +65,15 @@ class FakeStore implements AsyncStore {
   }
 }
 
+function workerConfig(overrides: Record<string, string> = {}) {
+  return loadWorkerConfig({
+    WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/neondb',
+    ...overrides,
+  });
+}
+
 test('claims and completes a registered durable job handler', async () => {
-  const config = loadWorkerConfig({
-    DATABASE_URL: 'postgresql://worker:secret@example.invalid/neondb',
+  const config = workerConfig({
     WORKER_ID: 'worker-unit-test',
     WORKER_POLL_INTERVAL_MS: '100',
     WORKER_REAPER_INTERVAL_MS: '1000',
@@ -88,8 +94,7 @@ test('claims and completes a registered durable job handler', async () => {
 });
 
 test('routes missing handlers through durable retry instead of acknowledging work', async () => {
-  const config = loadWorkerConfig({
-    DATABASE_URL: 'postgresql://worker:secret@example.invalid/neondb',
+  const config = workerConfig({
     WORKER_ID: 'worker-unit-test-missing-handler',
     WORKER_POLL_INTERVAL_MS: '100',
     WORKER_REAPER_INTERVAL_MS: '1000',
@@ -109,8 +114,7 @@ test('routes missing handlers through durable retry instead of acknowledging wor
 });
 
 test('aborts and retries a handler before its lease can expire', async () => {
-  const config = loadWorkerConfig({
-    DATABASE_URL: 'postgresql://worker:secret@example.invalid/neondb',
+  const config = workerConfig({
     WORKER_ID: 'worker-unit-test-timeout',
     WORKER_POLL_INTERVAL_MS: '100',
     WORKER_REAPER_INTERVAL_MS: '1000',
