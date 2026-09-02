@@ -58,8 +58,9 @@ jobs:
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-async-${{ github.run_id }}" >> "$GITHUB_ENV"
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
-      - name: Create isolated Neon branch
-        id: admin
+      - name: Create isolated Neon branch — attempt 1
+        id: admin1
+        continue-on-error: true
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
@@ -69,6 +70,52 @@ jobs:
           role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off after transient Neon capacity failure
+        if: ${{ steps.admin1.outcome != 'success' }}
+        shell: bash
+        run: sleep 30
+
+      - name: Create isolated Neon branch — attempt 2
+        id: admin2
+        if: ${{ steps.admin1.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off before final Neon branch attempt
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        shell: bash
+        run: sleep 60
+
+      - name: Create isolated Neon branch — attempt 3
+        id: admin3
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Require isolated Neon branch
+        env:
+          BRANCH_ID: ${{ steps.admin1.outputs.branch_id || steps.admin2.outputs.branch_id || steps.admin3.outputs.branch_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${BRANCH_ID:-}" || { echo "Unable to allocate an isolated Neon branch after bounded retries." >&2; exit 1; }
 
       - name: Ensure PostgreSQL client
         shell: bash
@@ -82,7 +129,7 @@ jobs:
 
       - name: Bootstrap migration capability
         env:
-          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+          ADMIN_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
         shell: bash
         run: |
           set -euo pipefail
@@ -181,7 +228,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
-        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        if: ${{ always() && (steps.admin1.outcome == 'success' || steps.admin2.outcome == 'success' || steps.admin3.outcome == 'success') }}
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
