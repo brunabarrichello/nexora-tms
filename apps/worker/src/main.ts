@@ -16,7 +16,10 @@ async function bootstrap(): Promise<void> {
   const logger = new StructuredLogger(config.workerId, config.environment);
   const app = await NestFactory.createApplicationContext(WorkerModule, { logger: false });
   const store = new PgAsyncStore(config.database, config.maxConcurrency);
-  const handlers = createDefaultHandlerRegistry(logger);
+  const handlers = createDefaultHandlerRegistry(logger, {
+    port: store,
+    integrationSecretKey: process.env.NEXORA_INTEGRATION_SECRET_KEY,
+  });
   const runtime = new WorkerRuntime(config, store, handlers, logger);
   const health = new WorkerHealthServer(config, runtime, logger);
   let shuttingDown = false;
