@@ -14,6 +14,8 @@ test('loads bounded worker defaults and explicit runtime values', () => {
     PORT: '9090',
     WORKER_POLL_INTERVAL_MS: '250',
     WORKER_BATCH_SIZE: '12',
+    WORKER_LEASE_SECONDS: '30',
+    WORKER_HANDLER_TIMEOUT_MS: '9000',
     WORKER_MAX_CONCURRENCY: '4',
   });
 
@@ -22,6 +24,8 @@ test('loads bounded worker defaults and explicit runtime values', () => {
   assert.equal(config.port, 9090);
   assert.equal(config.pollIntervalMs, 250);
   assert.equal(config.batchSize, 12);
+  assert.equal(config.leaseSeconds, 30);
+  assert.equal(config.handlerTimeoutMs, 9000);
   assert.equal(config.maxConcurrency, 4);
   assert.ok(config.readinessStaleAfterMs >= 15_000);
 });
@@ -34,5 +38,17 @@ test('rejects unsafe worker bounds', () => {
         WORKER_BATCH_SIZE: '9999',
       }),
     /WORKER_BATCH_SIZE must be an integer between 1 and 500/,
+  );
+});
+
+test('rejects a handler deadline that can collide with lease expiry', () => {
+  assert.throws(
+    () =>
+      loadWorkerConfig({
+        DATABASE_URL: 'postgresql://worker:secret@example.invalid/neondb',
+        WORKER_LEASE_SECONDS: '5',
+        WORKER_HANDLER_TIMEOUT_MS: '5000',
+      }),
+    /WORKER_HANDLER_TIMEOUT_MS must be an integer between 100 and 4000/,
   );
 });
