@@ -288,6 +288,13 @@
       "when": 1788378900000,
       "tag": "0040_nex53_finance_reconciliation_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788379800000,
+      "tag": "0041_nex54_in_app_notifications",
+      "breakpoints": true
     }
   ]
 }
