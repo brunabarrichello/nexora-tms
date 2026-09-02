@@ -198,6 +198,8 @@ async function run(): Promise<void> {
         client.query('DELETE FROM financial_reconciliation_entries WHERE id=$1::uuid', [creditEntry.id]),
         (error: unknown) => ['42501', 'P0001'].includes((error as { code?: string }).code ?? ''),
       );
+    });
+    await database.withTenantContext(contextA.require(), async (client) => {
       await assert.rejects(
         client.query(
           `INSERT INTO financial_reconciliation_events(tenant_id,entry_id,event_type,payload,actor_user_id)
