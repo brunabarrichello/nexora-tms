@@ -1,0 +1,65 @@
+name: NEX-47 Format Once
+
+on:
+  push:
+    branches:
+      - feat/nex-47-document-validity-blocking
+    paths:
+      - '.github/workflows/nex47-format-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: feat/nex-47-document-validity-blocking
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply repository Prettier
+        run: |
+          pnpm exec prettier --write \
+            apps/api/src/documents/document-compliance-rbac.controller.spec.ts \
+            apps/api/src/documents/document-compliance.service.ts \
+            apps/api/src/documents/document-compliance.validation.spec.ts \
+            apps/api/src/documents/document-compliance.validation.ts \
+            apps/web/app/_lib/document-ui.ts \
+            apps/web/app/documentos/page.tsx
+
+      - name: Commit formatted files and remove formatter
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm .github/workflows/nex47-format-once.yml
+          git add \
+            apps/api/src/documents/document-compliance-rbac.controller.spec.ts \
+            apps/api/src/documents/document-compliance.service.ts \
+            apps/api/src/documents/document-compliance.validation.spec.ts \
+            apps/api/src/documents/document-compliance.validation.ts \
+            apps/web/app/_lib/document-ui.ts \
+            apps/web/app/documentos/page.tsx \
+            .github/workflows/nex47-format-once.yml
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "style(documents): apply Prettier to NEX-47"
+          git push origin HEAD:feat/nex-47-document-validity-blocking
