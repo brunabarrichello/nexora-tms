@@ -1,0 +1,45 @@
+name: NEX-91 Format Worker
+
+on:
+  push:
+    branches:
+      - feat/nex-91-worker-runtime
+    paths:
+      - '.github/workflows/nex91-format-worker.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: feat/nex-91-worker-runtime
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+      - name: Install workspace
+        run: pnpm install --frozen-lockfile
+      - name: Format Worker files
+        run: pnpm exec prettier --write apps/worker/src/health.ts apps/worker/src/runtime.test.ts apps/worker/src/runtime.ts apps/worker/src/store.ts
+      - name: Commit formatting
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/worker/src
+          git diff --cached --quiet && { echo "No formatting changes generated." >&2; exit 1; }
+          git commit -m "style(nex-91): format worker runtime"
+          git push origin HEAD:feat/nex-91-worker-runtime
