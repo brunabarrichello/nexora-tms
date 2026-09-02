@@ -26,7 +26,7 @@ ALTER TABLE "capacity_reservations" ADD CONSTRAINT "capacity_reservations_state_
         AND "capacity_reservations"."released_at" IS NULL
         AND "capacity_reservations"."release_reason" IS NULL
       ) OR (
-        "capacity_reservations"."status" = 'released'
+        "capacity_reservations"."status"::text = 'released'
         AND "capacity_reservations"."cancelled_by_user_id" IS NULL
         AND "capacity_reservations"."cancelled_at" IS NULL
         AND "capacity_reservations"."cancel_reason" IS NULL
@@ -47,7 +47,7 @@ ALTER TABLE "transport_contracts" ADD CONSTRAINT "transport_contracts_state_chec
         AND "transport_contracts"."cancelled_at" IS NULL
         AND "transport_contracts"."cancel_reason" IS NULL
       ) OR (
-        "transport_contracts"."status" = 'fulfilled'
+        "transport_contracts"."status"::text = 'fulfilled'
         AND "transport_contracts"."confirmed_by_user_id" IS NOT NULL
         AND "transport_contracts"."confirmed_at" IS NOT NULL
         AND "transport_contracts"."fulfilled_by_user_id" IS NOT NULL
