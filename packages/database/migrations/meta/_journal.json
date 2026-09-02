@@ -239,6 +239,13 @@
       "when": 1788372600000,
       "tag": "0033_nex47_document_compliance_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788373500000,
+      "tag": "0034_nex48_trip_proof_stop_integrity",
+      "breakpoints": true
     }
   ]
 }
