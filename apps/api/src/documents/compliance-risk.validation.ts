@@ -24,7 +24,10 @@ export function parseComplianceRiskDecision(input: unknown): ComplianceRiskManua
     throw new BadRequestException('Request body must be an object');
   }
   const body = input as Record<string, unknown>;
-  if (typeof body.decision !== 'string' || !decisions.has(body.decision as ComplianceRiskDecision)) {
+  if (
+    typeof body.decision !== 'string' ||
+    !decisions.has(body.decision as ComplianceRiskDecision)
+  ) {
     throw new BadRequestException('decision must be approve, review or block');
   }
   if (typeof body.reason !== 'string') {

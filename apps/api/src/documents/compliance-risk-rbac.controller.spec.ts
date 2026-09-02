@@ -9,7 +9,10 @@ import { ComplianceRiskController } from './compliance-risk.controller.js';
 const reflector = new Reflector();
 
 test('Risk controller requires document read permission by default', () => {
-  assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, ComplianceRiskController), 'documents.read');
+  assert.equal(
+    reflector.get(REQUIRED_TENANT_PERMISSION, ComplianceRiskController),
+    'documents.read',
+  );
 });
 
 test('Risk evaluation and administrative decision use separate permissions', () => {

@@ -90,16 +90,21 @@ async function run(): Promise<void> {
         /permission denied|append-only/i,
       );
       await assert.rejects(
-        client.query(`DELETE FROM compliance_risk_assessments WHERE id=$1::uuid`, [partyAssessment.id]),
+        client.query(`DELETE FROM compliance_risk_assessments WHERE id=$1::uuid`, [
+          partyAssessment.id,
+        ]),
         /permission denied|append-only/i,
       );
     });
 
     await assert.rejects(riskB.list('party', PARTY_A), /not found in current tenant/);
-    await assert.rejects(riskB.decide(String(partyAssessment.id), {
-      decision: 'review',
-      reason: 'Cross-tenant decision must never resolve another tenant assessment.',
-    }), /risk assessment not found in current tenant/);
+    await assert.rejects(
+      riskB.decide(String(partyAssessment.id), {
+        decision: 'review',
+        reason: 'Cross-tenant decision must never resolve another tenant assessment.',
+      }),
+      /risk assessment not found in current tenant/,
+    );
   } finally {
     await database.onModuleDestroy();
   }

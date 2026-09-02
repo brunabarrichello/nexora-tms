@@ -1,7 +1,10 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 
 import { TenantContext } from '../tenancy/tenant-context.js';
-import { TenantDatabaseService, type TenantQueryClient } from '../tenancy/tenant-database.service.js';
+import {
+  TenantDatabaseService,
+  type TenantQueryClient,
+} from '../tenancy/tenant-database.service.js';
 import {
   COMPLIANCE_RISK_PROVIDER_PORT,
   type ComplianceRiskProviderPort,
@@ -49,10 +52,7 @@ export class ComplianceRiskService {
     });
   }
 
-  async evaluate(
-    subjectScopeValue: string,
-    subjectIdValue: string,
-  ): Promise<ComplianceRiskRecord> {
+  async evaluate(subjectScopeValue: string, subjectIdValue: string): Promise<ComplianceRiskRecord> {
     const subjectScope = parseComplianceRiskSubjectScope(subjectScopeValue);
     const subjectId = requireUuid(subjectIdValue, 'subjectId');
     const context = this.tenantContext.require();
@@ -349,9 +349,18 @@ function partySignals(snapshot: Readonly<Record<string, unknown>>): ComplianceRi
   const roles = Array.isArray(snapshot.roles) ? snapshot.roles.map(String) : [];
   const partnerScoped = roles.some((role) => ['carrier', 'partner', 'supplier'].includes(role));
   if (snapshot.homologation_status === 'rejected') {
-    signals.push(signal('PARTY_HOMOLOGATION_REJECTED', 'critical', 'Business party homologation is rejected', 80));
+    signals.push(
+      signal(
+        'PARTY_HOMOLOGATION_REJECTED',
+        'critical',
+        'Business party homologation is rejected',
+        80,
+      ),
+    );
   } else if (partnerScoped && snapshot.homologation_status !== 'approved') {
-    signals.push(signal('PARTY_HOMOLOGATION_PENDING', 'high', 'Partner homologation is not approved', 40));
+    signals.push(
+      signal('PARTY_HOMOLOGATION_PENDING', 'high', 'Partner homologation is not approved', 40),
+    );
   }
   if (snapshot.has_email !== true) {
     signals.push(signal('PARTY_EMAIL_MISSING', 'low', 'Business party has no email registered', 5));
@@ -365,22 +374,34 @@ function partySignals(snapshot: Readonly<Record<string, unknown>>): ComplianceRi
 function driverSignals(snapshot: Readonly<Record<string, unknown>>): ComplianceRiskSignal[] {
   const signals: ComplianceRiskSignal[] = [];
   if (snapshot.registration_status === 'blocked') {
-    signals.push(signal('DRIVER_REGISTRATION_BLOCKED', 'critical', 'Driver registration is blocked', 80));
+    signals.push(
+      signal('DRIVER_REGISTRATION_BLOCKED', 'critical', 'Driver registration is blocked', 80),
+    );
   } else if (snapshot.registration_status === 'pending') {
-    signals.push(signal('DRIVER_REGISTRATION_PENDING', 'medium', 'Driver registration is pending', 30));
+    signals.push(
+      signal('DRIVER_REGISTRATION_PENDING', 'medium', 'Driver registration is pending', 30),
+    );
   } else if (snapshot.registration_status === 'inactive') {
-    signals.push(signal('DRIVER_REGISTRATION_INACTIVE', 'medium', 'Driver registration is inactive', 30));
+    signals.push(
+      signal('DRIVER_REGISTRATION_INACTIVE', 'medium', 'Driver registration is inactive', 30),
+    );
   }
   if (snapshot.operational_status === 'blocked') {
-    signals.push(signal('DRIVER_OPERATIONAL_BLOCKED', 'critical', 'Driver operational status is blocked', 80));
+    signals.push(
+      signal('DRIVER_OPERATIONAL_BLOCKED', 'critical', 'Driver operational status is blocked', 80),
+    );
   } else if (snapshot.operational_status === 'inactive') {
-    signals.push(signal('DRIVER_OPERATIONAL_INACTIVE', 'medium', 'Driver operational status is inactive', 30));
+    signals.push(
+      signal('DRIVER_OPERATIONAL_INACTIVE', 'medium', 'Driver operational status is inactive', 30),
+    );
   }
   if (snapshot.cnh_expired === true) {
     signals.push(signal('DRIVER_CNH_EXPIRED', 'critical', 'Driver license is expired', 80));
   }
   if (snapshot.has_carrier !== true) {
-    signals.push(signal('DRIVER_CARRIER_MISSING', 'low', 'Driver is not linked to a carrier party', 10));
+    signals.push(
+      signal('DRIVER_CARRIER_MISSING', 'low', 'Driver is not linked to a carrier party', 10),
+    );
   }
   if (snapshot.has_email !== true) {
     signals.push(signal('DRIVER_EMAIL_MISSING', 'low', 'Driver has no email registered', 5));
@@ -396,7 +417,9 @@ function assetSignals(snapshot: Readonly<Record<string, unknown>>): ComplianceRi
     signals.push(signal('ASSET_INACTIVE', 'medium', 'Capacity asset is inactive', 30));
   }
   if (snapshot.has_carrier !== true) {
-    signals.push(signal('ASSET_CARRIER_MISSING', 'low', 'Capacity asset is not linked to a carrier party', 10));
+    signals.push(
+      signal('ASSET_CARRIER_MISSING', 'low', 'Capacity asset is not linked to a carrier party', 10),
+    );
   }
   return signals;
 }
@@ -414,9 +437,23 @@ function documentSignals(snapshot: Readonly<Record<string, unknown>>): Complianc
   }
 
   if (snapshot.latest_validation_result === 'invalid') {
-    signals.push(signal('DOCUMENT_VALIDATION_INVALID', 'critical', 'Latest document validation is invalid', 80));
+    signals.push(
+      signal(
+        'DOCUMENT_VALIDATION_INVALID',
+        'critical',
+        'Latest document validation is invalid',
+        80,
+      ),
+    );
   } else if (snapshot.latest_validation_result === 'review_required') {
-    signals.push(signal('DOCUMENT_VALIDATION_REVIEW', 'high', 'Latest document validation requires review', 40));
+    signals.push(
+      signal(
+        'DOCUMENT_VALIDATION_REVIEW',
+        'high',
+        'Latest document validation requires review',
+        40,
+      ),
+    );
   }
   return signals;
 }
@@ -432,7 +469,9 @@ function signal(
 }
 
 function normalizeSignal(value: ComplianceRiskSignal): ComplianceRiskSignal {
-  const severity: ComplianceRiskSeverity = ['low', 'medium', 'high', 'critical'].includes(value.severity)
+  const severity: ComplianceRiskSeverity = ['low', 'medium', 'high', 'critical'].includes(
+    value.severity,
+  )
     ? value.severity
     : 'high';
   return {
@@ -463,7 +502,8 @@ function resolveDecision(
   score: number,
 ): ComplianceRiskDecision {
   if (signals.some((item) => item.severity === 'critical') || score >= 80) return 'block';
-  if (signals.some((item) => item.severity === 'high') || score >= 40) return 'review';
+  if (signals.some((item) => item.severity === 'high' || item.severity === 'medium') || score >= 40)
+    return 'review';
   return 'approve';
 }
 
