@@ -22,4 +22,5 @@ export * from './platform.js';
 export * from './reference-data.js';
 export * from './transport-contract.js';
 export * from './trip-execution.js';
+export * from './trip-occurrences.js';
 export * from './trips.js';
