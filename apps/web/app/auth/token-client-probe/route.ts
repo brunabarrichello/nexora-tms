@@ -9,7 +9,8 @@ type ProbeResult = {
 function auth0TokenUrl(): string {
   const domain = process.env.AUTH0_DOMAIN?.trim();
   if (!domain) throw new Error('AUTH0_DOMAIN is required');
-  const base = domain.startsWith('http://') || domain.startsWith('https://') ? domain : `https://${domain}`;
+  const base =
+    domain.startsWith('http://') || domain.startsWith('https://') ? domain : `https://${domain}`;
   return new URL('/oauth/token', base).toString();
 }
 
