@@ -84,11 +84,22 @@ BEGIN
      );
   IF c <> 6 THEN RAISE EXCEPTION 'Expected six NEX-51 finance triggers, found %', c; END IF;
 
-  IF has_function_privilege('public','nexora_carrier_payment_obligation_guard()','EXECUTE')
-     OR has_function_privilege('public','nexora_carrier_payment_transaction_guard()','EXECUTE')
-     OR has_function_privilege('public','nexora_carrier_payment_events_guard()','EXECUTE')
-     OR has_function_privilege('public','nexora_carrier_payment_obligation_events()','EXECUTE')
-     OR has_function_privilege('public','nexora_carrier_payment_transaction_events()','EXECUTE') THEN
+  IF EXISTS (
+    SELECT 1
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid=p.pronamespace
+      CROSS JOIN LATERAL aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+     WHERE n.nspname='public'
+       AND p.proname IN (
+         'nexora_carrier_payment_obligation_guard',
+         'nexora_carrier_payment_transaction_guard',
+         'nexora_carrier_payment_events_guard',
+         'nexora_carrier_payment_obligation_events',
+         'nexora_carrier_payment_transaction_events'
+       )
+       AND acl.grantee=0
+       AND acl.privilege_type='EXECUTE'
+  ) THEN
     RAISE EXCEPTION 'NEX-51 trigger helpers must not be executable by PUBLIC';
   END IF;
 END $$;
