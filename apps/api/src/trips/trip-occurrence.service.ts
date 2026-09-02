@@ -198,9 +198,9 @@ export class TripOccurrenceService {
 
       const updated = await client.query<Record<string, unknown>>(
         `UPDATE trip_occurrences
-            SET status=$1,
-                resolved_at=CASE WHEN $1='resolved' THEN now() ELSE NULL END,
-                resolved_by_user_id=CASE WHEN $1='resolved' THEN $2::uuid ELSE NULL END,
+            SET status=$1::varchar,
+                resolved_at=CASE WHEN $1::varchar='resolved' THEN now() ELSE NULL END,
+                resolved_by_user_id=CASE WHEN $1::varchar='resolved' THEN $2::uuid ELSE NULL END,
                 updated_at=now()
           WHERE id=$3::uuid AND trip_id=$4::uuid
           RETURNING *`,
