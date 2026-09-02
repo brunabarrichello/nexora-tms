@@ -224,3 +224,26 @@ test('OIDC JWT verification enforces signature, exact issuer and audience', asyn
     }),
   );
 });
+
+test('OIDC JWT verification rejects an otherwise valid token after expiration', async () => {
+  const { privateKey, publicKey } = await generateKeyPair('RS256');
+  const issuer = 'https://nexora-dev.us.auth0.com/';
+  const audience = 'urn:nexora:tms:api:development';
+  const now = Math.floor(Date.now() / 1000);
+  const expiredToken = await new SignJWT({ scope: 'nexora:api' })
+    .setProtectedHeader({ alg: 'RS256' })
+    .setIssuer(issuer)
+    .setAudience(audience)
+    .setSubject('external-user-123')
+    .setIssuedAt(now - 120)
+    .setExpirationTime(now - 60)
+    .sign(privateKey);
+
+  await assert.rejects(
+    verifyOidcJwt(expiredToken, publicKey, {
+      algorithms: ['RS256'],
+      audience: [audience],
+      issuer,
+    }),
+  );
+});
