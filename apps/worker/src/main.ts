@@ -15,7 +15,7 @@ async function bootstrap(): Promise<void> {
   const config = loadWorkerConfig();
   const logger = new StructuredLogger(config.workerId, config.environment);
   const app = await NestFactory.createApplicationContext(WorkerModule, { logger: false });
-  const store = new PgAsyncStore(config.databaseUrl, config.maxConcurrency);
+  const store = new PgAsyncStore(config.database, config.maxConcurrency);
   const handlers = createDefaultHandlerRegistry(logger);
   const runtime = new WorkerRuntime(config, store, handlers, logger);
   const health = new WorkerHealthServer(config, runtime, logger);
