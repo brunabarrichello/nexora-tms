@@ -225,6 +225,20 @@
       "when": 1788366690918,
       "tag": "0031_known_spiral",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788371700000,
+      "tag": "0032_nex47_document_compliance",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788372600000,
+      "tag": "0033_nex47_document_compliance_hardening",
+      "breakpoints": true
     }
   ]
 }

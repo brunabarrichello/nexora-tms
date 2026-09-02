@@ -8,6 +8,8 @@ on:
       - 'packages/database/**'
       - 'apps/api/src/documents/**'
       - 'apps/api/src/capacity/**'
+      - 'apps/web/app/documentos/**'
+      - 'apps/web/app/_lib/document-ui.ts'
       - '.github/workflows/neon-documents-pr-gate.yml'
 
 permissions:
@@ -101,6 +103,8 @@ jobs:
           echo "::add-mask::$OWNER_DATABASE_URL"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0018-documents-owner.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex47-document-compliance-security.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex47-document-compliance-seed.sql
 
       - name: Resolve runtime connection
         id: app
@@ -120,6 +124,7 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$APP_DATABASE_URL"
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0018-documents-runtime.sql
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex47-document-compliance-runtime.sql
 
       - name: Cleanup isolated Neon branch
         if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}

@@ -5,8 +5,10 @@ import {
   documentStatusLabel,
   documentTabs,
   documentText,
-  effectiveStatus,
+  policyAwareStatus,
+  policyWarningDays,
   singleValues,
+  type DocumentCompliancePolicyRecord,
   type DocumentRecord,
   type DocumentSearchParams,
 } from '../../_lib/document-ui';
@@ -17,32 +19,40 @@ export default async function Page({
   searchParams,
 }: Readonly<{ searchParams: DocumentSearchParams }>) {
   const values = singleValues(await searchParams);
-  const result = await apiGet<readonly DocumentRecord[]>('/api/v1/documents');
+  const [result, policyResult] = await Promise.all([
+    apiGet<readonly DocumentRecord[]>('/api/v1/documents'),
+    apiGet<readonly DocumentCompliancePolicyRecord[]>('/api/v1/document-compliance/policies'),
+  ]);
   const items = result.kind === 'ready' ? result.data : [];
-  const windowDays = Number(values.window || '30');
+  const policies = policyResult.kind === 'ready' ? policyResult.data : [];
+  const explicitWindow = values.window ? Number(values.window) : null;
   const now = Date.now();
-  const upper = now + (Number.isFinite(windowDays) ? windowDays : 30) * 86_400_000;
   const expiring = items
     .filter((item) => {
       if (!item.expires_on) return false;
       const expiry = new Date(`${String(item.expires_on).slice(0, 10)}T00:00:00Z`).getTime();
       if (Number.isNaN(expiry)) return false;
       if (values.scope && String(item.subject_scope ?? '') !== values.scope) return false;
-      return expiry <= upper;
+      const windowDays =
+        explicitWindow !== null && Number.isFinite(explicitWindow)
+          ? explicitWindow
+          : policyWarningDays(item, policies);
+      return expiry <= now + windowDays * 86_400_000;
     })
     .sort((a, b) => String(a.expires_on).localeCompare(String(b.expires_on)));
 
   return (
     <OperationalPage
-      eyebrow="Documents • Wave 0018"
+      eyebrow="Documents • NEX-47"
       title="Vencimentos"
-      description="Agenda real de documentos vencidos ou com validade dentro da janela operacional selecionada."
+      description="Agenda de documentos vencidos ou dentro da janela de alerta configurada por tipo documental."
       status={result.kind === 'ready' ? 'API conectada' : 'API indisponível'}
       filters={[
         {
           label: 'Janela',
           name: 'window',
           options: [
+            { label: 'Política do tipo', value: '' },
             { label: '7 dias', value: '7' },
             { label: '15 dias', value: '15' },
             { label: '30 dias', value: '30' },
@@ -61,11 +71,13 @@ export default async function Page({
         { key: 'scope', label: 'Escopo' },
         { key: 'expires', label: 'Vence em' },
         { key: 'days', label: 'Dias' },
+        { key: 'window', label: 'Janela' },
         { key: 'status', label: 'Status' },
       ]}
       rows={expiring.map((item) => {
         const expiry = new Date(`${String(item.expires_on).slice(0, 10)}T00:00:00Z`).getTime();
         const days = Math.ceil((expiry - now) / 86_400_000);
+        const warningDays = policyWarningDays(item, policies);
         return {
           id: documentText(item.id),
           document: documentText(item.title),
@@ -74,7 +86,8 @@ export default async function Page({
           scope: documentText(item.subject_scope),
           expires: documentDate(item.expires_on),
           days: days < 0 ? `${Math.abs(days)} dias vencido` : days === 0 ? 'Hoje' : `${days} dias`,
-          status: documentStatusLabel(effectiveStatus(item)),
+          window: `${warningDays} dias`,
+          status: documentStatusLabel(policyAwareStatus(item, policies)),
         };
       })}
       tabs={documentTabs()}
@@ -90,8 +103,9 @@ export default async function Page({
           : result.message
       }
       integrationNotes={[
-        'A agenda usa expires_on real; documentos vencidos permanecem visíveis independentemente da janela futura.',
-        'Alertas automáticos serão ligados posteriormente ao bounded context Notifications.',
+        'Sem filtro manual, cada documento usa warningDays da política do seu tipo; tipos sem política usam fallback de 30 dias.',
+        'O status “A vencer” é visual e operacional; a política decide separadamente se essa condição bloqueia contratação/viagem.',
+        'Vencidos permanecem visíveis independentemente da janela futura selecionada.',
       ]}
     />
   );
