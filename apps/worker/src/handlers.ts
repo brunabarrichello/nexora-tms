@@ -1,5 +1,9 @@
 import type { StructuredLogger } from './logger.js';
 import type { DurableJobWorkItem, OutboxWorkItem } from './store.js';
+import {
+  createWebhookDeliveryHandler,
+  type WebhookDeliveryDependencies,
+} from './webhook-delivery.js';
 
 export interface HandlerContext {
   tenantId: string;
@@ -59,7 +63,10 @@ const IN_APP_NOTIFICATION_EVENT_TYPES = [
   'documents.validation.recorded',
 ] as const;
 
-export function createDefaultHandlerRegistry(logger: StructuredLogger): HandlerRegistry {
+export function createDefaultHandlerRegistry(
+  logger: StructuredLogger,
+  webhookDependencies?: WebhookDeliveryDependencies,
+): HandlerRegistry {
   const registry = new HandlerRegistry();
   const smokeHandler: WorkHandler = async (context) => {
     context.signal.throwIfAborted();
@@ -90,6 +97,12 @@ export function createDefaultHandlerRegistry(logger: StructuredLogger): HandlerR
   registry.registerJob('nexora.worker.smoke', smokeHandler);
   for (const eventType of IN_APP_NOTIFICATION_EVENT_TYPES) {
     registry.registerOutbox(eventType, inAppNotificationHandler);
+  }
+  if (webhookDependencies) {
+    registry.registerJob(
+      'integrations.webhook.deliver',
+      createWebhookDeliveryHandler(webhookDependencies),
+    );
   }
   return registry;
 }
