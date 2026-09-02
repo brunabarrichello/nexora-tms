@@ -8,7 +8,6 @@ export default async function LoginPage({
   const recovery = typeof params.recovery === 'string' ? params.recovery : undefined;
   const loggedOut = params.logged_out === '1';
   const returnTo = typeof params.returnTo === 'string' ? params.returnTo : '/';
-  const loginHref = `/auth/login?returnTo=${encodeURIComponent(returnTo)}`;
 
   return (
     <div className="page-stack">
@@ -22,9 +21,12 @@ export default async function LoginPage({
             o Nexora continua sendo a autoridade para usuário interno, tenant, papéis e permissões.
           </p>
         </div>
-        <a className="button button-primary" href={loginHref}>
-          Entrar com Auth0
-        </a>
+        <form action="/auth/login" method="get">
+          <input type="hidden" name="returnTo" value={returnTo} />
+          <button className="button button-primary" type="submit">
+            Entrar com Auth0
+          </button>
+        </form>
       </section>
 
       {loggedOut ? (
