@@ -32,7 +32,7 @@ interface FinalStateRow extends ProposalCandidateRow {
 
 interface ReservationIdentityRow {
   readonly id: string;
-  readonly status: 'active' | 'cancelled';
+  readonly status: 'active' | 'cancelled' | 'released';
 }
 
 interface ReservationRow {
@@ -47,7 +47,7 @@ interface ReservationRow {
   readonly vehicle_plate: string | null;
   readonly carrier_party_id: string;
   readonly carrier_name: string;
-  readonly status: 'active' | 'cancelled';
+  readonly status: 'active' | 'cancelled' | 'released';
   readonly approved_by_user_id: string;
   readonly approved_by_name: string;
   readonly approved_at: Date;
@@ -55,6 +55,10 @@ interface ReservationRow {
   readonly cancelled_by_name: string | null;
   readonly cancelled_at: Date | null;
   readonly cancel_reason: string | null;
+  readonly released_by_user_id: string | null;
+  readonly released_by_name: string | null;
+  readonly released_at: Date | null;
+  readonly release_reason: string | null;
   readonly created_at: Date;
   readonly updated_at: Date;
 }
@@ -62,7 +66,7 @@ interface ReservationRow {
 interface ReservationEventRow {
   readonly id: string;
   readonly reservation_id: string;
-  readonly type: 'approved' | 'cancelled';
+  readonly type: 'approved' | 'cancelled' | 'released';
   readonly actor_user_id: string;
   readonly actor_name: string;
   readonly reason: string | null;
@@ -71,7 +75,7 @@ interface ReservationEventRow {
 
 export interface CapacityReservationEvent {
   readonly id: string;
-  readonly type: 'approved' | 'cancelled';
+  readonly type: 'approved' | 'cancelled' | 'released';
   readonly actorUserId: string;
   readonly actorName: string;
   readonly reason: string | null;
@@ -96,7 +100,7 @@ export interface CapacityReservation {
     readonly id: string;
     readonly name: string;
   };
-  readonly status: 'active' | 'cancelled';
+  readonly status: 'active' | 'cancelled' | 'released';
   readonly approvedBy: {
     readonly userId: string;
     readonly name: string;
@@ -108,6 +112,9 @@ export interface CapacityReservation {
   } | null;
   readonly cancelledAt: string | null;
   readonly cancelReason: string | null;
+  readonly releasedBy: { readonly userId: string; readonly name: string } | null;
+  readonly releasedAt: string | null;
+  readonly releaseReason: string | null;
   readonly createdAt: string;
   readonly updatedAt: string;
   readonly events: readonly CapacityReservationEvent[];
@@ -429,7 +436,7 @@ export class CapacityReservationService {
     client: TenantQueryClient,
     tenantId: string,
     reservationId: string,
-    type: 'approved' | 'cancelled',
+    type: 'approved' | 'cancelled' | 'released',
     actorUserId: string,
     reason: string | null,
   ): Promise<void> {
@@ -465,6 +472,10 @@ export class CapacityReservationService {
               canceller.display_name AS cancelled_by_name,
               r.cancelled_at,
               r.cancel_reason,
+              r.released_by_user_id::text AS released_by_user_id,
+              releaser.display_name AS released_by_name,
+              r.released_at,
+              r.release_reason,
               r.created_at,
               r.updated_at
          FROM capacity_reservations r
@@ -474,6 +485,7 @@ export class CapacityReservationService {
            ON carrier.tenant_id=r.tenant_id AND carrier.id=r.carrier_party_id
          JOIN users approver ON approver.id=r.approved_by_user_id
          LEFT JOIN users canceller ON canceller.id=r.cancelled_by_user_id
+         LEFT JOIN users releaser ON releaser.id=r.released_by_user_id
         WHERE ($1::uuid IS NULL OR r.transport_request_id=$1::uuid)
           AND ($2::uuid IS NULL OR r.id=$2::uuid)
         ORDER BY r.created_at,r.id`,
@@ -553,6 +565,12 @@ function mapReservations(
         : null,
     cancelledAt: row.cancelled_at?.toISOString() ?? null,
     cancelReason: row.cancel_reason,
+    releasedBy:
+      row.released_by_user_id && row.released_by_name
+        ? { userId: row.released_by_user_id, name: row.released_by_name }
+        : null,
+    releasedAt: row.released_at?.toISOString() ?? null,
+    releaseReason: row.release_reason,
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
     events: eventsByReservation.get(row.id) ?? [],

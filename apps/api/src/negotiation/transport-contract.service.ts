@@ -31,7 +31,7 @@ interface ContractIdentityRow {
   readonly id: string;
   readonly transport_request_id: string;
   readonly reservation_id: string;
-  readonly status: 'confirmed' | 'refused' | 'cancelled';
+  readonly status: 'confirmed' | 'refused' | 'cancelled' | 'fulfilled';
 }
 
 interface ContractRow {
@@ -43,7 +43,7 @@ interface ContractRow {
   readonly driver_id: string;
   readonly vehicle_id: string;
   readonly carrier_party_id: string;
-  readonly status: 'confirmed' | 'refused' | 'cancelled';
+  readonly status: 'confirmed' | 'refused' | 'cancelled' | 'fulfilled';
   readonly currency_code: string;
   readonly freight_amount: string;
   readonly toll_amount: string;
@@ -52,6 +52,8 @@ interface ContractRow {
   readonly commercial_notes: string | null;
   readonly confirmed_by_user_id: string | null;
   readonly confirmed_at: Date | null;
+  readonly fulfilled_by_user_id: string | null;
+  readonly fulfilled_at: Date | null;
   readonly refused_by_user_id: string | null;
   readonly refused_at: Date | null;
   readonly refusal_reason: string | null;
@@ -65,7 +67,7 @@ interface ContractRow {
 interface ContractEventRow {
   readonly id: string;
   readonly contract_id: string;
-  readonly type: 'confirmed' | 'refused' | 'cancelled';
+  readonly type: 'confirmed' | 'refused' | 'cancelled' | 'fulfilled';
   readonly actor_user_id: string;
   readonly reason: string | null;
   readonly created_at: Date;
@@ -73,7 +75,7 @@ interface ContractEventRow {
 
 export interface TransportContractEvent {
   readonly id: string;
-  readonly type: 'confirmed' | 'refused' | 'cancelled';
+  readonly type: 'confirmed' | 'refused' | 'cancelled' | 'fulfilled';
   readonly actorUserId: string;
   readonly reason: string | null;
   readonly createdAt: string;
@@ -88,7 +90,7 @@ export interface TransportContract {
   readonly driverId: string;
   readonly vehicleId: string;
   readonly carrierPartyId: string;
-  readonly status: 'confirmed' | 'refused' | 'cancelled';
+  readonly status: 'confirmed' | 'refused' | 'cancelled' | 'fulfilled';
   readonly commercialTerms: {
     readonly currencyCode: string;
     readonly freightAmount: string;
@@ -100,6 +102,8 @@ export interface TransportContract {
   };
   readonly confirmedByUserId: string | null;
   readonly confirmedAt: string | null;
+  readonly fulfilledByUserId: string | null;
+  readonly fulfilledAt: string | null;
   readonly refusedByUserId: string | null;
   readonly refusedAt: string | null;
   readonly refusalReason: string | null;
@@ -449,7 +453,7 @@ export class TransportContractService {
     client: TenantQueryClient,
     tenantId: string,
     contractId: string,
-    type: 'confirmed' | 'refused' | 'cancelled',
+    type: 'confirmed' | 'refused' | 'cancelled' | 'fulfilled',
     actorUserId: string,
     reason: string | null,
   ): Promise<void> {
@@ -492,6 +496,8 @@ export class TransportContractService {
               commercial_notes,
               confirmed_by_user_id::text AS confirmed_by_user_id,
               confirmed_at,
+              fulfilled_by_user_id::text AS fulfilled_by_user_id,
+              fulfilled_at,
               refused_by_user_id::text AS refused_by_user_id,
               refused_at,
               refusal_reason,
@@ -563,6 +569,8 @@ export class TransportContractService {
       },
       confirmedByUserId: contract.confirmed_by_user_id,
       confirmedAt: contract.confirmed_at?.toISOString() ?? null,
+      fulfilledByUserId: contract.fulfilled_by_user_id,
+      fulfilledAt: contract.fulfilled_at?.toISOString() ?? null,
       refusedByUserId: contract.refused_by_user_id,
       refusedAt: contract.refused_at?.toISOString() ?? null,
       refusalReason: contract.refusal_reason,
