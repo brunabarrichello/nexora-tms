@@ -57,8 +57,6 @@ jobs:
             apps/api/src/documents/compliance-risk.controller.ts \
             apps/api/src/documents/compliance-risk.integration.ts \
             apps/api/src/documents/documents.module.ts \
-            packages/database/ci/nex49-compliance-risk-schema.sql \
-            packages/database/migrations/0035_nex49_compliance_risk.sql \
             packages/database/migrations/meta/_journal.json \
             .github/workflows/neon-compliance-risk-gate.yml
           rm .github/workflows/nex49-normalize-once.yml
