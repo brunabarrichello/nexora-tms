@@ -107,3 +107,39 @@ test('routes missing handlers through durable retry instead of acknowledging wor
   assert.deepEqual(store.failedJobIds, ['job-1']);
   assert.equal(runtime.snapshot().failed, 1);
 });
+
+test('aborts and retries a handler before its lease can expire', async () => {
+  const config = loadWorkerConfig({
+    DATABASE_URL: 'postgresql://worker:secret@example.invalid/neondb',
+    WORKER_ID: 'worker-unit-test-timeout',
+    WORKER_POLL_INTERVAL_MS: '100',
+    WORKER_REAPER_INTERVAL_MS: '1000',
+    WORKER_READINESS_STALE_AFTER_MS: '1000',
+    WORKER_LEASE_SECONDS: '2',
+    WORKER_HANDLER_TIMEOUT_MS: '100',
+  });
+  const store = new FakeStore();
+  const logger = new StructuredLogger(config.workerId, 'test');
+  const registry = new HandlerRegistry().registerJob('nexora.worker.smoke', async (context) => {
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(resolve, 500);
+      context.signal.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timer);
+          reject(context.signal.reason);
+        },
+        { once: true },
+      );
+    });
+  });
+  const runtime = new WorkerRuntime(config, store, registry, logger);
+
+  await runtime.start();
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  await runtime.stop();
+
+  assert.deepEqual(store.completedJobIds, []);
+  assert.deepEqual(store.failedJobIds, ['job-1']);
+  assert.equal(runtime.snapshot().failed, 1);
+});
