@@ -16,15 +16,19 @@ export const auth0 = new Auth0Client({
   enableAccessTokenEndpoint: false,
   async onCallback(error, context) {
     if (error) {
+      const cause = (error as { cause?: { code?: unknown } }).cause;
+      const providerCode = typeof cause?.code === 'string' ? cause.code : undefined;
+
       console.error(
         'NEX70_AUTH0_CALLBACK_ERROR',
-        JSON.stringify({ name: error.name, code: error.code }),
+        JSON.stringify({ name: error.name, code: error.code, providerCode }),
       );
 
       return NextResponse.json(
         {
           authCallbackError: true,
           code: error.code,
+          ...(providerCode ? { providerCode } : {}),
         },
         { status: 502 },
       );
