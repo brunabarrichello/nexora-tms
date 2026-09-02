@@ -20,10 +20,10 @@ const admin = new Client({ connectionString: adminUrl });
 await admin.connect();
 
 try {
-  const formatted = await admin.query('select format(%L, $1) as password_literal', ['%L', password]);
+  const formatted = await admin.query('select quote_literal($1) as password_literal', [password]);
   const passwordLiteral = formatted.rows[0]?.password_literal;
   if (typeof passwordLiteral !== 'string') {
-    throw new Error('Could not safely format nexora_worker password');
+    throw new Error('Could not safely quote nexora_worker password');
   }
 
   await admin.query(`alter role nexora_worker password ${passwordLiteral}`);
