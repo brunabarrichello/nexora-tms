@@ -14,8 +14,24 @@ type TenantRuntimeGate = {
   tenantId: string;
 };
 
-const TENANT_A = '57000000-0000-4000-8000-000000000001';
-const TENANT_B = '57000000-0000-4000-8000-000000000002';
+const DEVELOPMENT_TENANT_A = '57000000-0000-4000-8000-000000000001';
+const DEVELOPMENT_TENANT_B = '57000000-0000-4000-8000-000000000002';
+const STAGING_TENANT_A = '58000000-0000-4000-8000-000000000001';
+const STAGING_TENANT_B = '58000000-0000-4000-8000-000000000002';
+
+function probeTenants(): { tenantA: string; tenantB: string } {
+  const environment = (
+    process.env.APP_ENV?.trim() ||
+    process.env.RAILWAY_ENVIRONMENT_NAME?.trim() ||
+    ''
+  ).toLowerCase();
+
+  if (environment === 'staging') {
+    return { tenantA: STAGING_TENANT_A, tenantB: STAGING_TENANT_B };
+  }
+
+  return { tenantA: DEVELOPMENT_TENANT_A, tenantB: DEVELOPMENT_TENANT_B };
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -52,13 +68,14 @@ export async function GET(): Promise<NextResponse> {
   try {
     const token = (await auth0.getAccessToken()).token;
     const gateUrl = new URL('/api/v1/tenant/runtime-gate', apiBaseUrlValue);
+    const { tenantA, tenantB } = probeTenants();
 
     const [tenantAResponse, tenantBResponse] = await Promise.all([
       fetch(gateUrl, {
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
-          'x-nexora-tenant-id': TENANT_A,
+          'x-nexora-tenant-id': tenantA,
         },
         cache: 'no-store',
       }),
@@ -66,7 +83,7 @@ export async function GET(): Promise<NextResponse> {
         headers: {
           Accept: 'application/json',
           Authorization: `Bearer ${token}`,
-          'x-nexora-tenant-id': TENANT_B,
+          'x-nexora-tenant-id': tenantB,
         },
         cache: 'no-store',
       }),
@@ -74,8 +91,8 @@ export async function GET(): Promise<NextResponse> {
 
     let tenantARlsIsolated = false;
     if (tenantAResponse.ok) {
-      const tenantA = (await tenantAResponse.json()) as TenantRuntimeGate;
-      tenantARlsIsolated = tenantA.authenticated === true && tenantA.rlsIsolated === true;
+      const tenantAResult = (await tenantAResponse.json()) as TenantRuntimeGate;
+      tenantARlsIsolated = tenantAResult.authenticated === true && tenantAResult.rlsIsolated === true;
     }
 
     const tenantAAuthorized = tenantAResponse.status === 200;
