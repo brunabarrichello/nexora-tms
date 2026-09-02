@@ -3,6 +3,7 @@ import { Module } from '@nestjs/common';
 import { ApiController } from './api.controller.js';
 import { CapacityModule } from './capacity/capacity.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
+import { FinanceModule } from './finance/finance.module.js';
 import { FreightModule } from './freight/freight.module.js';
 import { HealthController } from './health.controller.js';
 import { MasterDataModule } from './master-data/master-data.module.js';
@@ -25,6 +26,7 @@ import { TripsModule } from './trips/trips.module.js';
     NegotiationModule,
     DocumentsModule,
     TripsModule,
+    FinanceModule,
   ],
   controllers: [ApiController, HealthController],
 })

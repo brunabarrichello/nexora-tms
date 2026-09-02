@@ -1,0 +1,98 @@
+INSERT INTO tenants (id,slug,name) VALUES
+  ('76000000-0000-4000-8000-000000000001','nex50-a','NEX-50 Tenant A'),
+  ('76000000-0000-4000-8000-000000000002','nex50-b','NEX-50 Tenant B');
+
+INSERT INTO users (id,display_name) VALUES
+  ('76000000-0000-4000-8000-000000000101','NEX-50 User A'),
+  ('76000000-0000-4000-8000-000000000102','NEX-50 User B');
+
+INSERT INTO business_parties (
+  id,tenant_id,tax_id,legal_name,email,status,homologation_status
+) VALUES
+  ('76000000-0000-4000-8000-000000000501','76000000-0000-4000-8000-000000000001','76000000000001','NEX-50 Carrier A','carrier-a@nexora.test','active','approved'),
+  ('76000000-0000-4000-8000-000000000502','76000000-0000-4000-8000-000000000001','76000000000002','NEX-50 Customer A','customer-a@nexora.test','active',null),
+  ('76000000-0000-4000-8000-000000000503','76000000-0000-4000-8000-000000000001','76000000000003','NEX-50 Consignee A','consignee-a@nexora.test','active',null),
+  ('76000000-0000-4000-8000-000000000504','76000000-0000-4000-8000-000000000002','76000000000004','NEX-50 Customer B','customer-b@nexora.test','active',null),
+  ('76000000-0000-4000-8000-000000000505','76000000-0000-4000-8000-000000000002','76000000000005','NEX-50 Shipper B','shipper-b@nexora.test','active',null),
+  ('76000000-0000-4000-8000-000000000506','76000000-0000-4000-8000-000000000002','76000000000006','NEX-50 Consignee B','consignee-b@nexora.test','active',null);
+
+INSERT INTO business_party_addresses (
+  id,tenant_id,party_id,type,label,street,number,city,state,is_active
+) VALUES
+  ('76000000-0000-4000-8000-000000000601','76000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000502','pickup','NEX-50 Origin A','Rua A','100','São Paulo','SP',true),
+  ('76000000-0000-4000-8000-000000000602','76000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000503','delivery','NEX-50 Destination A','Rua B','200','Campinas','SP',true),
+  ('76000000-0000-4000-8000-000000000603','76000000-0000-4000-8000-000000000002','76000000-0000-4000-8000-000000000505','pickup','NEX-50 Origin B','Rua C','300','Sorocaba','SP',true),
+  ('76000000-0000-4000-8000-000000000604','76000000-0000-4000-8000-000000000002','76000000-0000-4000-8000-000000000506','delivery','NEX-50 Destination B','Rua D','400','Santos','SP',true);
+
+INSERT INTO transport_requests (
+  id,tenant_id,customer_party_id,shipper_party_id,consignee_party_id,
+  origin_address_id,destination_address_id,planned_pickup_at,planned_delivery_at,
+  cargo_description,status,created_by_user_id,updated_by_user_id
+) VALUES
+  ('76000000-0000-4000-8000-000000000701','76000000-0000-4000-8000-000000000001',
+   '76000000-0000-4000-8000-000000000502','76000000-0000-4000-8000-000000000502','76000000-0000-4000-8000-000000000503',
+   '76000000-0000-4000-8000-000000000601','76000000-0000-4000-8000-000000000602',
+   '2026-09-10T08:00:00Z','2026-09-11T18:00:00Z','NEX-50 Margin Cargo A','in_negotiation',
+   '76000000-0000-4000-8000-000000000101','76000000-0000-4000-8000-000000000101'),
+  ('76000000-0000-4000-8000-000000000702','76000000-0000-4000-8000-000000000002',
+   '76000000-0000-4000-8000-000000000504','76000000-0000-4000-8000-000000000505','76000000-0000-4000-8000-000000000506',
+   '76000000-0000-4000-8000-000000000603','76000000-0000-4000-8000-000000000604',
+   '2026-09-12T08:00:00Z','2026-09-13T18:00:00Z','NEX-50 Margin Cargo B','ready_for_quote',
+   '76000000-0000-4000-8000-000000000102','76000000-0000-4000-8000-000000000102');
+
+INSERT INTO transport_request_commercial_terms (
+  id,tenant_id,transport_request_id,currency_code,customer_price,target_carrier_freight,
+  toll_amount,additional_amount,payment_terms,status,created_by_user_id,updated_by_user_id
+) VALUES
+  ('76000000-0000-4000-8000-000000000751','76000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000701',
+   'BRL',19000,16000,350,150,'30% coleta / 70% entrega','draft',
+   '76000000-0000-4000-8000-000000000101','76000000-0000-4000-8000-000000000101'),
+  ('76000000-0000-4000-8000-000000000752','76000000-0000-4000-8000-000000000002','76000000-0000-4000-8000-000000000702',
+   'BRL',10000,8000,200,100,'50% coleta / 50% entrega','draft',
+   '76000000-0000-4000-8000-000000000102','76000000-0000-4000-8000-000000000102');
+
+INSERT INTO drivers (
+  id,tenant_id,carrier_party_id,full_name,tax_id,phone,cnh_number,cnh_category,cnh_expires_on,
+  registration_status,operational_status,created_by_user_id,updated_by_user_id
+) VALUES (
+  '76000000-0000-4000-8000-000000000801','76000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000501',
+  'NEX-50 Driver A','76000000001','11990000001','76000000001','E','2030-12-31','qualified','active',
+  '76000000-0000-4000-8000-000000000101','76000000-0000-4000-8000-000000000101'
+);
+
+INSERT INTO capacity_assets (
+  id,tenant_id,carrier_party_id,asset_kind,identifier,plate,vehicle_type,body_type,
+  capacity_weight_kg,capacity_volume_m3,max_length_m,max_width_m,max_height_m,
+  tracking_available,status,created_by_user_id,updated_by_user_id
+) VALUES (
+  '76000000-0000-4000-8000-000000000811','76000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000501',
+  'vehicle','NEX50-VEHICLE-A','NEX5A00','carreta','sider',14000,85,14.8,2.6,2.9,true,'active',
+  '76000000-0000-4000-8000-000000000101','76000000-0000-4000-8000-000000000101'
+);
+
+INSERT INTO capacity_assignments (
+  id,tenant_id,driver_id,vehicle_id,carrier_party_id,status,starts_at,created_by_user_id,updated_by_user_id
+) VALUES (
+  '76000000-0000-4000-8000-000000000821','76000000-0000-4000-8000-000000000001',
+  '76000000-0000-4000-8000-000000000801','76000000-0000-4000-8000-000000000811','76000000-0000-4000-8000-000000000501',
+  'active','2026-09-01T08:00:00Z','76000000-0000-4000-8000-000000000101','76000000-0000-4000-8000-000000000101'
+);
+
+INSERT INTO freight_proposals (
+  id,tenant_id,transport_request_id,capacity_assignment_id,carrier_party_id,sequence,kind,
+  currency_code,freight_amount,toll_amount,additional_amount,payment_terms,commercial_notes,authored_by_user_id
+) VALUES (
+  '76000000-0000-4000-8000-000000000831','76000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000701',
+  '76000000-0000-4000-8000-000000000821','76000000-0000-4000-8000-000000000501',1,'proposal',
+  'BRL',15000,300,0,'50% coleta / 50% entrega','NEX-50 proposal fixture','76000000-0000-4000-8000-000000000101'
+);
+
+INSERT INTO capacity_reservations (
+  id,tenant_id,transport_request_id,proposal_id,capacity_assignment_id,driver_id,vehicle_id,
+  carrier_party_id,status,approved_by_user_id,approved_at
+) VALUES (
+  '76000000-0000-4000-8000-000000000841','76000000-0000-4000-8000-000000000001','76000000-0000-4000-8000-000000000701',
+  '76000000-0000-4000-8000-000000000831','76000000-0000-4000-8000-000000000821','76000000-0000-4000-8000-000000000801',
+  '76000000-0000-4000-8000-000000000811','76000000-0000-4000-8000-000000000501','active',
+  '76000000-0000-4000-8000-000000000101','2026-09-02T17:30:00Z'
+);
