@@ -47,4 +47,5 @@ jobs:
           git add apps/api/src/trips packages/database/src/schema/trip-execution.ts packages/database/migrations docs/data/nex-45-tracking-eta.md
           git diff --cached --quiet && { echo 'No generated changes'; exit 1; }
           git commit -m 'feat(trips): implement NEX-45 external tracking and ETA'
+          git restore apps/web/next-env.d.ts apps/web/tsconfig.json
           git push origin HEAD:feat/nex-45-tracking-eta
