@@ -37,7 +37,7 @@ export class FinanceMarginService {
     return this.database.withTenantContext(context, async (client) => {
       const result = await client.query<OperationMarginRecord>(
         `${marginProjectionSql()}
-          ORDER BY r.updated_at DESC,r.id`,
+          ORDER BY request_id`,
       );
       return result.rows;
     });
@@ -49,7 +49,7 @@ export class FinanceMarginService {
     return this.database.withTenantContext(context, async (client) => {
       const result = await client.query<OperationMarginRecord>(
         `${marginProjectionSql()}
-          AND r.id=$1::uuid
+          AND request_id=$1::uuid
           LIMIT 1`,
         [transportRequestId],
       );
@@ -66,7 +66,11 @@ export class FinanceMarginService {
 
 function requireUuid(value: string, field: string): string {
   const normalized = value.trim().toLowerCase();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      normalized,
+    )
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
