@@ -1,0 +1,51 @@
+name: NEX-52 Format Once
+
+on:
+  push:
+    branches:
+      - feat/nex-52-accounts-receivable
+    paths:
+      - '.github/workflows/nex52-format-once.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          ref: feat/nex-52-accounts-receivable
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Format NEX-52 files and remove workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          pnpm exec prettier --write \
+            apps/api/src/finance/finance-receivable.service.ts \
+            apps/api/src/finance/finance-receivable.validation.ts \
+            apps/web/app/_actions/finance-receivable-actions.ts \
+            'apps/web/app/financeiro/faturamento/[id]/page.tsx' \
+            apps/web/app/financeiro/faturamento/page.tsx
+          rm .github/workflows/nex52-format-once.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'style: normalize NEX-52 receivable files'
+          git push origin HEAD:feat/nex-52-accounts-receivable
