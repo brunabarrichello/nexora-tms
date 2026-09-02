@@ -33,7 +33,7 @@ jobs:
           fi
           echo "::add-mask::$OWNER_URL"
 
-          roles="$(psql "$OWNER_URL" -Atqc 'select session_user || ':' || current_user')"
+          roles="$(psql "$OWNER_URL" -Atqc "select session_user || ':' || current_user")"
           [[ "$roles" == 'nexora_migrator:nexora_owner' ]]
 
           psql "$OWNER_URL" -v ON_ERROR_STOP=1 <<'SQL'
