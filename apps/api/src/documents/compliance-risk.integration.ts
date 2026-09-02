@@ -98,6 +98,9 @@ async function run(): Promise<void> {
         ),
         /permission denied|append-only/i,
       );
+    });
+
+    await database.withTenantContext(contextA.require(), async (client) => {
       await assert.rejects(
         client.query(`DELETE FROM compliance_risk_assessments WHERE id=$1::uuid`, [
           partyAssessment.id,
