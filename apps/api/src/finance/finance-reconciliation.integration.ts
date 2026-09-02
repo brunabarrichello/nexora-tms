@@ -195,7 +195,9 @@ async function run(): Promise<void> {
 
     await database.withTenantContext(contextA.require(), async (client) => {
       await assert.rejects(
-        client.query('DELETE FROM financial_reconciliation_entries WHERE id=$1::uuid', [creditEntry.id]),
+        client.query('DELETE FROM financial_reconciliation_entries WHERE id=$1::uuid', [
+          creditEntry.id,
+        ]),
         (error: unknown) => ['42501', 'P0001'].includes((error as { code?: string }).code ?? ''),
       );
     });

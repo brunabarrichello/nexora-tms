@@ -18,10 +18,16 @@ export async function createReconciliationImport(formData: FormData): Promise<vo
   try {
     entries = JSON.parse(entriesJson);
   } catch {
-    redirectWithError('/financeiro/conciliacao', 'As linhas importadas precisam estar em JSON válido.');
+    redirectWithError(
+      '/financeiro/conciliacao',
+      'As linhas importadas precisam estar em JSON válido.',
+    );
   }
   if (!Array.isArray(entries)) {
-    redirectWithError('/financeiro/conciliacao', 'O JSON da importação precisa ser uma lista de linhas.');
+    redirectWithError(
+      '/financeiro/conciliacao',
+      'O JSON da importação precisa ser uma lista de linhas.',
+    );
   }
 
   const result = await apiSend<{ id: string }>('/api/v1/finance/reconciliation/imports', 'POST', {

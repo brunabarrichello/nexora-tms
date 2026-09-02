@@ -1,10 +1,6 @@
 export type FinancialReconciliationDirection = 'credit' | 'debit';
 export type FinancialReconciliationStatus =
-  | 'pending'
-  | 'suggested'
-  | 'divergent'
-  | 'reconciled'
-  | 'ignored';
+  'pending' | 'suggested' | 'divergent' | 'reconciled' | 'ignored';
 export type FinancialReconciliationTargetType = 'customer_receivable' | 'carrier_payment';
 export type FinancialReconciliationMatchMethod = 'suggested' | 'manual';
 

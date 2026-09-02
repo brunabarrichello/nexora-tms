@@ -167,7 +167,10 @@ export default async function Page({
               <div className="field-grid">
                 <label className="form-field field-wide">
                   <span>Alvo</span>
-                  <input value={`${targetLabel(entry.suggestedTargetType)} • ${entry.suggestedTargetId}`} readOnly />
+                  <input
+                    value={`${targetLabel(entry.suggestedTargetType)} • ${entry.suggestedTargetId}`}
+                    readOnly
+                  />
                 </label>
                 <label className="form-field field-wide">
                   <span>Comprovante financeiro (Document ID)</span>
@@ -201,7 +204,9 @@ export default async function Page({
             <div>
               <span className="eyebrow">Conciliação assistida</span>
               <h2>Vincular manualmente</h2>
-              <p>Use quando o financeiro possuir evidência suficiente apesar de uma sugestão fraca.</p>
+              <p>
+                Use quando o financeiro possuir evidência suficiente apesar de uma sugestão fraca.
+              </p>
             </div>
           </div>
           <form action={reconcileEntry} className="entity-form">
@@ -213,7 +218,9 @@ export default async function Page({
                   <span>Natureza do alvo *</span>
                   <select
                     name="targetType"
-                    defaultValue={entry.direction === 'credit' ? 'customer_receivable' : 'carrier_payment'}
+                    defaultValue={
+                      entry.direction === 'credit' ? 'customer_receivable' : 'carrier_payment'
+                    }
                     required
                   >
                     <option value="customer_receivable">Conta a receber</option>
@@ -285,7 +292,8 @@ export default async function Page({
               <span className="eyebrow">Correção append-only</span>
               <h2>Reverter conciliação ativa</h2>
               <p>
-                {targetLabel(match.targetType)} • {match.targetId} • lançamento {match.ledgerTransactionId}
+                {targetLabel(match.targetType)} • {match.targetId} • lançamento{' '}
+                {match.ledgerTransactionId}
               </p>
             </div>
           </div>

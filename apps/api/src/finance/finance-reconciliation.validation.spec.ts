@@ -69,7 +69,8 @@ test('requires coherent reconcile target and UUID', () => {
 test('reversal reason must be meaningful', () => {
   assert.throws(() => parseReverseFinancialReconciliation({ reason: 'short' }), /at least 10/);
   assert.equal(
-    parseReverseFinancialReconciliation({ reason: 'Bank line was linked to the wrong title' }).reason,
+    parseReverseFinancialReconciliation({ reason: 'Bank line was linked to the wrong title' })
+      .reason,
     'Bank line was linked to the wrong title',
   );
 });

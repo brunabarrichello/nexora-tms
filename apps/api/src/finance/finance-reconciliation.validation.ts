@@ -46,7 +46,9 @@ export interface IgnoreFinancialReconciliationInput {
 export function requireReconciliationUuid(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new BadRequestException(`${field} must be a UUID`);
   const normalized = value.trim().toLowerCase();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
@@ -85,7 +87,9 @@ export function parseReconcileFinancialEntry(input: unknown): ReconcileFinancial
     targetId: requireReconciliationUuid(body.targetId, 'targetId'),
     matchMethod: requireMatchMethod(body.matchMethod),
     proofDocumentId:
-      body.proofDocumentId === undefined || body.proofDocumentId === null || body.proofDocumentId === ''
+      body.proofDocumentId === undefined ||
+      body.proofDocumentId === null ||
+      body.proofDocumentId === ''
         ? null
         : requireReconciliationUuid(body.proofDocumentId, 'proofDocumentId'),
     notes: optionalText(body.notes, 'notes', 1000),
@@ -119,7 +123,11 @@ function parseImportEntry(value: unknown, index: number): FinancialReconciliatio
     currencyCode: requireCurrency(body.currencyCode, index),
     occurredAt: requireDateTime(body.occurredAt, `entries[${index}].occurredAt`),
     reference: optionalText(body.reference, `entries[${index}].reference`, 300),
-    counterpartyName: optionalText(body.counterpartyName, `entries[${index}].counterpartyName`, 200),
+    counterpartyName: optionalText(
+      body.counterpartyName,
+      `entries[${index}].counterpartyName`,
+      200,
+    ),
     rawPayload: optionalPayload(body.rawPayload, index),
   };
 }
@@ -154,9 +162,12 @@ function requireMatchMethod(value: unknown): FinancialReconciliationMatchMethod 
 }
 
 function requireMoney(value: unknown, field: string): string {
-  const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  const text =
+    typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
   if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(text) || Number(text) <= 0) {
-    throw new BadRequestException(`${field} must be a positive monetary value with up to 2 decimals`);
+    throw new BadRequestException(
+      `${field} must be a positive monetary value with up to 2 decimals`,
+    );
   }
   return Number(text).toFixed(2);
 }
@@ -171,7 +182,8 @@ function requireCurrency(value: unknown, index: number): string {
 function requireDateTime(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new BadRequestException(`${field} must be an ISO date-time`);
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new BadRequestException(`${field} must be a valid date-time`);
+  if (Number.isNaN(date.getTime()))
+    throw new BadRequestException(`${field} must be a valid date-time`);
   return date.toISOString();
 }
 
@@ -194,7 +206,8 @@ function optionalText(value: unknown, field: string, max: number): string | null
   if (typeof value !== 'string') throw new BadRequestException(`${field} must be text`);
   const text = value.trim();
   if (!text) return null;
-  if (text.length > max) throw new BadRequestException(`${field} must have at most ${max} characters`);
+  if (text.length > max)
+    throw new BadRequestException(`${field} must have at most ${max} characters`);
   return text;
 }
 

@@ -162,7 +162,9 @@ export class FinanceReconciliationService {
         const candidates = await this.computeCandidates(client, entry);
         const top = candidates[0];
         const second = candidates[1];
-        const unambiguous = Boolean(top && top.score >= 70 && (!second || top.score - second.score >= 10));
+        const unambiguous = Boolean(
+          top && top.score >= 70 && (!second || top.score - second.score >= 10),
+        );
 
         if (top && unambiguous) {
           await client.query(
@@ -187,7 +189,10 @@ export class FinanceReconciliationService {
 
         await this.recordEvent(client, entryId, null, 'matching_attempted', {
           candidateCount: candidates.length,
-          suggested: top && unambiguous ? { targetType: top.targetType, targetId: top.targetId, score: top.score } : null,
+          suggested:
+            top && unambiguous
+              ? { targetType: top.targetType, targetId: top.targetId, score: top.score }
+              : null,
           candidates: candidates.slice(0, 5).map((candidate) => ({
             targetType: candidate.targetType,
             targetId: candidate.targetId,
@@ -217,7 +222,8 @@ export class FinanceReconciliationService {
         if (entry.status === 'reconciled' || entry.status === 'ignored') {
           throw new ConflictException('reconciliation entry is terminal');
         }
-        const expectedType = entry.direction === 'credit' ? 'customer_receivable' : 'carrier_payment';
+        const expectedType =
+          entry.direction === 'credit' ? 'customer_receivable' : 'carrier_payment';
         if (payload.targetType !== expectedType) {
           throw new ConflictException('target type does not match reconciliation entry direction');
         }
@@ -228,7 +234,9 @@ export class FinanceReconciliationService {
             entry.suggestedTargetId !== payload.targetId ||
             (entry.suggestedScore ?? 0) < 70)
         ) {
-          throw new ConflictException('suggested reconciliation must use the qualified current suggestion');
+          throw new ConflictException(
+            'suggested reconciliation must use the qualified current suggestion',
+          );
         }
 
         const ledgerTransactionId = await this.insertLedgerTransaction(
@@ -240,7 +248,8 @@ export class FinanceReconciliationService {
           payload.notes,
         );
         const score =
-          entry.suggestedTargetType === payload.targetType && entry.suggestedTargetId === payload.targetId
+          entry.suggestedTargetType === payload.targetType &&
+          entry.suggestedTargetId === payload.targetId
             ? entry.suggestedScore
             : null;
 
@@ -319,7 +328,11 @@ export class FinanceReconciliationService {
       try {
         const match = await this.requireActiveMatch(client, matchId, true);
         const entry = await this.requireEntry(client, match.entryId, true);
-        const reversalTransactionId = await this.insertLedgerReversal(client, match, payload.reason);
+        const reversalTransactionId = await this.insertLedgerReversal(
+          client,
+          match,
+          payload.reason,
+        );
 
         await client.query(
           `UPDATE financial_reconciliation_matches
@@ -390,7 +403,8 @@ export class FinanceReconciliationService {
       [matchId],
     );
     const row = result.rows[0];
-    if (!row) throw new NotFoundException('active reconciliation match not found in current tenant');
+    if (!row)
+      throw new NotFoundException('active reconciliation match not found in current tenant');
     return row;
   }
 
@@ -399,22 +413,20 @@ export class FinanceReconciliationService {
     entry: FinancialReconciliationEntryRecord,
     candidates?: readonly FinancialReconciliationCandidateRecord[],
   ): Promise<FinancialReconciliationEntryDetail> {
-    const [resolvedCandidates, matches, events] = await Promise.all([
-      candidates ? Promise.resolve(candidates) : this.computeCandidates(client, entry),
-      client.query<FinancialReconciliationMatchRecord>(
-        `${matchProjectionSql()} WHERE m.entry_id=$1::uuid ORDER BY m.matched_at DESC,m.id DESC`,
-        [entry.id],
-      ),
-      client.query<FinancialReconciliationEventRecord>(
-        `SELECT ev.id::text AS id,ev.entry_id::text AS "entryId",ev.match_id::text AS "matchId",
-                ev.event_type AS "eventType",ev.payload,ev.actor_user_id::text AS "actorUserId",
-                ev.created_at AS "createdAt"
-           FROM financial_reconciliation_events ev
-          WHERE ev.entry_id=$1::uuid
-          ORDER BY ev.created_at,ev.id`,
-        [entry.id],
-      ),
-    ]);
+    const resolvedCandidates = candidates ?? (await this.computeCandidates(client, entry));
+    const matches = await client.query<FinancialReconciliationMatchRecord>(
+      `${matchProjectionSql()} WHERE m.entry_id=$1::uuid ORDER BY m.matched_at DESC,m.id DESC`,
+      [entry.id],
+    );
+    const events = await client.query<FinancialReconciliationEventRecord>(
+      `SELECT ev.id::text AS id,ev.entry_id::text AS "entryId",ev.match_id::text AS "matchId",
+              ev.event_type AS "eventType",ev.payload,ev.actor_user_id::text AS "actorUserId",
+              ev.created_at AS "createdAt"
+         FROM financial_reconciliation_events ev
+        WHERE ev.entry_id=$1::uuid
+        ORDER BY ev.created_at,ev.id`,
+      [entry.id],
+    );
     return {
       ...entry,
       candidates: resolvedCandidates,
@@ -510,14 +522,30 @@ export class FinanceReconciliationService {
                tenant_id,receivable_id,kind,amount,proof_document_id,occurred_at,notes,created_by_user_id
              ) VALUES ($1::uuid,$2::uuid,'receipt',$3::numeric(14,2),$4::uuid,$5::timestamptz,$6,$7::uuid)
              RETURNING id::text AS id`,
-            [context.tenantId, targetId, entry.amount, proofDocumentId, entry.occurredAt, reconciliationNote, context.userId],
+            [
+              context.tenantId,
+              targetId,
+              entry.amount,
+              proofDocumentId,
+              entry.occurredAt,
+              reconciliationNote,
+              context.userId,
+            ],
           )
         : await client.query<{ id: string }>(
             `INSERT INTO carrier_payment_transactions(
                tenant_id,obligation_id,kind,amount,proof_document_id,occurred_at,notes,created_by_user_id
              ) VALUES ($1::uuid,$2::uuid,'payment',$3::numeric(14,2),$4::uuid,$5::timestamptz,$6,$7::uuid)
              RETURNING id::text AS id`,
-            [context.tenantId, targetId, entry.amount, proofDocumentId, entry.occurredAt, reconciliationNote, context.userId],
+            [
+              context.tenantId,
+              targetId,
+              entry.amount,
+              proofDocumentId,
+              entry.occurredAt,
+              reconciliationNote,
+              context.userId,
+            ],
           );
     const id = result.rows[0]?.id;
     if (!id) throw new ConflictException('financial ledger transaction could not be persisted');
@@ -540,7 +568,12 @@ export class FinanceReconciliationService {
                FROM customer_receivable_transactions t
               WHERE t.id=$2::uuid AND t.kind='receipt'
              RETURNING id::text AS id`,
-            [context.tenantId, match.ledgerTransactionId, `Reconciliation reversal: ${reason}`, context.userId],
+            [
+              context.tenantId,
+              match.ledgerTransactionId,
+              `Reconciliation reversal: ${reason}`,
+              context.userId,
+            ],
           )
         : await client.query<{ id: string }>(
             `INSERT INTO carrier_payment_transactions(
@@ -550,10 +583,18 @@ export class FinanceReconciliationService {
                FROM carrier_payment_transactions t
               WHERE t.id=$2::uuid AND t.kind IN ('advance','payment')
              RETURNING id::text AS id`,
-            [context.tenantId, match.ledgerTransactionId, `Reconciliation reversal: ${reason}`, context.userId],
+            [
+              context.tenantId,
+              match.ledgerTransactionId,
+              `Reconciliation reversal: ${reason}`,
+              context.userId,
+            ],
           );
     const id = result.rows[0]?.id;
-    if (!id) throw new ConflictException('reconciliation reversal ledger transaction could not be persisted');
+    if (!id)
+      throw new ConflictException(
+        'reconciliation reversal ledger transaction could not be persisted',
+      );
     return id;
   }
 
@@ -615,7 +656,8 @@ function scoreCandidate(
     reasons.push('exact reference');
   } else if (
     entryReference &&
-    ((candidateReference && entryReference.includes(candidateReference)) || entryReference.includes(candidateId))
+    ((candidateReference && entryReference.includes(candidateReference)) ||
+      entryReference.includes(candidateId))
   ) {
     score += 25;
     reasons.push('reference contains target identifier');
@@ -640,7 +682,8 @@ function scoreCandidate(
   if (
     entryCounterparty &&
     candidateCounterparty &&
-    (entryCounterparty.includes(candidateCounterparty) || candidateCounterparty.includes(entryCounterparty))
+    (entryCounterparty.includes(candidateCounterparty) ||
+      candidateCounterparty.includes(entryCounterparty))
   ) {
     score += 10;
     reasons.push('counterparty name match');
@@ -660,7 +703,8 @@ function normalize(value: string | null): string {
 function throwReconciliationError(error: unknown): never {
   if (error instanceof ConflictException || error instanceof NotFoundException) throw error;
   const candidate = error as { code?: string; message?: string };
-  if (candidate?.code === '23505') throw new ConflictException('reconciliation record already exists');
+  if (candidate?.code === '23505')
+    throw new ConflictException('reconciliation record already exists');
   if (['P0001', '23503', '23514', '42501'].includes(candidate?.code ?? '')) {
     throw new ConflictException(candidate.message ?? 'reconciliation rule rejected the operation');
   }
