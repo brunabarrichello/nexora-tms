@@ -1,0 +1,99 @@
+name: NEX-70 Staging Tenant RBAC Fixture
+
+on:
+  push:
+    branches:
+      - feat/nex-70-web-auth0-pkce
+    paths:
+      - .github/workflows/nex70-staging-tenant-fixture.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  provision:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Provision and verify isolated Staging Tenant RBAC fixture
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}"
+
+          MIGRATOR_URL="$(npx --yes neonctl@v2 connection-string staging --project-id raspy-river-76339604 --database-name neondb --role-name nexora_migrator)"
+          echo "::add-mask::$MIGRATOR_URL"
+          if [[ "$MIGRATOR_URL" == *'?'* ]]; then
+            OWNER_URL="${MIGRATOR_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_URL="${MIGRATOR_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_URL"
+
+          roles="$(psql "$OWNER_URL" -Atqc 'select session_user || ':' || current_user')"
+          [[ "$roles" == 'nexora_migrator:nexora_owner' ]]
+
+          psql "$OWNER_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+
+          INSERT INTO tenants (id, slug, name, status) VALUES
+            ('58000000-0000-4000-8000-000000000001', 'nex70-auth-stg-a', 'NEX-70 Staging Tenant A', 'active'),
+            ('58000000-0000-4000-8000-000000000002', 'nex70-auth-stg-b', 'NEX-70 Staging Tenant B', 'active')
+          ON CONFLICT (id) DO UPDATE
+            SET status = 'active', updated_at = now();
+
+          INSERT INTO memberships (id, tenant_id, user_id, status) VALUES
+            ('58000000-0000-4000-8000-000000000121', '58000000-0000-4000-8000-000000000001', '58000000-0000-4000-8000-000000000101', 'active')
+          ON CONFLICT (id) DO UPDATE
+            SET tenant_id = EXCLUDED.tenant_id, user_id = EXCLUDED.user_id, status = 'active', updated_at = now();
+
+          INSERT INTO permissions (key, description) VALUES
+            ('tenant.read', 'NEX-70 Staging tenant runtime gate')
+          ON CONFLICT (key) DO NOTHING;
+
+          INSERT INTO roles (tenant_id, code, name, description) VALUES
+            ('58000000-0000-4000-8000-000000000001', 'nex70_staging_reader', 'NEX-70 Staging Reader', 'Least-privilege NEX-70 Staging runtime gate role')
+          ON CONFLICT (tenant_id, code) DO UPDATE
+            SET name = EXCLUDED.name, description = EXCLUDED.description, updated_at = now();
+
+          INSERT INTO role_permissions (tenant_id, role_id, permission_id)
+          SELECT
+            '58000000-0000-4000-8000-000000000001'::uuid,
+            r.id,
+            p.id
+          FROM roles r
+          CROSS JOIN permissions p
+          WHERE r.tenant_id = '58000000-0000-4000-8000-000000000001'::uuid
+            AND r.code = 'nex70_staging_reader'
+            AND p.key = 'tenant.read'
+          ON CONFLICT (tenant_id, role_id, permission_id) DO NOTHING;
+
+          INSERT INTO membership_roles (tenant_id, membership_id, role_id)
+          SELECT
+            '58000000-0000-4000-8000-000000000001'::uuid,
+            '58000000-0000-4000-8000-000000000121'::uuid,
+            r.id
+          FROM roles r
+          WHERE r.tenant_id = '58000000-0000-4000-8000-000000000001'::uuid
+            AND r.code = 'nex70_staging_reader'
+          ON CONFLICT (tenant_id, membership_id, role_id) DO NOTHING;
+
+          COMMIT;
+          SQL
+
+          proof="$(psql "$OWNER_URL" -X -At -F '|' -v ON_ERROR_STOP=1 -c "
+            SELECT
+              (SELECT count(*) FROM tenants WHERE id IN ('58000000-0000-4000-8000-000000000001'::uuid,'58000000-0000-4000-8000-000000000002'::uuid) AND status='active'),
+              (SELECT count(*) FROM memberships WHERE id='58000000-0000-4000-8000-000000000121'::uuid AND tenant_id='58000000-0000-4000-8000-000000000001'::uuid AND user_id='58000000-0000-4000-8000-000000000101'::uuid AND status='active'),
+              (SELECT count(*) FROM memberships WHERE user_id='58000000-0000-4000-8000-000000000101'::uuid AND tenant_id='58000000-0000-4000-8000-000000000002'::uuid AND status='active'),
+              (SELECT count(*) FROM membership_roles mr JOIN roles r ON r.id=mr.role_id AND r.tenant_id=mr.tenant_id JOIN role_permissions rp ON rp.role_id=r.id AND rp.tenant_id=r.tenant_id JOIN permissions p ON p.id=rp.permission_id WHERE mr.membership_id='58000000-0000-4000-8000-000000000121'::uuid AND mr.tenant_id='58000000-0000-4000-8000-000000000001'::uuid AND p.key='tenant.read');
+          ")"
+          IFS='|' read -r tenants membership_a membership_b tenant_read <<< "$proof"
+          [[ "$tenants" == '2' ]]
+          [[ "$membership_a" == '1' ]]
+          [[ "$membership_b" == '0' ]]
+          [[ "$tenant_read" == '1' ]]
+          printf '{"stagingTenants":%s,"tenantAMembership":%s,"tenantBMembership":%s,"tenantReadGrant":%s}\n' "$tenants" "$membership_a" "$membership_b" "$tenant_read"
