@@ -1,0 +1,56 @@
+name: NEX-70 Staging auth audit check
+
+on:
+  push:
+    branches:
+      - feat/nex-70-web-auth0-pkce
+    paths:
+      - '.github/workflows/nex70-staging-auth-audit-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Inspect sanitized Staging auth audit
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}"
+          OWNER_URL="$(npx --yes neonctl@v2 connection-string staging --project-id raspy-river-76339604 --database-name neondb --role-name neondb_owner)"
+          echo "::add-mask::$OWNER_URL"
+
+          latest="$(psql "$OWNER_URL" -X -At -F '|' -v ON_ERROR_STOP=1 -c "
+            SELECT event_type, outcome, provider_key IS NOT NULL, subject_fingerprint IS NOT NULL
+            FROM pretenant_auth_events
+            WHERE occurred_at >= now() - interval '2 hours'
+              AND event_type IN ('auth.identity.unlinked','auth.bearer.rejected','auth.identity.accepted')
+            ORDER BY occurred_at DESC
+            LIMIT 1;
+          ")"
+
+          counts="$(psql "$OWNER_URL" -X -At -F '|' -v ON_ERROR_STOP=1 -c "
+            SELECT
+              count(*) FILTER (WHERE event_type='auth.identity.unlinked'),
+              count(*) FILTER (WHERE event_type='auth.bearer.rejected'),
+              count(*) FILTER (WHERE event_type='auth.identity.accepted')
+            FROM pretenant_auth_events
+            WHERE occurred_at >= now() - interval '2 hours';
+          ")"
+
+          IFS='|' read -r latest_type latest_outcome has_provider has_fingerprint <<< "$latest"
+          IFS='|' read -r unlinked_count rejected_count accepted_count <<< "$counts"
+
+          printf '{"latestType":"%s","latestOutcome":"%s","hasProvider":%s,"hasFingerprint":%s,"unlinked":%s,"bearerRejected":%s,"accepted":%s}\n' \
+            "${latest_type:-none}" "${latest_outcome:-none}" \
+            "${has_provider:-f}" "${has_fingerprint:-f}" \
+            "${unlinked_count:-0}" "${rejected_count:-0}" "${accepted_count:-0}"
+
+          [[ "${latest_type:-}" == 'auth.identity.unlinked' ]]
+          [[ "${has_provider:-}" == 't' ]]
+          [[ "${has_fingerprint:-}" == 't' ]]
