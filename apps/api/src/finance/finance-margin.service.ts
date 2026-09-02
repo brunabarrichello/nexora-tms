@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 
 import { TenantContext } from '../tenancy/tenant-context.js';
 import { TenantDatabaseService } from '../tenancy/tenant-database.service.js';
@@ -43,7 +43,8 @@ export class FinanceMarginService {
     });
   }
 
-  async get(transportRequestId: string): Promise<OperationMarginRecord> {
+  async get(transportRequestIdValue: string): Promise<OperationMarginRecord> {
+    const transportRequestId = requireUuid(transportRequestIdValue, 'transportRequestId');
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
       const result = await client.query<OperationMarginRecord>(
@@ -61,6 +62,14 @@ export class FinanceMarginService {
       return row;
     });
   }
+}
+
+function requireUuid(value: string, field: string): string {
+  const normalized = value.trim().toLowerCase();
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) {
+    throw new BadRequestException(`${field} must be a valid UUID`);
+  }
+  return normalized;
 }
 
 function marginProjectionSql(): string {
