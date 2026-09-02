@@ -103,7 +103,8 @@ jobs:
           echo "::add-mask::$OWNER_DATABASE_URL"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0018-documents-owner.sql
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex47-document-compliance-owner.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex47-document-compliance-security.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex47-document-compliance-seed.sql
 
       - name: Resolve runtime connection
         id: app
