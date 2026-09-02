@@ -41,7 +41,10 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
   const candidates =
     marginsResult.kind === 'ready'
       ? marginsResult.data.filter(
-          (item) => item.stage === 'contracted' && item.contractId && !existingContracts.has(item.contractId),
+          (item) =>
+            item.stage === 'contracted' &&
+            item.contractId &&
+            !existingContracts.has(item.contractId),
         )
       : [];
   const error = typeof params.error === 'string' ? params.error : null;
@@ -54,8 +57,8 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
             <span className="eyebrow">Financeiro • NEX-51</span>
             <h2>Nova obrigação do transportador</h2>
             <p>
-              O valor é copiado do contrato confirmado; o usuário informa somente vencimento, vínculo
-              opcional de viagem e observações.
+              O valor é copiado do contrato confirmado; o usuário informa somente vencimento,
+              vínculo opcional de viagem e observações.
             </p>
           </div>
         </div>
@@ -70,7 +73,10 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
                     Selecione uma operação contratada
                   </option>
                   {candidates.map((item) => (
-                    <option key={item.contractId ?? item.transportRequestId} value={item.contractId ?? ''}>
+                    <option
+                      key={item.contractId ?? item.transportRequestId}
+                      value={item.contractId ?? ''}
+                    >
                       {item.customerName} — {item.cargoDescription} —{' '}
                       {money(item.totalCostAmount, item.currencyCode)}
                     </option>
@@ -95,10 +101,17 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
             <div className="form-summary-card">
               <span className="eyebrow">Fonte canônica</span>
               <h2>Sem digitação do valor contratado</h2>
-              <p>Frete, pedágio e adicionais são capturados do contrato para evitar divergência manual.</p>
+              <p>
+                Frete, pedágio e adicionais são capturados do contrato para evitar divergência
+                manual.
+              </p>
             </div>
             <div className="sticky-actions">
-              <button className="button button-primary" type="submit" disabled={candidates.length === 0}>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={candidates.length === 0}
+              >
                 Criar obrigação
               </button>
             </div>
@@ -114,7 +127,11 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
         metrics={[
           {
             label: 'Em aberto',
-            value: String(obligations.filter((item) => ['open', 'partially_paid'].includes(item.effectiveStatus)).length),
+            value: String(
+              obligations.filter((item) =>
+                ['open', 'partially_paid'].includes(item.effectiveStatus),
+              ).length,
+            ),
             helper: 'Inclui obrigações parcialmente pagas',
           },
           {
@@ -150,7 +167,11 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
           status: statusLabel(item.effectiveStatus),
         }))}
         totalRows={obligations.length}
-        emptyTitle={obligationsResult.kind === 'ready' ? 'Nenhuma obrigação registrada' : 'Pagamentos indisponíveis'}
+        emptyTitle={
+          obligationsResult.kind === 'ready'
+            ? 'Nenhuma obrigação registrada'
+            : 'Pagamentos indisponíveis'
+        }
         emptyDescription={
           obligationsResult.kind === 'ready'
             ? 'Crie a obrigação a partir de uma operação já contratada.'

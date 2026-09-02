@@ -71,7 +71,9 @@ export class FinancePaymentService {
         );
         const id = result.rows[0]?.id;
         if (!id) {
-          throw new NotFoundException('confirmed or fulfilled transport contract not found in current tenant');
+          throw new NotFoundException(
+            'confirmed or fulfilled transport contract not found in current tenant',
+          );
         }
         return this.requireObligation(client, id);
       } catch (error) {
@@ -119,7 +121,8 @@ export class FinancePaymentService {
           values,
         );
         const id = result.rows[0]?.id;
-        if (!id) throw new NotFoundException('carrier payment obligation not found in current tenant');
+        if (!id)
+          throw new NotFoundException('carrier payment obligation not found in current tenant');
         return this.requireObligation(client, id);
       } catch (error) {
         throwPaymentError(error);
@@ -171,7 +174,9 @@ export class FinancePaymentService {
     return this.database.withTenantContext(context, async (client) => {
       await this.requireObligation(client, obligationId);
       const result = await client.query<CarrierPaymentTransactionRecord>(
-        transactionProjectionSql('WHERE t.obligation_id=$1::uuid ORDER BY t.occurred_at,t.created_at,t.id'),
+        transactionProjectionSql(
+          'WHERE t.obligation_id=$1::uuid ORDER BY t.occurred_at,t.created_at,t.id',
+        ),
         [obligationId],
       );
       return result.rows;
@@ -193,7 +198,8 @@ export class FinancePaymentService {
           'SELECT id::text AS id FROM documents WHERE id=$1::uuid AND deleted_at IS NULL',
           [payload.proofDocumentId],
         );
-        if (!proof.rows[0]) throw new NotFoundException('proof document not found in current tenant');
+        if (!proof.rows[0])
+          throw new NotFoundException('proof document not found in current tenant');
       }
 
       try {
@@ -263,7 +269,8 @@ export class FinancePaymentService {
       [transactionId],
     );
     const row = result.rows[0];
-    if (!row) throw new NotFoundException('carrier payment transaction not found in current tenant');
+    if (!row)
+      throw new NotFoundException('carrier payment transaction not found in current tenant');
     return row;
   }
 }

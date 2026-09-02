@@ -85,7 +85,9 @@ export default async function Page({
   const transactions = transactionsResult.kind === 'ready' ? transactionsResult.data : [];
   const events = eventsResult.kind === 'ready' ? eventsResult.data : [];
   const error = typeof query.error === 'string' ? query.error : null;
-  const reversible = transactions.filter((item) => item.kind === 'advance' || item.kind === 'payment');
+  const reversible = transactions.filter(
+    (item) => item.kind === 'advance' || item.kind === 'payment',
+  );
 
   return (
     <div className="page-stack">

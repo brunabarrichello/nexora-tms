@@ -27,7 +27,9 @@ export interface CreateCarrierPaymentTransactionInput {
 export function requireFinanceUuid(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new BadRequestException(`${field} must be a UUID`);
   const normalized = value.trim().toLowerCase();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
@@ -115,7 +117,8 @@ function requireDateTime(value: unknown, field: string): string {
     throw new BadRequestException(`${field} must be an ISO date-time`);
   }
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) throw new BadRequestException(`${field} must be a valid date-time`);
+  if (Number.isNaN(date.getTime()))
+    throw new BadRequestException(`${field} must be a valid date-time`);
   return date.toISOString();
 }
 
@@ -125,9 +128,12 @@ function requireTransactionKind(value: unknown): CarrierPaymentTransactionKind {
 }
 
 function requireMoney(value: unknown, field: string): string {
-  const text = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
+  const text =
+    typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : '';
   if (!/^\d{1,12}(?:\.\d{1,2})?$/.test(text)) {
-    throw new BadRequestException(`${field} must be a positive monetary value with up to 2 decimals`);
+    throw new BadRequestException(
+      `${field} must be a positive monetary value with up to 2 decimals`,
+    );
   }
   const numeric = Number(text);
   if (!Number.isFinite(numeric) || numeric <= 0) {
@@ -141,7 +147,8 @@ function optionalText(value: unknown, field: string, max: number): string | null
   if (typeof value !== 'string') throw new BadRequestException(`${field} must be text`);
   const normalized = value.trim();
   if (!normalized) return null;
-  if (normalized.length > max) throw new BadRequestException(`${field} must have at most ${max} characters`);
+  if (normalized.length > max)
+    throw new BadRequestException(`${field} must have at most ${max} characters`);
   return normalized;
 }
 

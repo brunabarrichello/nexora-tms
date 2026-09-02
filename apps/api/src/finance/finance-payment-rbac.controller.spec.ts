@@ -23,7 +23,10 @@ test('payment mutations require finance.write', () => {
     FinancePaymentController.prototype.cancelObligation,
     FinancePaymentController.prototype.createTransaction,
   ]) {
-    assert.equal(reflector.get(REQUIRED_TENANT_PERMISSION, method), TENANT_PERMISSIONS.FINANCE_WRITE);
+    assert.equal(
+      reflector.get(REQUIRED_TENANT_PERMISSION, method),
+      TENANT_PERMISSIONS.FINANCE_WRITE,
+    );
   }
 });
 

@@ -17,11 +17,19 @@ async function run(): Promise<void> {
   const database = new TenantDatabaseService();
 
   const contextA = new TenantContext();
-  contextA.establish({ subject: 'integration|finance-payments-a', tenantId: TENANT_A, userId: USER_A });
+  contextA.establish({
+    subject: 'integration|finance-payments-a',
+    tenantId: TENANT_A,
+    userId: USER_A,
+  });
   const paymentsA = new FinancePaymentService(contextA, database);
 
   const contextB = new TenantContext();
-  contextB.establish({ subject: 'integration|finance-payments-b', tenantId: TENANT_B, userId: USER_B });
+  contextB.establish({
+    subject: 'integration|finance-payments-b',
+    tenantId: TENANT_B,
+    userId: USER_B,
+  });
   const paymentsB = new FinancePaymentService(contextB, database);
 
   try {
@@ -194,10 +202,7 @@ async function run(): Promise<void> {
     assert.ok(events.some((event) => event.eventType === 'created'));
     assert.ok(events.some((event) => event.eventType === 'due_at_changed'));
     assert.ok(events.some((event) => event.eventType === 'cancelled'));
-    assert.equal(
-      events.filter((event) => event.eventType === 'transaction_recorded').length,
-      4,
-    );
+    assert.equal(events.filter((event) => event.eventType === 'transaction_recorded').length, 4);
 
     await database.withTenantContext(contextA.require(), async (client) => {
       const eventId = events[0]?.id;
