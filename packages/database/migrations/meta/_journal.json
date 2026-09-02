@@ -253,6 +253,20 @@
       "when": 1788374400000,
       "tag": "0035_nex49_compliance_risk",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788375300000,
+      "tag": "0036_nex51_carrier_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788376200000,
+      "tag": "0037_nex51_carrier_payments_hardening",
+      "breakpoints": true
     }
   ]
 }
