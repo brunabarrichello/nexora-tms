@@ -25,18 +25,18 @@ BEGIN
          succeeded_at = CASE
            WHEN status = 'cancelled' AND NEW.status = 'succeeded' THEN NULL
            WHEN NEW.status = 'succeeded' THEN coalesce(succeeded_at, now())
-           WHEN NEW.status = 'pending' THEN NULL
+           WHEN NEW.status IN ('pending','retry_wait') THEN NULL
            ELSE succeeded_at
          END,
          dead_lettered_at = CASE
            WHEN NEW.status = 'dead_lettered' THEN coalesce(dead_lettered_at, now())
-           WHEN NEW.status = 'pending' THEN NULL
+           WHEN NEW.status IN ('pending','retry_wait') THEN NULL
            ELSE dead_lettered_at
          END,
          cancelled_at = CASE
            WHEN status = 'cancelled' AND NEW.status = 'succeeded' THEN coalesce(cancelled_at, now())
            WHEN NEW.status = 'cancelled' THEN coalesce(cancelled_at, now())
-           WHEN NEW.status = 'pending' THEN NULL
+           WHEN NEW.status IN ('pending','retry_wait') THEN NULL
            ELSE cancelled_at
          END,
          updated_at = now()
