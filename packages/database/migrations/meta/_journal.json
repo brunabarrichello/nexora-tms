@@ -267,6 +267,13 @@
       "when": 1788376200000,
       "tag": "0037_nex51_carrier_payments_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788377100000,
+      "tag": "0038_nex52_accounts_receivable",
+      "breakpoints": true
     }
   ]
 }
