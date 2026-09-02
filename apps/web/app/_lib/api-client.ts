@@ -1,5 +1,7 @@
 import { headers } from 'next/headers';
 
+import { auth0 } from './auth0';
+
 export type ApiResult<T> =
   | { readonly kind: 'ready'; readonly data: T }
   | { readonly kind: 'unconfigured'; readonly message: string }
@@ -30,22 +32,55 @@ async function apiRequest<T>(
   init: RequestInit,
   query?: Readonly<Record<string, string | undefined>>,
 ): Promise<ApiResult<T>> {
-  const baseUrl = process.env.NEXORA_API_BASE_URL?.trim();
-  if (!baseUrl) {
+  if (!path.startsWith('/') || path.startsWith('//')) {
+    return { kind: 'error', message: 'O caminho solicitado para a API é inválido.' };
+  }
+
+  const apiBaseUrlValue = process.env.NEXORA_API_BASE_URL?.trim();
+  if (!apiBaseUrlValue) {
     return {
       kind: 'unconfigured',
-      message: 'NEXORA_API_BASE_URL ainda não foi configurada para este ambiente web.',
+      message: 'A integração Web/API ainda não foi configurada para este ambiente.',
+    };
+  }
+
+  let apiBaseUrl: URL;
+  try {
+    apiBaseUrl = new URL(apiBaseUrlValue);
+  } catch {
+    return {
+      kind: 'unconfigured',
+      message: 'A URL da API configurada para este ambiente é inválida.',
+    };
+  }
+
+  let accessToken: string;
+  try {
+    const session = await auth0.getSession();
+    if (!session) {
+      return {
+        kind: 'unauthorized',
+        message: 'A sessão Web não está autenticada. Entre novamente no Nexora.',
+      };
+    }
+
+    const token = await auth0.getAccessToken();
+    accessToken = token.token;
+  } catch {
+    return {
+      kind: 'unauthorized',
+      message: 'A sessão Web expirou ou não pôde obter autorização para a API.',
     };
   }
 
   const incomingHeaders = await headers();
   const outgoingHeaders = new Headers(init.headers);
   outgoingHeaders.set('Accept', 'application/json');
-  for (const headerName of ['authorization', 'x-correlation-id']) {
-    const value = incomingHeaders.get(headerName);
-    if (value) outgoingHeaders.set(headerName, value);
-  }
+  outgoingHeaders.set('Authorization', `Bearer ${accessToken}`);
+  const correlationId = incomingHeaders.get('x-correlation-id');
+  if (correlationId) outgoingHeaders.set('x-correlation-id', correlationId);
 
+  const baseUrl = apiBaseUrl.toString();
   const url = new URL(path, baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`);
   for (const [key, value] of Object.entries(query ?? {})) {
     if (value !== undefined && value !== '') url.searchParams.set(key, value);
@@ -61,7 +96,7 @@ async function apiRequest<T>(
     if (response.status === 401 || response.status === 403) {
       return {
         kind: 'unauthorized',
-        message: 'A API está configurada, mas a sessão atual ainda não possui autorização válida.',
+        message: 'A sessão existe, mas a API recusou a identidade ou a autorização atual.',
       };
     }
 

@@ -29,7 +29,7 @@
     "prepare": "simple-git-hooks",
     "start:api": "pnpm --filter @nexora/api start",
     "start:web": "pnpm --filter @nexora/web start",
-    "start:worker": "pnpm --filter @nexora/worker start",
+    "start:worker": "pnpm build:worker && pnpm start:worker",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"

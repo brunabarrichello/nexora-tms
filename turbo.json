@@ -3,6 +3,21 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": [
+        "AUTH0_DOMAIN",
+        "AUTH0_CLIENT_ID",
+        "AUTH0_CLIENT_SECRET",
+        "AUTH0_SECRET",
+        "AUTH0_DATABASE_CONNECTION",
+        "APP_BASE_URL",
+        "NEXORA_API_BASE_URL",
+        "NEXORA_API_AUDIENCE",
+        "NEXORA_ENVIRONMENT",
+        "OIDC_ISSUER_URL",
+        "OIDC_AUDIENCE",
+        "VERCEL_BRANCH_URL",
+        "VERCEL_URL"
+      ],
       "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
     },
     "dev": {
