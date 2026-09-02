@@ -11,6 +11,7 @@ const USER_A = '75000000-0000-4000-8000-000000000101';
 const USER_B = '75000000-0000-4000-8000-000000000102';
 const PARTY_A = '75000000-0000-4000-8000-000000000201';
 const DRIVER_A = '75000000-0000-4000-8000-000000000301';
+const ASSET_A = '75000000-0000-4000-8000-000000000351';
 const DOCUMENT_A = '75000000-0000-4000-8000-000000000401';
 
 async function run(): Promise<void> {
@@ -52,6 +53,14 @@ async function run(): Promise<void> {
       ),
     );
 
+    const assetAssessment = await riskA.evaluate('asset', ASSET_A);
+    assert.equal(assetAssessment.decision, 'review');
+    assert.ok(
+      (assetAssessment.signals as Array<{ code: string }>).some(
+        (item) => item.code === 'ASSET_INACTIVE',
+      ),
+    );
+
     const documentAssessment = await riskA.evaluate('document', DOCUMENT_A);
     assert.equal(documentAssessment.decision, 'block');
     assert.ok(
@@ -80,7 +89,7 @@ async function run(): Promise<void> {
           WHERE entity_type='compliance_risk_assessment'
             AND action IN ('compliance.risk.assessed','compliance.risk.decided')`,
       );
-      assert.equal(Number(audit.rows[0]?.count ?? 0), 4);
+      assert.equal(Number(audit.rows[0]?.count ?? 0), 5);
 
       await assert.rejects(
         client.query(
