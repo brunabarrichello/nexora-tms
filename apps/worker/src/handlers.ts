@@ -9,6 +9,7 @@ export interface HandlerContext {
   idempotencyKey: string;
   attempt: number;
   maxAttempts: number;
+  signal: AbortSignal;
 }
 
 export type WorkHandler = (context: HandlerContext) => Promise<void>;
@@ -54,6 +55,7 @@ export class HandlerRegistry {
 export function createDefaultHandlerRegistry(logger: StructuredLogger): HandlerRegistry {
   const registry = new HandlerRegistry();
   const smokeHandler: WorkHandler = async (context) => {
+    context.signal.throwIfAborted();
     logger.info('worker.smoke.processed', {
       tenantId: context.tenantId,
       correlationId: context.correlationId,
