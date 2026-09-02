@@ -14,11 +14,9 @@ const SHIPPER_A = '62000000-0000-4000-8000-000000000502';
 const CONSIGNEE_A = '62000000-0000-4000-8000-000000000503';
 const ORIGIN_ADDRESS_A = '62000000-0000-4000-8000-000000000601';
 const DESTINATION_ADDRESS_A = '62000000-0000-4000-8000-000000000602';
-const REQUEST_A = '62000000-0000-4000-8000-000000000701';
 const DRIVER_A = '62000000-0000-4000-8000-000000000801';
 const VEHICLE_A = '62000000-0000-4000-8000-000000000811';
 const ASSIGNMENT_A = '62000000-0000-4000-8000-000000000821';
-const PROPOSAL_A = '62000000-0000-4000-8000-000000000831';
 const RESERVATION_A = '62000000-0000-4000-8000-000000000841';
 const CONTRACT_A = '62000000-0000-4000-8000-000000000901';
 const REQUEST_B = '62000000-0000-4000-8000-000000000702';
@@ -222,7 +220,15 @@ async function run(): Promise<void> {
             '2026-09-12T08:00:00Z','2026-09-12T10:00:00Z','Second trip pickup'),
            ($2::uuid,current_setting('app.tenant_id')::uuid,$3::uuid,2,'delivery',$6::uuid,$7::uuid,
             '2026-09-13T16:00:00Z','2026-09-13T18:00:00Z','Second trip delivery')`,
-        [PICKUP_B, DELIVERY_B, REQUEST_B, SHIPPER_A, ORIGIN_ADDRESS_A, CONSIGNEE_A, DESTINATION_ADDRESS_A],
+        [
+          PICKUP_B,
+          DELIVERY_B,
+          REQUEST_B,
+          SHIPPER_A,
+          ORIGIN_ADDRESS_A,
+          CONSIGNEE_A,
+          DESTINATION_ADDRESS_A,
+        ],
       );
       await client.query(
         `INSERT INTO freight_proposals (
@@ -249,7 +255,16 @@ async function run(): Promise<void> {
            $1::uuid,current_setting('app.tenant_id')::uuid,$2::uuid,$3::uuid,$4::uuid,$5::uuid,$6::uuid,
            $7::uuid,'active',$8::uuid,now()
          )`,
-        [RESERVATION_B, REQUEST_B, PROPOSAL_B, ASSIGNMENT_A, DRIVER_A, VEHICLE_A, CARRIER_A, USER_A],
+        [
+          RESERVATION_B,
+          REQUEST_B,
+          PROPOSAL_B,
+          ASSIGNMENT_A,
+          DRIVER_A,
+          VEHICLE_A,
+          CARRIER_A,
+          USER_A,
+        ],
       );
       await client.query(
         `INSERT INTO capacity_reservation_events (tenant_id,reservation_id,type,actor_user_id)
@@ -266,7 +281,17 @@ async function run(): Promise<void> {
            $6::uuid,$7::uuid,$8::uuid,'confirmed','BRL',16000,320,0,
            '50% pickup / 50% delivery','NEX-44 reusable confirmed contract',$9::uuid,now()
          )`,
-        [CONTRACT_B, REQUEST_B, RESERVATION_B, PROPOSAL_B, ASSIGNMENT_A, DRIVER_A, VEHICLE_A, CARRIER_A, USER_A],
+        [
+          CONTRACT_B,
+          REQUEST_B,
+          RESERVATION_B,
+          PROPOSAL_B,
+          ASSIGNMENT_A,
+          DRIVER_A,
+          VEHICLE_A,
+          CARRIER_A,
+          USER_A,
+        ],
       );
       await client.query(
         `INSERT INTO transport_contract_events (tenant_id,contract_id,type,actor_user_id)
