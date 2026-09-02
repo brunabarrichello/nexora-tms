@@ -18,6 +18,7 @@ export const TENANT_PERMISSIONS = {
   TRIPS_READ: 'trips.read',
   TRIPS_WRITE: 'trips.write',
   FINANCE_READ: 'finance.read',
+  FINANCE_WRITE: 'finance.write',
   AUDIT_READ: 'audit.read',
 } as const;
 
@@ -90,6 +91,7 @@ export const TENANT_ROLE_TEMPLATES = {
       TENANT_PERMISSIONS.NEGOTIATION_READ,
       TENANT_PERMISSIONS.TRIPS_READ,
       TENANT_PERMISSIONS.FINANCE_READ,
+      TENANT_PERMISSIONS.FINANCE_WRITE,
       TENANT_PERMISSIONS.AUDIT_READ,
     ],
   },
