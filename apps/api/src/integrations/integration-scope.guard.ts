@@ -13,10 +13,10 @@ export class IntegrationScopeGuard implements CanActivate {
   ) {}
 
   canActivate(executionContext: ExecutionContext): boolean {
-    const required = this.reflector.getAllAndOverride<readonly string[]>(REQUIRED_INTEGRATION_SCOPES, [
-      executionContext.getHandler(),
-      executionContext.getClass(),
-    ]);
+    const required = this.reflector.getAllAndOverride<readonly string[]>(
+      REQUIRED_INTEGRATION_SCOPES,
+      [executionContext.getHandler(), executionContext.getClass()],
+    );
     if (!required || required.length === 0) {
       throw new ForbiddenException('External API scope metadata is required');
     }

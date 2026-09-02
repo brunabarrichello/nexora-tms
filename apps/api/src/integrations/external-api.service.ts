@@ -18,9 +18,13 @@ export class ExternalApiService {
 
   listTransportRequests(limitValue?: string): Promise<ExternalApiEnvelope<readonly unknown[]>> {
     const limit = parseLimit(limitValue);
-    return this.withContext('integration.api.freight.listed', 'transport_request', null, async (client) => {
-      const result = await client.query(
-        `SELECT id::text AS id,
+    return this.withContext(
+      'integration.api.freight.listed',
+      'transport_request',
+      null,
+      async (client) => {
+        const result = await client.query(
+          `SELECT id::text AS id,
                 customer_party_id::text AS "customerPartyId",
                 shipper_party_id::text AS "shipperPartyId",
                 consignee_party_id::text AS "consigneePartyId",
@@ -35,17 +39,22 @@ export class ExternalApiService {
            FROM transport_requests
           ORDER BY created_at DESC,id DESC
           LIMIT $1::int`,
-        [limit],
-      );
-      return result.rows.map(normalizeDates);
-    });
+          [limit],
+        );
+        return result.rows.map(normalizeDates);
+      },
+    );
   }
 
   getTransportRequest(idValue: string): Promise<ExternalApiEnvelope<unknown>> {
     const id = requireUuid(idValue, 'transportRequestId');
-    return this.withContext('integration.api.freight.read', 'transport_request', id, async (client) => {
-      const result = await client.query(
-        `SELECT id::text AS id,
+    return this.withContext(
+      'integration.api.freight.read',
+      'transport_request',
+      id,
+      async (client) => {
+        const result = await client.query(
+          `SELECT id::text AS id,
                 customer_party_id::text AS "customerPartyId",
                 shipper_party_id::text AS "shipperPartyId",
                 consignee_party_id::text AS "consigneePartyId",
@@ -59,11 +68,12 @@ export class ExternalApiService {
                 updated_at AS "updatedAt"
            FROM transport_requests
           WHERE id=$1::uuid`,
-        [id],
-      );
-      if (!result.rows[0]) throw new NotFoundException('Transport request not found');
-      return normalizeDates(result.rows[0]);
-    });
+          [id],
+        );
+        if (!result.rows[0]) throw new NotFoundException('Transport request not found');
+        return normalizeDates(result.rows[0]);
+      },
+    );
   }
 
   listTrips(limitValue?: string): Promise<ExternalApiEnvelope<readonly unknown[]>> {
@@ -114,9 +124,13 @@ export class ExternalApiService {
 
   listDocuments(limitValue?: string): Promise<ExternalApiEnvelope<readonly unknown[]>> {
     const limit = parseLimit(limitValue);
-    return this.withContext('integration.api.documents.listed', 'document', null, async (client) => {
-      const result = await client.query(
-        `SELECT id::text AS id,
+    return this.withContext(
+      'integration.api.documents.listed',
+      'document',
+      null,
+      async (client) => {
+        const result = await client.query(
+          `SELECT id::text AS id,
                 document_type_id::text AS "documentTypeId",
                 title,status,issued_on AS "issuedOn",expires_on AS "expiresOn",
                 external_reference AS "externalReference",
@@ -125,10 +139,11 @@ export class ExternalApiService {
           WHERE deleted_at IS NULL
           ORDER BY created_at DESC,id DESC
           LIMIT $1::int`,
-        [limit],
-      );
-      return result.rows.map(normalizeDates);
-    });
+          [limit],
+        );
+        return result.rows.map(normalizeDates);
+      },
+    );
   }
 
   getDocument(idValue: string): Promise<ExternalApiEnvelope<unknown>> {
@@ -180,6 +195,9 @@ export class ExternalApiService {
 
 function normalizeDates(row: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(
-    Object.entries(row).map(([key, value]) => [key, value instanceof Date ? value.toISOString() : value]),
+    Object.entries(row).map(([key, value]) => [
+      key,
+      value instanceof Date ? value.toISOString() : value,
+    ]),
   );
 }

@@ -34,7 +34,10 @@ test('integration client and webhook mutations require tenant.manage', () => {
 
 test('external API routes declare explicit least-privilege scopes', () => {
   assert.deepEqual(
-    reflector.get(REQUIRED_INTEGRATION_SCOPES, ExternalApiController.prototype.listTransportRequests),
+    reflector.get(
+      REQUIRED_INTEGRATION_SCOPES,
+      ExternalApiController.prototype.listTransportRequests,
+    ),
     ['freight.read'],
   );
   assert.deepEqual(

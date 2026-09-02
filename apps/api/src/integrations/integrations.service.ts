@@ -265,7 +265,10 @@ export class IntegrationsService {
     });
   }
 
-  async updateWebhook(subscriptionIdValue: string, body: unknown): Promise<WebhookSubscriptionRecord> {
+  async updateWebhook(
+    subscriptionIdValue: string,
+    body: unknown,
+  ): Promise<WebhookSubscriptionRecord> {
     const subscriptionId = requireUuid(subscriptionIdValue, 'subscriptionId');
     const input = parseUpdateWebhookSubscription(body);
     const context = this.tenantContext.require();

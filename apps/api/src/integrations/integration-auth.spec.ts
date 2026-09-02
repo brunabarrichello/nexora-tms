@@ -20,6 +20,9 @@ test('integration credential is one-time bearer material with SHA-256 storage ha
 });
 
 test('integration authorization rejects arbitrary bearer values', () => {
-  assert.throws(() => parseIntegrationAuthorization('Bearer user-token'), /Invalid integration credential/);
+  assert.throws(
+    () => parseIntegrationAuthorization('Bearer user-token'),
+    /Invalid integration credential/,
+  );
   assert.throws(() => parseIntegrationAuthorization(undefined), /required/);
 });

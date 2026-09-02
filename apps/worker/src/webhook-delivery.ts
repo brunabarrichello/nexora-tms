@@ -45,7 +45,9 @@ export interface WebhookDeliveryDependencies {
   readonly now?: () => Date;
 }
 
-export function createWebhookDeliveryHandler(dependencies: WebhookDeliveryDependencies): WorkHandler {
+export function createWebhookDeliveryHandler(
+  dependencies: WebhookDeliveryDependencies,
+): WorkHandler {
   const fetchFn = dependencies.fetchFn ?? fetch;
   const resolveHost = dependencies.resolveHost ?? resolveHostAddresses;
   const now = dependencies.now ?? (() => new Date());
@@ -205,7 +207,10 @@ function isPrivateAddress(address: string): boolean {
     );
   }
   const parts = address.split('.').map(Number);
-  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) {
+  if (
+    parts.length !== 4 ||
+    parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)
+  ) {
     return true;
   }
   const [a, b] = parts;

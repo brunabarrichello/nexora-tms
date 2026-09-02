@@ -84,7 +84,8 @@ export function parseUpdateWebhookSubscription(body: unknown): UpdateWebhookSubs
   } = {};
 
   if (record.name !== undefined) result.name = requireText(record.name, 'name', 1, 160);
-  if (record.endpointUrl !== undefined) result.endpointUrl = requireWebhookEndpoint(record.endpointUrl);
+  if (record.endpointUrl !== undefined)
+    result.endpointUrl = requireWebhookEndpoint(record.endpointUrl);
   if (record.eventTypes !== undefined) result.eventTypes = requireEventTypes(record.eventTypes);
   if (record.maxAttempts !== undefined) {
     result.maxAttempts = requireInteger(record.maxAttempts, 'maxAttempts', 1, 10);
@@ -111,7 +112,9 @@ export function parseUpdateWebhookSubscription(body: unknown): UpdateWebhookSubs
 export function requireUuid(value: unknown, field: string): string {
   if (typeof value !== 'string') throw new BadRequestException(`${field} must be a UUID`);
   const normalized = value.trim().toLowerCase();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
@@ -133,12 +136,7 @@ function requireObject(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function requireText(
-  value: unknown,
-  field: string,
-  minLength: number,
-  maxLength: number,
-): string {
+function requireText(value: unknown, field: string, minLength: number, maxLength: number): string {
   if (typeof value !== 'string') {
     throw new BadRequestException(`${field} must be a string`);
   }
@@ -152,8 +150,13 @@ function requireText(
 }
 
 function requireScope(value: unknown): ExternalIntegrationScope {
-  if (typeof value !== 'string' || !EXTERNAL_INTEGRATION_SCOPES.includes(value as ExternalIntegrationScope)) {
-    throw new BadRequestException(`scope must be one of: ${EXTERNAL_INTEGRATION_SCOPES.join(', ')}`);
+  if (
+    typeof value !== 'string' ||
+    !EXTERNAL_INTEGRATION_SCOPES.includes(value as ExternalIntegrationScope)
+  ) {
+    throw new BadRequestException(
+      `scope must be one of: ${EXTERNAL_INTEGRATION_SCOPES.join(', ')}`,
+    );
   }
   return value as ExternalIntegrationScope;
 }
@@ -176,7 +179,12 @@ function requireEventTypes(value: unknown): readonly string[] {
 }
 
 function requireInteger(value: unknown, field: string, minimum: number, maximum: number): number {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum || value > maximum) {
+  if (
+    typeof value !== 'number' ||
+    !Number.isSafeInteger(value) ||
+    value < minimum ||
+    value > maximum
+  ) {
     throw new BadRequestException(`${field} must be an integer between ${minimum} and ${maximum}`);
   }
   return value;
@@ -223,5 +231,11 @@ function isPrivateWebhookHost(hostname: string): boolean {
     );
   }
   const unwrapped = hostname.replace(/^\[|\]$/g, '').toLowerCase();
-  return unwrapped === '::1' || unwrapped === '::' || unwrapped.startsWith('fc') || unwrapped.startsWith('fd') || unwrapped.startsWith('fe80:');
+  return (
+    unwrapped === '::1' ||
+    unwrapped === '::' ||
+    unwrapped.startsWith('fc') ||
+    unwrapped.startsWith('fd') ||
+    unwrapped.startsWith('fe80:')
+  );
 }
