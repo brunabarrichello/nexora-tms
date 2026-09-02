@@ -1,0 +1,292 @@
+name: Neon Trip Occurrence Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/database/**'
+      - 'apps/api/src/trips/**'
+      - '.github/workflows/neon-trip-occurrence-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-trip-occurrence-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  trip-occurrence:
+    name: NEX-43 occurrence schema, RLS, grants and API integration
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo 'NEON_API_KEY repository secret is not configured.' >&2; exit 1; }
+
+      - name: Set ephemeral branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-nex43-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch
+        id: admin
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Bootstrap migration capability
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator connection
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply migrations
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify NEX-43 schema, RLS and grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $block$
+          DECLARE
+            v_count integer;
+          BEGIN
+            SELECT count(*) INTO v_count
+              FROM information_schema.tables
+             WHERE table_schema='public'
+               AND table_name IN ('trip_occurrences','trip_occurrence_history','trip_occurrence_documents');
+            IF v_count <> 3 THEN
+              RAISE EXCEPTION 'Expected 3 NEX-43 tables, found %', v_count;
+            END IF;
+
+            SELECT count(*) INTO v_count
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid=c.relnamespace
+             WHERE n.nspname='public'
+               AND c.relname IN ('trip_occurrences','trip_occurrence_history','trip_occurrence_documents')
+               AND c.relrowsecurity;
+            IF v_count <> 3 THEN
+              RAISE EXCEPTION 'Expected RLS on all 3 NEX-43 tables, found %', v_count;
+            END IF;
+
+            IF NOT has_table_privilege('nexora_app','public.trip_occurrences','SELECT')
+               OR NOT has_table_privilege('nexora_app','public.trip_occurrences','INSERT')
+               OR NOT has_table_privilege('nexora_app','public.trip_occurrences','UPDATE')
+               OR has_table_privilege('nexora_app','public.trip_occurrences','DELETE') THEN
+              RAISE EXCEPTION 'trip_occurrences lifecycle grants are incorrect';
+            END IF;
+
+            IF EXISTS (
+              SELECT 1
+                FROM unnest(ARRAY['trip_occurrence_history','trip_occurrence_documents']) AS t(table_name)
+               WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT')
+                  OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT')
+                  OR has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE')
+                  OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')
+            ) THEN
+              RAISE EXCEPTION 'NEX-43 append-only grants are incorrect';
+            END IF;
+
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrences_resolution_check') THEN
+              RAISE EXCEPTION 'Occurrence resolution invariant is missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrence_history_occurrence_fk') THEN
+              RAISE EXCEPTION 'Occurrence history FK is missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrence_documents_document_fk') THEN
+              RAISE EXCEPTION 'Occurrence Document Core FK is missing';
+            END IF;
+          END
+          $block$;
+          SQL
+
+      - name: Seed NEX-43 integration fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO tenants (id,slug,name) VALUES
+            ('73000000-0000-4000-8000-000000000001','nex43-a','NEX-43 Tenant A'),
+            ('73000000-0000-4000-8000-000000000002','nex43-b','NEX-43 Tenant B');
+
+          INSERT INTO users (id,display_name) VALUES
+            ('73000000-0000-4000-8000-000000000101','NEX-43 User A'),
+            ('73000000-0000-4000-8000-000000000102','NEX-43 User B');
+
+          INSERT INTO memberships (tenant_id,user_id,status,joined_at) VALUES
+            ('73000000-0000-4000-8000-000000000001','73000000-0000-4000-8000-000000000101','active',now()),
+            ('73000000-0000-4000-8000-000000000002','73000000-0000-4000-8000-000000000102','active',now());
+
+          INSERT INTO countries (id,code,iso3,name) VALUES
+            ('74000000-0000-4000-8000-000000000101','BR','BRA','Brazil');
+          INSERT INTO states (id,country_id,code,name) VALUES
+            ('74000000-0000-4000-8000-000000000102','74000000-0000-4000-8000-000000000101','SP','Sao Paulo');
+          INSERT INTO cities (id,state_id,ibge_code,name) VALUES
+            ('74000000-0000-4000-8000-000000000103','74000000-0000-4000-8000-000000000102','3550308','Sao Paulo');
+
+          INSERT INTO locations (
+            id,tenant_id,code,name,type,city_id,street,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '74000000-0000-4000-8000-000000000111','73000000-0000-4000-8000-000000000001',
+            'NEX43-STOP','NEX-43 Stop','warehouse','74000000-0000-4000-8000-000000000103','Rua NEX-43',
+            '73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO document_types (
+            id,tenant_id,code,name,subject_scope,has_expiry,requires_validation
+          ) VALUES (
+            '74000000-0000-4000-8000-000000000041','73000000-0000-4000-8000-000000000001',
+            'OCC-EVIDENCE','Occurrence evidence','trip',false,false
+          );
+
+          INSERT INTO documents (
+            id,tenant_id,document_type_id,title,status,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '74000000-0000-4000-8000-000000000021','73000000-0000-4000-8000-000000000001',
+            '74000000-0000-4000-8000-000000000041','NEX-43 occurrence evidence','valid',
+            '73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO trips (
+            id,tenant_id,code,status,planned_start_at,planned_end_at,origin_location_id,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '74000000-0000-4000-8000-000000000001','73000000-0000-4000-8000-000000000001',
+            'NEX43-TRIP-001','ready','2026-09-02T12:00:00Z','2026-09-03T12:00:00Z',
+            '74000000-0000-4000-8000-000000000111',
+            '73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO trip_stops (
+            id,tenant_id,trip_id,sequence,type,location_id,planned_arrival_at,planned_departure_at,
+            created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '74000000-0000-4000-8000-000000000011','73000000-0000-4000-8000-000000000001',
+            '74000000-0000-4000-8000-000000000001',1,'pickup','74000000-0000-4000-8000-000000000111',
+            '2026-09-02T12:00:00Z','2026-09-02T13:00:00Z',
+            '73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101'
+          );
+          SQL
+
+      - name: Resolve nexora_app connection
+        id: app
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Build API
+        run: pnpm --filter @nexora/api build
+
+      - name: Run NEX-43 API integration against Neon
+        env:
+          DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_POOL_MAX: '2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$DATABASE_URL"
+          node apps/api/dist/trips/trip-occurrence.integration.js
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '### NEX-43 Trip Occurrence Gate'
+            echo '- occurrence + treatment history + document evidence: verified'
+            echo '- open/resolved/reopen lifecycle: verified'
+            echo '- active tenant responsibility: verified'
+            echo '- append-only history/evidence grants: verified'
+            echo '- tenant RLS isolation: verified'
+            echo '- Production: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ env.NEON_TEST_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}
