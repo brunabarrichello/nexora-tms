@@ -288,6 +288,27 @@
       "when": 1788378900000,
       "tag": "0040_nex53_finance_reconciliation_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788379800000,
+      "tag": "0041_nex54_in_app_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1788380700000,
+      "tag": "0042_nex54_domain_notification_producers",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1788381600000,
+      "tag": "0043_nex54_notification_function_hardening",
+      "breakpoints": true
     }
   ]
 }
