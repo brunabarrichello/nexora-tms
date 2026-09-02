@@ -92,7 +92,8 @@ export async function GET(): Promise<NextResponse> {
     let tenantARlsIsolated = false;
     if (tenantAResponse.ok) {
       const tenantAResult = (await tenantAResponse.json()) as TenantRuntimeGate;
-      tenantARlsIsolated = tenantAResult.authenticated === true && tenantAResult.rlsIsolated === true;
+      tenantARlsIsolated =
+        tenantAResult.authenticated === true && tenantAResult.rlsIsolated === true;
     }
 
     const tenantAAuthorized = tenantAResponse.status === 200;
