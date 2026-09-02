@@ -67,7 +67,10 @@ test('rejects a non-worker database user', () => {
 
 test('does not accept generic DATABASE_URL as a worker credential', () => {
   assert.throws(
-    () => loadWorkerConfig({ DATABASE_URL: 'postgresql://nexora_app:secret@example.invalid/neondb' }),
+    () =>
+      loadWorkerConfig({
+        DATABASE_URL: 'postgresql://nexora_app:secret@example.invalid/neondb',
+      }),
     /WORKER_DATABASE_URL or WORKER_DATABASE_HOST \+ WORKER_DATABASE_PASSWORD is required/,
   );
 });
