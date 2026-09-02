@@ -102,6 +102,10 @@ O `Neon Finance Receivables Gate` cria branch Neon efêmera a partir de Producti
 - isolamento cross-tenant;
 - cleanup da branch efêmera.
 
+### Pré-qualificação da PR #170
+
+A primeira execução do gate aplicou com sucesso a cadeia completa de migrations, a migration `0038`, as validações de schema/RLS/least privilege e as fixtures financeiras no Neon real. A falha subsequente ficou restrita à montagem TypeScript do DTO de atualização e foi corrigida antes da repetição dos gates. Os cinco arquivos apontados pelo Prettier também foram normalizados com a versão 3.9.6 usada pelo CI.
+
 ## Limite de escopo
 
 NEX-52 não implementa conciliação bancária, matching de extrato, importação bancária ou baixa automática. Esses itens pertencem ao NEX-53.
