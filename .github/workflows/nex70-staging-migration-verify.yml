@@ -118,8 +118,8 @@ jobs:
             id, event_type, outcome, occurred_at
           ) VALUES (
             '57000000-0000-7000-8000-000000000001',
-            'auth.staging.migration.verify',
-            'accepted',
+            'auth.identity.accepted',
+            'success',
             now()
           );
           ROLLBACK;
