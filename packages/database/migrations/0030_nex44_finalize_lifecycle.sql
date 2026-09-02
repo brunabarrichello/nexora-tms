@@ -82,4 +82,6 @@ ALTER TABLE "transport_contracts" ADD CONSTRAINT "transport_contracts_state_chec
         AND "transport_contracts"."cancelled_by_user_id" IS NOT NULL
         AND "transport_contracts"."cancelled_at" IS NOT NULL
         AND length(trim(coalesce("transport_contracts"."cancel_reason", ''))) > 0
-      ));
+      ));--> statement-breakpoint
+GRANT UPDATE (status, released_by_user_id, released_at, release_reason, updated_at) ON TABLE capacity_reservations TO nexora_app;--> statement-breakpoint
+GRANT UPDATE (status, fulfilled_by_user_id, fulfilled_at, updated_at) ON TABLE transport_contracts TO nexora_app;
