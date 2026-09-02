@@ -37,6 +37,7 @@ jobs:
             apps/api/src/integrations/integrations.service.ts \
             apps/api/src/integrations/integrations.validation.ts \
             apps/worker/src/runtime.test.ts \
+            apps/worker/src/webhook-delivery.test.ts \
             apps/worker/src/webhook-delivery.ts \
             docs/data/nex-56-external-api-webhooks.md
       - name: Commit formatted files and remove this workflow
@@ -56,6 +57,7 @@ jobs:
             apps/api/src/integrations/integrations.service.ts \
             apps/api/src/integrations/integrations.validation.ts \
             apps/worker/src/runtime.test.ts \
+            apps/worker/src/webhook-delivery.test.ts \
             apps/worker/src/webhook-delivery.ts \
             docs/data/nex-56-external-api-webhooks.md \
             .github/workflows/nex56-format-once.yml
