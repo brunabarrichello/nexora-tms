@@ -1,6 +1,7 @@
 import { BadRequestException } from '@nestjs/common';
 
 import { requireUuid } from '../freight/transport-request.validation.js';
+import type { TrackingEtaSource } from './trip-tracking-provider.port.js';
 
 export type TripExecutionSource = 'manual' | 'mobile' | 'gps' | 'integration';
 export type TripEventType =
@@ -47,6 +48,8 @@ export interface TripLocationInput {
   readonly accuracyM: number | null;
   readonly speedKmh: number | null;
   readonly headingDegrees: number | null;
+  readonly etaAt: string | null;
+  readonly etaSource: TrackingEtaSource | null;
   readonly recordedAt: string;
   readonly metadata: Record<string, unknown>;
 }
@@ -157,6 +160,7 @@ const eventTypes = new Set<TripEventType>([
 ]);
 const eventSources = new Set(['manual', 'mobile', 'integration'] as const);
 const executionSources = new Set<TripExecutionSource>(['manual', 'mobile', 'gps', 'integration']);
+const trackingEtaSources = new Set<TrackingEtaSource>(['provider', 'calculated']);
 const checkinTypes = new Set<TripCheckinType>([
   'arrival',
   'departure',
@@ -258,6 +262,11 @@ export function parseTripLocation(input: unknown): TripLocationInput {
   if (source === 'integration' && !provider) {
     throw new BadRequestException('provider is required for integration locations');
   }
+  const etaAt = optionalTimestamp(body.etaAt, 'etaAt');
+  const etaSource = optionalEnum(body.etaSource, 'etaSource', trackingEtaSources);
+  if ((etaAt === null) !== (etaSource === null)) {
+    throw new BadRequestException('etaAt and etaSource must be provided together');
+  }
   return {
     tripStopId: optionalUuid(body.tripStopId, 'tripStopId'),
     source,
@@ -268,9 +277,29 @@ export function parseTripLocation(input: unknown): TripLocationInput {
     accuracyM: optionalNumber(body.accuracyM, 'accuracyM', 0),
     speedKmh: optionalNumber(body.speedKmh, 'speedKmh', 0),
     headingDegrees: optionalNumber(body.headingDegrees, 'headingDegrees', 0, 359.999),
+    etaAt,
+    etaSource,
     recordedAt: requireTimestamp(body.recordedAt, 'recordedAt'),
     metadata: optionalMetadata(body.metadata, 'metadata'),
   };
+}
+
+export function parseTripProviderLocation(
+  providerValue: unknown,
+  input: unknown,
+): TripLocationInput {
+  const provider = requireString(providerValue, 'provider', 80);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._-]*$/.test(provider)) {
+    throw new BadRequestException('provider contains unsupported characters');
+  }
+  const body = requireRecord(input);
+  const providerEventId = requireString(body.providerEventId, 'providerEventId', 180);
+  return parseTripLocation({
+    ...body,
+    source: 'integration',
+    provider,
+    providerEventId,
+  });
 }
 
 export function parseTripChecklist(input: unknown): TripChecklistInput {
@@ -429,6 +458,16 @@ function requireTimestamp(value: unknown, field: string): string {
     throw new BadRequestException(`${field} must be a valid timestamp`);
   }
   return new Date(Date.parse(value)).toISOString();
+}
+
+function optionalTimestamp(value: unknown, field: string): string | null {
+  if (value === undefined || value === null || value === '') return null;
+  return requireTimestamp(value, field);
+}
+
+function optionalEnum<T extends string>(value: unknown, field: string, allowed: Set<T>): T | null {
+  if (value === undefined || value === null || value === '') return null;
+  return requireEnum(value, field, allowed);
 }
 
 function requireEnum<T extends string>(value: unknown, field: string, allowed: Set<T>): T {

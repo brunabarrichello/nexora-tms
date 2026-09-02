@@ -17,9 +17,12 @@ import {
   parseTripExpenseStatus,
   parseTripFuel,
   parseTripLocation,
+  parseTripProviderLocation,
   parseTripProof,
   parseTripToll,
+  type TripLocationInput,
 } from './trip-execution.validation.js';
+import { resolveTrackingPolicy } from './trip-tracking.policy.js';
 
 type ExecutionTable =
   | 'trip_events'
@@ -166,23 +169,80 @@ export class TripExecutionService {
     });
   }
 
-  listLocations(tripId: string) {
-    return this.list(tripId, 'trip_locations', 'recorded_at,created_at');
+  async listLocations(tripId: string): Promise<readonly Record<string, unknown>[]> {
+    const context = this.tenantContext.require();
+    return this.database.withTenantContext(context, async (client) => {
+      const trip = await this.requireTrip(client, tripId, false);
+      const result = await client.query<Record<string, unknown>>(
+        `SELECT * FROM trip_locations
+          WHERE trip_id=$1::uuid AND retention_until > clock_timestamp()
+          ORDER BY recorded_at,created_at`,
+        [trip.id],
+      );
+      return result.rows;
+    });
   }
 
   async createLocation(tripId: string, input: unknown): Promise<Record<string, unknown>> {
     const location = parseTripLocation(input);
+    return this.createParsedLocation(tripId, location);
+  }
+
+  async ingestProviderLocation(
+    tripId: string,
+    provider: string,
+    input: unknown,
+  ): Promise<Record<string, unknown>> {
+    const location = parseTripProviderLocation(provider, input);
+    return this.createParsedLocation(tripId, location);
+  }
+
+  async getTrackingSnapshot(tripId: string): Promise<Record<string, unknown>> {
+    const context = this.tenantContext.require();
+    return this.database.withTenantContext(context, async (client) => {
+      const trip = await this.requireTrip(client, tripId, false);
+      const result = await client.query<Record<string, unknown>>(
+        `SELECT id::text AS id,source,provider,provider_event_id,latitude,longitude,
+                accuracy_m,speed_kmh,heading_degrees,eta_at,eta_source,recorded_at,received_at,
+                stale_after_seconds,retention_until,metadata,
+                greatest(0,floor(extract(epoch FROM (clock_timestamp()-recorded_at))))::integer AS age_seconds,
+                (clock_timestamp() > recorded_at + stale_after_seconds * interval '1 second') AS stale
+           FROM trip_locations
+          WHERE trip_id=$1::uuid AND retention_until > clock_timestamp()
+          ORDER BY recorded_at DESC,created_at DESC
+          LIMIT 1`,
+        [trip.id],
+      );
+      const lastPosition = result.rows[0] ?? null;
+      return {
+        tripId: trip.id,
+        tripStatus: trip.status,
+        hasPosition: lastPosition !== null,
+        lastPosition,
+      };
+    });
+  }
+
+  private async createParsedLocation(
+    tripId: string,
+    location: TripLocationInput,
+  ): Promise<Record<string, unknown>> {
     const context = this.tenantContext.require();
     return this.database.withTenantContext(context, async (client) => {
       const trip = await this.requireOperationalTrip(client, tripId, false);
       if (location.tripStopId) await this.requireStop(client, trip.id, location.tripStopId, false);
+      const policy = resolveTrackingPolicy(location.provider);
       try {
         return await this.insertOne(
           client,
           `INSERT INTO trip_locations (
              tenant_id,trip_id,trip_stop_id,source,provider,provider_event_id,latitude,longitude,
-             accuracy_m,speed_kmh,heading_degrees,recorded_at,metadata
-           ) VALUES ($1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13::jsonb)
+             accuracy_m,speed_kmh,heading_degrees,eta_at,eta_source,recorded_at,
+             stale_after_seconds,retention_until,metadata
+           ) VALUES (
+             $1::uuid,$2::uuid,$3::uuid,$4,$5,$6,$7,$8,$9,$10,$11,$12::timestamptz,$13,
+             $14::timestamptz,$15::integer,clock_timestamp()+($16::integer * interval '1 day'),$17::jsonb
+           )
            RETURNING *`,
           [
             context.tenantId,
@@ -196,7 +256,11 @@ export class TripExecutionService {
             location.accuracyM,
             location.speedKmh,
             location.headingDegrees,
+            location.etaAt,
+            location.etaSource,
             location.recordedAt,
+            policy.staleAfterSeconds,
+            policy.retentionDays,
             JSON.stringify(location.metadata),
           ],
         );

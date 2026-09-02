@@ -1,0 +1,322 @@
+name: Neon Trip Tracking Retention Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'packages/database/migrations/**'
+      - 'packages/database/src/schema/trip-execution.ts'
+      - 'apps/api/src/trips/trip-execution.service.ts'
+      - 'apps/api/src/trips/trip-execution.validation.ts'
+      - 'apps/api/src/trips/trip-tracking.policy.ts'
+      - 'apps/api/src/trips/trip-tracking-provider.port.ts'
+      - '.github/workflows/neon-trip-tracking-retention-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-trip-tracking-retention-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  tracking-retention:
+    name: Tracking retention, least privilege and purge
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
+
+      - name: Set ephemeral branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-tracking-retention-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch — attempt 1
+        id: admin1
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off after transient Neon capacity failure
+        if: ${{ steps.admin1.outcome != 'success' }}
+        shell: bash
+        run: sleep 30
+
+      - name: Create isolated Neon branch — attempt 2
+        id: admin2
+        if: ${{ steps.admin1.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off before final Neon branch attempt
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        shell: bash
+        run: sleep 60
+
+      - name: Create isolated Neon branch — attempt 3
+        id: admin3
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Require isolated Neon branch
+        env:
+          BRANCH_ID: ${{ steps.admin1.outputs.branch_id || steps.admin2.outputs.branch_id || steps.admin3.outputs.branch_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${BRANCH_ID:-}" || { echo "Unable to allocate an isolated Neon branch after bounded retries." >&2; exit 1; }
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Bootstrap migration capability
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator connection
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply migrations
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify tracking retention schema and grants
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $block$
+          DECLARE
+            v_count integer;
+          BEGIN
+            SELECT count(*) INTO v_count
+              FROM information_schema.columns
+             WHERE table_schema='public'
+               AND table_name='trip_locations'
+               AND column_name IN ('eta_at','eta_source','stale_after_seconds','retention_until');
+            IF v_count <> 4 THEN
+              RAISE EXCEPTION 'Expected NEX-45 tracking columns, found %', v_count;
+            END IF;
+
+            IF to_regprocedure('public.nexora_purge_expired_trip_locations(integer)') IS NULL THEN
+              RAISE EXCEPTION 'Tracking retention purge function is missing';
+            END IF;
+            IF has_table_privilege('nexora_app','public.trip_locations','DELETE') THEN
+              RAISE EXCEPTION 'nexora_app must not DELETE trip_locations';
+            END IF;
+            IF has_function_privilege('nexora_app','public.nexora_purge_expired_trip_locations(integer)','EXECUTE') THEN
+              RAISE EXCEPTION 'nexora_app must not execute tracking retention purge';
+            END IF;
+            IF has_table_privilege('nexora_worker','public.trip_locations','DELETE') THEN
+              RAISE EXCEPTION 'nexora_worker must not have direct DELETE on trip_locations';
+            END IF;
+            IF NOT has_function_privilege('nexora_worker','public.nexora_purge_expired_trip_locations(integer)','EXECUTE') THEN
+              RAISE EXCEPTION 'nexora_worker must execute tracking retention purge';
+            END IF;
+          END
+          $block$;
+          SQL
+
+      - name: Seed expired and retained tracking fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO tenants (id,slug,name) VALUES
+            ('73000000-0000-4000-8000-000000000001','tracking-retention-a','Tracking Retention A');
+
+          INSERT INTO users (id,display_name) VALUES
+            ('73000000-0000-4000-8000-000000000101','Tracking Retention User');
+
+          INSERT INTO trips (
+            id,tenant_id,code,status,planned_start_at,created_by_user_id,updated_by_user_id
+          ) VALUES (
+            '73000000-0000-4000-8000-000000000201','73000000-0000-4000-8000-000000000001',
+            'TRIP-RETENTION-001','in_transit',clock_timestamp() - interval '3 days',
+            '73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101'
+          );
+
+          INSERT INTO trip_locations (
+            id,tenant_id,trip_id,source,provider,provider_event_id,latitude,longitude,
+            recorded_at,received_at,stale_after_seconds,retention_until,metadata
+          ) VALUES
+            (
+              '73000000-0000-4000-8000-000000000301','73000000-0000-4000-8000-000000000001',
+              '73000000-0000-4000-8000-000000000201','integration','retention-gate','expired-001',
+              -23.550520,-46.633308,clock_timestamp() - interval '3 days',
+              clock_timestamp() - interval '2 days',900,clock_timestamp() - interval '1 day','{}'::jsonb
+            ),
+            (
+              '73000000-0000-4000-8000-000000000302','73000000-0000-4000-8000-000000000001',
+              '73000000-0000-4000-8000-000000000201','integration','retention-gate','retained-001',
+              -23.551000,-46.634000,clock_timestamp() - interval '10 minutes',
+              clock_timestamp() - interval '9 minutes',900,clock_timestamp() + interval '1 day','{}'::jsonb
+            );
+          SQL
+
+      - name: Resolve nexora_app connection
+        id: app
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Verify nexora_app cannot purge tracking history
+        env:
+          APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APP_DATABASE_URL"
+          privileges="$(psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT has_table_privilege(current_user,'public.trip_locations','DELETE'),has_function_privilege(current_user,'public.nexora_purge_expired_trip_locations(integer)','EXECUTE')")"
+          test "$privileges" = 'f|f' || { echo "Unexpected nexora_app tracking retention privileges: $privileges" >&2; exit 1; }
+
+      - name: Resolve nexora_worker connection
+        id: worker
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_worker
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Verify nexora_worker controlled purge and idempotency
+        env:
+          WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$WORKER_DATABASE_URL"
+          privileges="$(psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT has_table_privilege(current_user,'public.trip_locations','DELETE'),has_function_privilege(current_user,'public.nexora_purge_expired_trip_locations(integer)','EXECUTE')")"
+          test "$privileges" = 'f|t' || { echo "Unexpected nexora_worker tracking retention privileges: $privileges" >&2; exit 1; }
+          first_purge="$(psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc 'SELECT nexora_purge_expired_trip_locations(100)')"
+          test "$first_purge" = '1' || { echo "Expected first purge to remove 1 row, removed $first_purge" >&2; exit 1; }
+          second_purge="$(psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc 'SELECT nexora_purge_expired_trip_locations(100)')"
+          test "$second_purge" = '0' || { echo "Expected second purge to be idempotent, removed $second_purge" >&2; exit 1; }
+
+      - name: Verify only retained tracking fixture remains
+        shell: bash
+        run: |
+          set -euo pipefail
+          remaining="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atc "SELECT coalesce(string_agg(provider_event_id,',' ORDER BY provider_event_id),'') FROM trip_locations WHERE provider='retention-gate'")"
+          test "$remaining" = 'retained-001' || { echo "Unexpected tracking retention remainder: $remaining" >&2; exit 1; }
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '### NEX-45 Tracking Retention Gate'
+            echo '- ETA/staleness/retention schema: verified'
+            echo '- nexora_app direct DELETE: denied'
+            echo '- nexora_app purge function: denied'
+            echo '- nexora_worker direct DELETE: denied'
+            echo '- nexora_worker controlled purge: verified'
+            echo '- bounded purge idempotency: verified'
+            echo '- non-expired tracking retained: verified'
+            echo '- Production: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && (steps.admin1.outputs.branch_id != '' || steps.admin2.outputs.branch_id != '' || steps.admin3.outputs.branch_id != '') }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ env.NEON_TEST_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}

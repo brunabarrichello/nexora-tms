@@ -218,6 +218,13 @@
       "when": 1788362850705,
       "tag": "0030_nex44_finalize_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788366690918,
+      "tag": "0031_known_spiral",
+      "breakpoints": true
     }
   ]
 }

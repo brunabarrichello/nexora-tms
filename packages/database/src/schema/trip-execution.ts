@@ -4,6 +4,7 @@ import {
   check,
   foreignKey,
   index,
+  integer,
   jsonb,
   numeric,
   pgPolicy,
@@ -161,8 +162,14 @@ export const tripLocations = pgTable(
     accuracyM: numeric('accuracy_m', { precision: 10, scale: 2 }),
     speedKmh: numeric('speed_kmh', { precision: 10, scale: 2 }),
     headingDegrees: numeric('heading_degrees', { precision: 6, scale: 2 }),
+    etaAt: timestamp('eta_at', { withTimezone: true }),
+    etaSource: varchar('eta_source', { length: 24 }),
     recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull(),
     receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
+    staleAfterSeconds: integer('stale_after_seconds').default(900).notNull(),
+    retentionUntil: timestamp('retention_until', { withTimezone: true })
+      .default(sql`now() + interval '90 days'`)
+      .notNull(),
     metadata: jsonb('metadata')
       .$type<Record<string, unknown>>()
       .default(sql`'{}'::jsonb`)
@@ -206,7 +213,24 @@ export const tripLocations = pgTable(
       'trip_locations_heading_check',
       sql`${table.headingDegrees} IS NULL OR (${table.headingDegrees} >= 0 AND ${table.headingDegrees} < 360)`,
     ),
+    check(
+      'trip_locations_eta_pair_check',
+      sql`(${table.etaAt} IS NULL AND ${table.etaSource} IS NULL) OR (${table.etaAt} IS NOT NULL AND ${table.etaSource} IS NOT NULL)`,
+    ),
+    check(
+      'trip_locations_eta_source_check',
+      sql`${table.etaSource} IS NULL OR ${table.etaSource} in ('provider','calculated')`,
+    ),
+    check(
+      'trip_locations_eta_time_check',
+      sql`${table.etaAt} IS NULL OR ${table.etaAt} >= ${table.recordedAt}`,
+    ),
     check('trip_locations_received_check', sql`${table.receivedAt} >= ${table.recordedAt}`),
+    check(
+      'trip_locations_stale_after_check',
+      sql`${table.staleAfterSeconds} >= 60 AND ${table.staleAfterSeconds} <= 86400`,
+    ),
+    check('trip_locations_retention_check', sql`${table.retentionUntil} > ${table.receivedAt}`),
     uniqueIndex('trip_locations_provider_event_unique')
       .on(table.tenantId, table.provider, table.providerEventId)
       .where(sql`${table.provider} IS NOT NULL AND ${table.providerEventId} IS NOT NULL`),
@@ -215,6 +239,7 @@ export const tripLocations = pgTable(
       table.tripId,
       table.recordedAt,
     ),
+    index('trip_locations_retention_idx').on(table.retentionUntil, table.id),
     pgPolicy('trip_locations_tenant_isolation', {
       for: 'all',
       to: 'public',

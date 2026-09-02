@@ -38,6 +38,21 @@ export class TripExecutionController {
     return this.execution.createLocation(tripId, body);
   }
 
+  @Get(':tripId/tracking')
+  getTrackingSnapshot(@Param('tripId') tripId: string) {
+    return this.execution.getTrackingSnapshot(tripId);
+  }
+
+  @Post(':tripId/tracking/providers/:provider/events')
+  @TenantAuthorized('trips.write')
+  ingestProviderLocation(
+    @Param('tripId') tripId: string,
+    @Param('provider') provider: string,
+    @Body() body: unknown,
+  ) {
+    return this.execution.ingestProviderLocation(tripId, provider, body);
+  }
+
   @Get(':tripId/checklists')
   listChecklists(@Param('tripId') tripId: string) {
     return this.execution.listChecklists(tripId);

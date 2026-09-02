@@ -94,6 +94,8 @@ async function run(): Promise<void> {
       accuracyM: 15,
       speedKmh: 62.5,
       headingDegrees: 90,
+      etaAt: '2026-08-21T15:30:00Z',
+      etaSource: 'provider',
       recordedAt: '2026-08-20T09:00:00Z',
       metadata: { satelliteCount: 12 },
     });
@@ -107,6 +109,37 @@ async function run(): Promise<void> {
         latitude: -23.4,
         longitude: -46.2,
         recordedAt: '2026-08-20T09:00:00Z',
+      }),
+      /already ingested/,
+    );
+
+    const freshRecordedAt = new Date().toISOString();
+    const freshEtaAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const normalizedPosition = await executionA.ingestProviderLocation(TRIP_A, 'provider-a', {
+      providerEventId: 'position-002',
+      latitude: -23.35,
+      longitude: -46.1,
+      speedKmh: 58,
+      recordedAt: freshRecordedAt,
+      etaAt: freshEtaAt,
+      etaSource: 'calculated',
+      metadata: { routeDistanceRemainingKm: 104 },
+    });
+    assert.equal(normalizedPosition.provider, 'provider-a');
+
+    const tracking = await executionA.getTrackingSnapshot(TRIP_A);
+    assert.equal(tracking.hasPosition, true);
+    const lastPosition = tracking.lastPosition as Record<string, unknown>;
+    assert.equal(lastPosition.provider_event_id, 'position-002');
+    assert.equal(lastPosition.eta_source, 'calculated');
+    assert.equal(lastPosition.stale, false);
+
+    await assert.rejects(
+      executionA.ingestProviderLocation(TRIP_A, 'provider-a', {
+        providerEventId: 'position-002',
+        latitude: -23.35,
+        longitude: -46.1,
+        recordedAt: freshRecordedAt,
       }),
       /already ingested/,
     );
@@ -204,7 +237,7 @@ async function run(): Promise<void> {
     assert.equal(Number(fuel.total_amount), 625);
 
     assert.ok((await executionA.listEvents(TRIP_A)).length >= 3);
-    assert.equal((await executionA.listLocations(TRIP_A)).length, 1);
+    assert.equal((await executionA.listLocations(TRIP_A)).length, 2);
     assert.equal((await executionA.listDeliveryProofs(TRIP_A)).length, 1);
 
     await database.withTenantContext(contextA.require(), async (client) => {
@@ -222,9 +255,16 @@ async function run(): Promise<void> {
 
     assert.equal((await tripsB.list()).length, 0);
     await assert.rejects(executionB.listEvents(TRIP_A), /Trip not found in current tenant/);
+    await assert.rejects(
+      executionB.getTrackingSnapshot(TRIP_A),
+      /Trip not found in current tenant/,
+    );
 
     const completed = await tripsA.setStatus(TRIP_A, { status: 'completed' });
     assert.equal(completed.status, 'completed');
+    const completedTracking = await executionA.getTrackingSnapshot(TRIP_A);
+    assert.equal(completedTracking.hasPosition, true);
+    assert.equal(completedTracking.tripStatus, 'completed');
     await assert.rejects(
       executionA.createEvent(TRIP_A, {
         eventType: 'note',
