@@ -302,6 +302,13 @@
       "when": 1788380700000,
       "tag": "0042_nex54_domain_notification_producers",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1788381600000,
+      "tag": "0043_nex54_notification_function_hardening",
+      "breakpoints": true
     }
   ]
 }
