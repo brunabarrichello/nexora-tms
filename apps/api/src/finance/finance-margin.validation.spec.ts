@@ -8,8 +8,5 @@ import { FinanceMarginService } from './finance-margin.service.js';
 test('margin lookup rejects invalid transport request UUID before database access', async () => {
   const service = new FinanceMarginService({} as TenantContext, {} as TenantDatabaseService);
 
-  await assert.rejects(
-    service.get('not-a-uuid'),
-    /transportRequestId must be a valid UUID/,
-  );
+  await assert.rejects(service.get('not-a-uuid'), /transportRequestId must be a valid UUID/);
 });
