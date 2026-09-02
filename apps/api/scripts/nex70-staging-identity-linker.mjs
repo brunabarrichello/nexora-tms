@@ -52,7 +52,6 @@ await client.connect();
 
 try {
   await client.query('BEGIN');
-  await client.query('SET LOCAL ROLE nexora_owner');
 
   const collision = await client.query(
     `SELECT user_id::text AS user_id
