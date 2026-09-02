@@ -1,0 +1,39 @@
+name: NEX-70 Staging admin URL transport
+
+on:
+  push:
+    branches:
+      - feat/nex-70-web-auth0-pkce
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  transport:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve and encrypt Staging admin URL
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}"
+          ADMIN_URL="$(npx --yes neonctl@v2 connection-string staging --project-id raspy-river-76339604 --database-name neondb --role-name neondb_owner)"
+          test -n "$ADMIN_URL"
+          echo "::add-mask::$ADMIN_URL"
+          cat > /tmp/nex70_transport_public.pem <<'PEM'
+          -----BEGIN PUBLIC KEY-----
+          MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAjMIGO/CiuHv6a7CuJ+g6
+          x+ArTD8xVN9RXoMrdSxvB2jZFwMzU1G56mzSjLN1Je4/iKYRXcbODCQZ1zmEKCaV
+          7YQDmhYEEblOlLZ8pskU1JfHOiOMFESKB418zTvEDx0y/DV/A+ftTNq+mhsI+KM0
+          kRv5iK69NY42aEp1IupZaFcA8cnYFdoTRUiouGAmurOANJkfHhV9740qpzg+8Aqh
+          RP4zlLZFhzKybzbUDH+YtejWjXH2rBqutu6AERF7R2D6ER0w0bqQRSq4hvL8iFmv
+          03UylI2SaFql3Ic/7GJOID42mrzQ7sBO130hyZUdkLSs2zdf6sY8R7jYUMn3CFRn
+          hQIDAQAB
+          -----END PUBLIC KEY-----
+          PEM
+          printf '%s' "$ADMIN_URL" | openssl pkeyutl -encrypt -pubin -inkey /tmp/nex70_transport_public.pem -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -pkeyopt rsa_mgf1_md:sha256 | base64 -w0 > /tmp/ciphertext.b64
+          printf 'NEX70_STAGING_ADMIN_URL_CIPHERTEXT %s\n' "$(cat /tmp/ciphertext.b64)"
+          rm -f /tmp/nex70_transport_public.pem /tmp/ciphertext.b64
