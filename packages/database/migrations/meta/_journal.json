@@ -2,48 +2,306 @@
   "version": "7",
   "dialect": "postgresql",
   "entries": [
-    {"idx":0,"version":"7","when":1788003652734,"tag":"0000_past_enchantress","breakpoints":true},
-    {"idx":1,"version":"7","when":1788005800000,"tag":"0001_runtime_app_privileges","breakpoints":true},
-    {"idx":2,"version":"7","when":1788035562454,"tag":"0002_conscious_midnight","breakpoints":true},
-    {"idx":3,"version":"7","when":1788036485163,"tag":"0003_fearless_zzzax","breakpoints":true},
-    {"idx":4,"version":"7","when":1788037033584,"tag":"0004_chilly_shaman","breakpoints":true},
-    {"idx":5,"version":"7","when":1788038316860,"tag":"0005_brainy_weapon_omega","breakpoints":true},
-    {"idx":6,"version":"7","when":1788038865888,"tag":"0006_closed_karnak","breakpoints":true},
-    {"idx":7,"version":"7","when":1788039723343,"tag":"0007_young_slyde","breakpoints":true},
-    {"idx":8,"version":"7","when":1788040522524,"tag":"0008_high_dragon_lord","breakpoints":true},
-    {"idx":9,"version":"7","when":1788043420785,"tag":"0009_amused_micromax","breakpoints":true},
-    {"idx":10,"version":"7","when":1788044297346,"tag":"0010_first_drax","breakpoints":true},
-    {"idx":11,"version":"7","when":1788045299089,"tag":"0011_naive_wildside","breakpoints":true},
-    {"idx":12,"version":"7","when":1788048390019,"tag":"0012_yummy_maggott","breakpoints":true},
-    {"idx":13,"version":"7","when":1788050633870,"tag":"0013_gifted_klaw","breakpoints":true},
-    {"idx":14,"version":"7","when":1788052256681,"tag":"0014_shocking_sentry","breakpoints":true},
-    {"idx":15,"version":"7","when":1788054963622,"tag":"0015_panoramic_nicolaos","breakpoints":true},
-    {"idx":16,"version":"7","when":1788056516771,"tag":"0016_wooden_thunderball","breakpoints":true},
-    {"idx":17,"version":"7","when":1788058085531,"tag":"0017_supreme_scalphunter","breakpoints":true},
-    {"idx":18,"version":"7","when":1788063228944,"tag":"0018_tired_exodus","breakpoints":true},
-    {"idx":19,"version":"7","when":1788067474709,"tag":"0019_safe_human_fly","breakpoints":true},
-    {"idx":20,"version":"7","when":1788070396691,"tag":"0020_dapper_zuras","breakpoints":true},
-    {"idx":21,"version":"7","when":1788073182857,"tag":"0021_dizzy_longshot","breakpoints":true},
-    {"idx":22,"version":"7","when":1788125232301,"tag":"0022_flat_ronan","breakpoints":true},
-    {"idx":23,"version":"7","when":1788129243081,"tag":"0023_moaning_iron_fist","breakpoints":true},
-    {"idx":24,"version":"7","when":1788135474185,"tag":"0024_dry_owl","breakpoints":true},
-    {"idx":25,"version":"7","when":1788218700000,"tag":"0025_pretenant_auth_audit","breakpoints":true},
-    {"idx":26,"version":"7","when":1788325691938,"tag":"0026_friendly_rumiko_fujikawa","breakpoints":true},
-    {"idx":27,"version":"7","when":1788326933068,"tag":"0027_nex90_lease_reaper","breakpoints":true},
-    {"idx":28,"version":"7","when":1788357581396,"tag":"0028_wandering_ben_parker","breakpoints":true},
-    {"idx":29,"version":"7","when":1788361035065,"tag":"0029_abnormal_dexter_bennett","breakpoints":true},
-    {"idx":30,"version":"7","when":1788362850705,"tag":"0030_nex44_finalize_lifecycle","breakpoints":true},
-    {"idx":31,"version":"7","when":1788366690918,"tag":"0031_known_spiral","breakpoints":true},
-    {"idx":32,"version":"7","when":1788371700000,"tag":"0032_nex47_document_compliance","breakpoints":true},
-    {"idx":33,"version":"7","when":1788372600000,"tag":"0033_nex47_document_compliance_hardening","breakpoints":true},
-    {"idx":34,"version":"7","when":1788373500000,"tag":"0034_nex48_trip_proof_stop_integrity","breakpoints":true},
-    {"idx":35,"version":"7","when":1788374400000,"tag":"0035_nex49_compliance_risk","breakpoints":true},
-    {"idx":36,"version":"7","when":1788375300000,"tag":"0036_nex51_carrier_payments","breakpoints":true},
-    {"idx":37,"version":"7","when":1788376200000,"tag":"0037_nex51_carrier_payments_hardening","breakpoints":true},
-    {"idx":38,"version":"7","when":1788377100000,"tag":"0038_nex52_accounts_receivable","breakpoints":true},
-    {"idx":39,"version":"7","when":1788378000000,"tag":"0039_nex53_finance_reconciliation","breakpoints":true},
-    {"idx":40,"version":"7","when":1788378900000,"tag":"0040_nex53_finance_reconciliation_hardening","breakpoints":true},
-    {"idx":41,"version":"7","when":1788379800000,"tag":"0041_nex54_in_app_notifications","breakpoints":true},
-    {"idx":42,"version":"7","when":1788380700000,"tag":"0042_nex54_domain_notification_producers","breakpoints":true}
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1788003652734,
+      "tag": "0000_past_enchantress",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1788005800000,
+      "tag": "0001_runtime_app_privileges",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1788035562454,
+      "tag": "0002_conscious_midnight",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1788036485163,
+      "tag": "0003_fearless_zzzax",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1788037033584,
+      "tag": "0004_chilly_shaman",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1788038316860,
+      "tag": "0005_brainy_weapon_omega",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1788038865888,
+      "tag": "0006_closed_karnak",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788039723343,
+      "tag": "0007_young_slyde",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788040522524,
+      "tag": "0008_high_dragon_lord",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788043420785,
+      "tag": "0009_amused_micromax",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788044297346,
+      "tag": "0010_first_drax",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788045299089,
+      "tag": "0011_naive_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1788048390019,
+      "tag": "0012_yummy_maggott",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1788050633870,
+      "tag": "0013_gifted_klaw",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1788052256681,
+      "tag": "0014_shocking_sentry",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1788054963622,
+      "tag": "0015_panoramic_nicolaos",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1788056516771,
+      "tag": "0016_wooden_thunderball",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1788058085531,
+      "tag": "0017_supreme_scalphunter",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788063228944,
+      "tag": "0018_tired_exodus",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788067474709,
+      "tag": "0019_safe_human_fly",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788070396691,
+      "tag": "0020_dapper_zuras",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1788073182857,
+      "tag": "0021_dizzy_longshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1788125232301,
+      "tag": "0022_flat_ronan",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1788129243081,
+      "tag": "0023_moaning_iron_fist",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1788135474185,
+      "tag": "0024_dry_owl",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1788218700000,
+      "tag": "0025_pretenant_auth_audit",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1788325691938,
+      "tag": "0026_friendly_rumiko_fujikawa",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1788326933068,
+      "tag": "0027_nex90_lease_reaper",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1788357581396,
+      "tag": "0028_wandering_ben_parker",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1788361035065,
+      "tag": "0029_abnormal_dexter_bennett",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1788362850705,
+      "tag": "0030_nex44_finalize_lifecycle",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1788366690918,
+      "tag": "0031_known_spiral",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1788371700000,
+      "tag": "0032_nex47_document_compliance",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1788372600000,
+      "tag": "0033_nex47_document_compliance_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1788373500000,
+      "tag": "0034_nex48_trip_proof_stop_integrity",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1788374400000,
+      "tag": "0035_nex49_compliance_risk",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1788375300000,
+      "tag": "0036_nex51_carrier_payments",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1788376200000,
+      "tag": "0037_nex51_carrier_payments_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1788377100000,
+      "tag": "0038_nex52_accounts_receivable",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1788378000000,
+      "tag": "0039_nex53_finance_reconciliation",
+      "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1788378900000,
+      "tag": "0040_nex53_finance_reconciliation_hardening",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1788379800000,
+      "tag": "0041_nex54_in_app_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1788380700000,
+      "tag": "0042_nex54_domain_notification_producers",
+      "breakpoints": true
+    }
   ]
 }
