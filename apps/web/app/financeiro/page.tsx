@@ -5,8 +5,14 @@ export default function Page() {
     <HubPage
       eyebrow="Financeiro"
       title="Financeiro"
-      description="Estrutura preparada para custos, receitas, repasses, faturamento e conciliação por carga e viagem."
+      description="Custos, margens, pagamentos, faturamento e conciliação por carga e viagem."
       items={[
+        {
+          href: '/financeiro/margens',
+          title: 'Margens',
+          description: 'Receita, custos e rentabilidade antes e depois da contratação.',
+          badge: 'NEX-50',
+        },
         {
           href: '/financeiro/lancamentos',
           title: 'Lançamentos',
