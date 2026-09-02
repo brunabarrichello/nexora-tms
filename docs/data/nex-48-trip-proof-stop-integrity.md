@@ -61,4 +61,6 @@ The existing Neon Trip Execution Gate remains the qualification path. Its API in
 - another tenant cannot read the trip proofs;
 - pickup and delivery proofs remain readable after the trip is completed.
 
+Final qualification must use the same head SHA for CI and the Neon Trip Execution Gate.
+
 Production remains frozen and is not changed by NEX-48 PR qualification.
