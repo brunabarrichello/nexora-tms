@@ -21,26 +21,36 @@ async function bootstrap(): Promise<void> {
   const health = new WorkerHealthServer(config, runtime, logger);
   let shuttingDown = false;
 
-  const shutdown = async (signal: string): Promise<void> => {
+  const shutdown = async (signal: string, exitCode = 0, cause?: unknown): Promise<void> => {
     if (shuttingDown) {
       return;
     }
     shuttingDown = true;
-    logger.info('worker.shutdown.requested', { signal });
+    logger.info('worker.shutdown.requested', {
+      signal,
+      exitCode,
+      ...(cause === undefined ? {} : errorFields(cause)),
+    });
 
     try {
       await health.stop();
       await runtime.stop();
       await app.close();
-      logger.info('worker.shutdown.completed', { signal });
+      logger.info('worker.shutdown.completed', { signal, exitCode });
     } catch (error) {
-      logger.error('worker.shutdown.failed', { signal, ...errorFields(error) });
-      process.exitCode = 1;
+      logger.error('worker.shutdown.failed', { signal, exitCode, ...errorFields(error) });
+      exitCode = 1;
+    }
+
+    if (exitCode !== 0) {
+      process.exit(exitCode);
     }
   };
 
   process.once('SIGINT', () => void shutdown('SIGINT'));
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
+  process.once('uncaughtException', (error) => void shutdown('uncaughtException', 1, error));
+  process.once('unhandledRejection', (reason) => void shutdown('unhandledRejection', 1, reason));
 
   try {
     await runtime.start();
@@ -48,10 +58,10 @@ async function bootstrap(): Promise<void> {
     logger.info('worker.bootstrap.completed');
   } catch (error) {
     logger.error('worker.bootstrap.failed', errorFields(error));
-    process.exitCode = 1;
     await health.stop().catch(() => undefined);
     await runtime.stop().catch(() => undefined);
     await app.close().catch(() => undefined);
+    process.exitCode = 1;
   }
 }
 
