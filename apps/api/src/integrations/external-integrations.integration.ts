@@ -113,6 +113,25 @@ try {
   assert.equal(first.max_attempts, 2);
   const originalIdempotencyKey = first.idempotency_key;
 
+  const deliveryLookup = await app.connect();
+  let deliveryId: string;
+  try {
+    await deliveryLookup.query('begin');
+    await deliveryLookup.query(
+      `select set_config('app.user_id',$1,true),set_config('app.tenant_id',$2,true)`,
+      [adminA, tenantA],
+    );
+    const delivery = await deliveryLookup.query<{ id: string }>(
+      'select id::text from webhook_deliveries where durable_job_id=$1::uuid',
+      [first.id],
+    );
+    assert.equal(delivery.rowCount, 1);
+    deliveryId = delivery.rows[0]!.id;
+    await deliveryLookup.query('commit');
+  } finally {
+    deliveryLookup.release();
+  }
+
   const target = await worker.query<{
     delivery_id: string;
     event_type: string;
@@ -120,14 +139,14 @@ try {
     event_payload: unknown;
     idempotency_key: string;
   }>(
-    'select delivery_id::text,event_type,event_version,event_payload,idempotency_key from nexora_worker_get_webhook_delivery((select id from webhook_deliveries where durable_job_id=$1::uuid))',
-    [first.id],
+    'select delivery_id::text,event_type,event_version,event_payload,idempotency_key from nexora_worker_get_webhook_delivery($1::uuid)',
+    [deliveryId],
   );
   assert.equal(target.rowCount, 1);
   assert.equal(target.rows[0]?.event_type, 'nex56.integration.test');
   assert.equal(target.rows[0]?.idempotency_key, originalIdempotencyKey);
+  assert.equal(target.rows[0]?.delivery_id, deliveryId);
 
-  const deliveryId = target.rows[0]!.delivery_id;
   await worker.query('select nexora_worker_record_webhook_attempt($1::uuid,1,$2,503,12,$3,false)', [
     deliveryId,
     'failure',
