@@ -85,7 +85,7 @@ test('webhook job signs a deterministic v1 envelope and preserves idempotency', 
   const fetchFn: typeof fetch = async (_input, init) => {
     receivedBody = String(init?.body ?? '');
     receivedHeaders = new Headers(init?.headers);
-    return new Response('', { status: 204 });
+    return new Response(null, { status: 204 });
   };
   const now = new Date('2026-09-02T12:05:00.000Z');
   const registry = createDefaultHandlerRegistry(new StructuredLogger('test-worker', 'test'), {
@@ -164,7 +164,7 @@ test('inactive webhook is cancelled without outbound network access', async () =
   };
   const fetchFn: typeof fetch = async () => {
     fetched = true;
-    return new Response('', { status: 204 });
+    return new Response(null, { status: 204 });
   };
   const registry = createDefaultHandlerRegistry(new StructuredLogger('test-worker', 'test'), {
     port,
