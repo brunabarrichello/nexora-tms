@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Inspect Development Drizzle migration history
+      - name: Inspect Development migration ownership
         shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -23,23 +23,24 @@ jobs:
           set -euo pipefail
           test -n "${NEON_API_KEY:-}"
 
-          MIGRATOR_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name nexora_migrator)"
-          echo "::add-mask::$MIGRATOR_URL"
+          OWNER_URL="$(npx --yes neonctl@v2 connection-string development --project-id raspy-river-76339604 --database-name neondb --role-name neondb_owner)"
+          echo "::add-mask::$OWNER_URL"
 
-          history_relation="$(psql "$MIGRATOR_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(to_regclass('drizzle.__drizzle_migrations')::text, to_regclass('public.__drizzle_migrations')::text, '');")"
-          public_tables="$(psql "$MIGRATOR_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM pg_catalog.pg_tables WHERE schemaname='public';")"
-          audit_table="$(psql "$MIGRATOR_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.pretenant_auth_events') IS NOT NULL;")"
-
+          schema_exists="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT EXISTS(SELECT 1 FROM pg_namespace WHERE nspname='drizzle');")"
+          schema_owner="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(pg_get_userbyid(nspowner),'') FROM pg_namespace WHERE nspname='drizzle';")"
+          migrator_usage="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT has_schema_privilege('nexora_migrator','drizzle','USAGE');")"
+          migrator_create="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT has_schema_privilege('nexora_migrator','drizzle','CREATE');")"
+          history_exists="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL;")"
+          history_owner="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(tableowner,'') FROM pg_tables WHERE schemaname='drizzle' AND tablename='__drizzle_migrations';")"
           history_rows=0
-          last_migration_created_at=0
-          if [[ -n "$history_relation" ]]; then
-            history_rows="$(psql "$MIGRATOR_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM $history_relation;")"
-            last_migration_created_at="$(psql "$MIGRATOR_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT COALESCE(max(created_at),0) FROM $history_relation;")"
+          migrator_history_select=false
+          migrator_history_insert=false
+          if [[ "$history_exists" == 't' ]]; then
+            history_rows="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM drizzle.__drizzle_migrations;")"
+            migrator_history_select="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT has_table_privilege('nexora_migrator','drizzle.__drizzle_migrations','SELECT');")"
+            migrator_history_insert="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT has_table_privilege('nexora_migrator','drizzle.__drizzle_migrations','INSERT');")"
           fi
+          audit_table="$(psql "$OWNER_URL" -X -At -v ON_ERROR_STOP=1 -c "SELECT to_regclass('public.pretenant_auth_events') IS NOT NULL;")"
 
-          printf '{"history_relation_present":%s,"history_rows":%s,"last_migration_created_at":%s,"public_tables":%s,"audit_table":%s}\n' \
-            "$([[ -n "$history_relation" ]] && echo true || echo false)" \
-            "$history_rows" \
-            "$last_migration_created_at" \
-            "$public_tables" \
-            "$audit_table"
+          printf '{"schema_exists":%s,"schema_owner":"%s","migrator_usage":%s,"migrator_create":%s,"history_exists":%s,"history_owner":"%s","history_rows":%s,"migrator_history_select":%s,"migrator_history_insert":%s,"audit_table":%s}\n' \
+            "$schema_exists" "$schema_owner" "$migrator_usage" "$migrator_create" "$history_exists" "$history_owner" "$history_rows" "$migrator_history_select" "$migrator_history_insert" "$audit_table"
