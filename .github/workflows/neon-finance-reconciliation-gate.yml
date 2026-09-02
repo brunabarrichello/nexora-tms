@@ -1,0 +1,227 @@
+name: Neon Finance Reconciliation Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/api/src/finance/**'
+      - 'apps/web/app/financeiro/conciliacao/**'
+      - 'apps/web/app/_actions/finance-reconciliation-actions.ts'
+      - 'packages/database/migrations/**'
+      - 'packages/database/ci/nex50-finance-margin-fixtures.sql'
+      - 'packages/database/ci/nex53-finance-reconciliation-security.sql'
+      - '.github/workflows/neon-finance-reconciliation-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-finance-reconciliation-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  reconciliation:
+    name: Import, matching, assisted settlement and immutable audit
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
+
+      - name: Set ephemeral branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-reconciliation-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch — attempt 1
+        id: admin1
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off after transient Neon capacity failure
+        if: ${{ steps.admin1.outcome != 'success' }}
+        shell: bash
+        run: sleep 30
+
+      - name: Create isolated Neon branch — attempt 2
+        id: admin2
+        if: ${{ steps.admin1.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off before final Neon branch attempt
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        shell: bash
+        run: sleep 60
+
+      - name: Create isolated Neon branch — attempt 3
+        id: admin3
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Require isolated Neon branch
+        env:
+          BRANCH_ID: ${{ steps.admin1.outputs.branch_id || steps.admin2.outputs.branch_id || steps.admin3.outputs.branch_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${BRANCH_ID:-}" || { echo "Unable to allocate an isolated Neon branch after bounded retries." >&2; exit 1; }
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Bootstrap migration capability
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator connection
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply full migration chain
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify NEX-53 schema, RLS and least privilege
+        shell: bash
+        run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex53-finance-reconciliation-security.sql
+
+      - name: Seed finance prerequisites
+        shell: bash
+        run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex50-finance-margin-fixtures.sql
+
+      - name: Resolve nexora_app connection
+        id: app
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Build API
+        run: pnpm --filter @nexora/api build
+
+      - name: Run NEX-53 reconciliation integration against Neon
+        env:
+          DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_POOL_MAX: '2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/api/dist/finance/finance-reconciliation.integration.js
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '## NEX-53 — Finance reconciliation'
+            echo '- provider-agnostic import and immutable source lines: verified'
+            echo '- deterministic reference/value/date candidate scoring: verified'
+            echo '- weak match divergence queue: verified'
+            echo '- manual assisted reconciliation into canonical ledger: verified'
+            echo '- suggested reconciliation into canonical ledger: verified'
+            echo '- protected audit events: verified'
+            echo '- append-only reversal and queue reopening: verified'
+            echo '- ignored terminal entries: verified'
+            echo '- tenant isolation and least privilege: verified'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && (steps.admin1.outputs.branch_id != '' || steps.admin2.outputs.branch_id != '' || steps.admin3.outputs.branch_id != '') }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.admin1.outputs.branch_id || steps.admin2.outputs.branch_id || steps.admin3.outputs.branch_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
