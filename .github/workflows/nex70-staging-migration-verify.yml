@@ -100,13 +100,13 @@ jobs:
             exit 1
           }
 
-          table_exists="$(psql "$ADMIN_DATABASE_URL" -Atqc \"select to_regclass('public.pretenant_auth_events') is not null\")"
+          table_exists="$(psql "$ADMIN_DATABASE_URL" -Atqc "select to_regclass('public.pretenant_auth_events') is not null")"
           [[ "$table_exists" == "t" ]] || {
             echo "pretenant_auth_events is missing" >&2
             exit 1
           }
 
-          can_insert="$(psql "$ADMIN_DATABASE_URL" -Atqc \"select has_table_privilege('nexora_app','public.pretenant_auth_events','INSERT')\")"
+          can_insert="$(psql "$ADMIN_DATABASE_URL" -Atqc "select has_table_privilege('nexora_app','public.pretenant_auth_events','INSERT')")"
           [[ "$can_insert" == "t" ]] || {
             echo "nexora_app lacks INSERT on pretenant_auth_events" >&2
             exit 1
