@@ -80,4 +80,10 @@ CREATE INDEX "outbox_events_pending_idx" ON "outbox_events" USING btree ("availa
 CREATE INDEX "outbox_events_lease_idx" ON "outbox_events" USING btree ("lease_expires_at") WHERE "outbox_events"."processed_at" IS NULL AND "outbox_events"."dead_lettered_at" IS NULL;--> statement-breakpoint
 CREATE INDEX "outbox_events_tenant_correlation_idx" ON "outbox_events" USING btree ("tenant_id","correlation_id");--> statement-breakpoint
 CREATE POLICY "durable_jobs_tenant_isolation" ON "durable_jobs" AS PERMISSIVE FOR ALL TO public USING ("durable_jobs"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("durable_jobs"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
-CREATE POLICY "outbox_events_tenant_isolation" ON "outbox_events" AS PERMISSIVE FOR ALL TO public USING ("outbox_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("outbox_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);
+CREATE POLICY "outbox_events_tenant_isolation" ON "outbox_events" AS PERMISSIVE FOR ALL TO public USING ("outbox_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid) WITH CHECK ("outbox_events"."tenant_id" = nullif(current_setting('app.tenant_id', true), '')::uuid);--> statement-breakpoint
+CREATE POLICY "durable_jobs_worker_cross_tenant" ON "durable_jobs" AS PERMISSIVE FOR ALL TO nexora_worker USING (true) WITH CHECK (true);--> statement-breakpoint
+CREATE POLICY "outbox_events_worker_cross_tenant" ON "outbox_events" AS PERMISSIVE FOR ALL TO nexora_worker USING (true) WITH CHECK (true);--> statement-breakpoint
+GRANT SELECT, INSERT ON TABLE "outbox_events", "durable_jobs" TO nexora_app;--> statement-breakpoint
+REVOKE UPDATE, DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE "outbox_events", "durable_jobs" FROM nexora_app;--> statement-breakpoint
+GRANT SELECT, INSERT, UPDATE ON TABLE "outbox_events", "durable_jobs" TO nexora_worker;--> statement-breakpoint
+REVOKE DELETE, TRUNCATE, REFERENCES, TRIGGER ON TABLE "outbox_events", "durable_jobs" FROM nexora_worker;
