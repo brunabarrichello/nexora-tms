@@ -1,9 +1,6 @@
 import Link from 'next/link';
 
-import {
-  reprocessDurableJob,
-  reprocessOutboxEvent,
-} from '../../../_actions/async-admin-actions';
+import { reprocessDurableJob, reprocessOutboxEvent } from '../../../_actions/async-admin-actions';
 import { apiGet } from '../../../_lib/api-client';
 
 interface OutboxItem {
@@ -72,8 +69,8 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
           <span className="eyebrow">Administração • Integrações • NEX-55</span>
           <h1>Processamento assíncrono</h1>
           <p>
-            Visão tenant-scoped do Transactional Outbox e Durable Jobs, com tentativas,
-            correlação, falhas e reprocessamento controlado de dead letters.
+            Visão tenant-scoped do Transactional Outbox e Durable Jobs, com tentativas, correlação,
+            falhas e reprocessamento controlado de dead letters.
           </p>
         </div>
       </section>
@@ -141,7 +138,10 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
             <button className="button button-primary" type="submit">
               Filtrar
             </button>
-            <Link className="button button-secondary" href="/administracao/integracoes/processamento">
+            <Link
+              className="button button-secondary"
+              href="/administracao/integracoes/processamento"
+            >
               Limpar
             </Link>
           </div>
@@ -213,8 +213,14 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
           <div className="table-empty">
             <div className="empty-icon">AQ</div>
             <div>
-              <strong>{outboxResult.kind === 'ready' ? 'Nenhum evento encontrado' : 'Outbox indisponível'}</strong>
-              <p>{outboxResult.kind === 'ready' ? 'Ajuste o filtro para consultar outros estados.' : outboxResult.message}</p>
+              <strong>
+                {outboxResult.kind === 'ready' ? 'Nenhum evento encontrado' : 'Outbox indisponível'}
+              </strong>
+              <p>
+                {outboxResult.kind === 'ready'
+                  ? 'Ajuste o filtro para consultar outros estados.'
+                  : outboxResult.message}
+              </p>
             </div>
           </div>
         )}
@@ -314,15 +320,24 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
           <div className="table-empty">
             <div className="empty-icon">DJ</div>
             <div>
-              <strong>{jobsResult.kind === 'ready' ? 'Nenhum job encontrado' : 'Durable Jobs indisponível'}</strong>
-              <p>{jobsResult.kind === 'ready' ? 'Ajuste o filtro para consultar outros estados.' : jobsResult.message}</p>
+              <strong>
+                {jobsResult.kind === 'ready'
+                  ? 'Nenhum job encontrado'
+                  : 'Durable Jobs indisponível'}
+              </strong>
+              <p>
+                {jobsResult.kind === 'ready'
+                  ? 'Ajuste o filtro para consultar outros estados.'
+                  : jobsResult.message}
+              </p>
             </div>
           </div>
         )}
 
         <div className="table-footer">
           <span>
-            Consulta exige audit.read. Reprocessamento exige tenant.manage e é revalidado no PostgreSQL para membership ativa de Tenant Admin.
+            Consulta exige audit.read. Reprocessamento exige tenant.manage e é revalidado no
+            PostgreSQL para membership ativa de Tenant Admin.
           </span>
         </div>
       </section>

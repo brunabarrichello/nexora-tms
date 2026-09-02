@@ -14,7 +14,9 @@ export async function reprocessOutboxEvent(formData: FormData): Promise<void> {
     { reason },
   );
   if (result.kind !== 'ready') {
-    redirect(`/administracao/integracoes/processamento?error=${encodeURIComponent(result.message.slice(0, 240))}`);
+    redirect(
+      `/administracao/integracoes/processamento?error=${encodeURIComponent(result.message.slice(0, 240))}`,
+    );
   }
   revalidatePath('/administracao/integracoes/processamento');
   redirect('/administracao/integracoes/processamento?reprocessed=outbox');
@@ -29,7 +31,9 @@ export async function reprocessDurableJob(formData: FormData): Promise<void> {
     { reason },
   );
   if (result.kind !== 'ready') {
-    redirect(`/administracao/integracoes/processamento?error=${encodeURIComponent(result.message.slice(0, 240))}`);
+    redirect(
+      `/administracao/integracoes/processamento?error=${encodeURIComponent(result.message.slice(0, 240))}`,
+    );
   }
   revalidatePath('/administracao/integracoes/processamento');
   redirect('/administracao/integracoes/processamento?reprocessed=job');

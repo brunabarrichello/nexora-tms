@@ -192,7 +192,10 @@ export class AsyncAdminService {
     const context = this.tenantContext.require();
 
     return this.database.withTenantContext(context, async (client) => {
-      const existing = await client.query<{ dead_lettered_at: Date | null; processed_at: Date | null }>(
+      const existing = await client.query<{
+        dead_lettered_at: Date | null;
+        processed_at: Date | null;
+      }>(
         `SELECT dead_lettered_at,processed_at
            FROM outbox_events
           WHERE id=$1::uuid`,
@@ -200,8 +203,10 @@ export class AsyncAdminService {
       );
       const row = existing.rows[0];
       if (!row) throw new NotFoundException('Outbox event not found in current tenant');
-      if (row.processed_at) throw new ConflictException('Processed outbox events cannot be reprocessed');
-      if (!row.dead_lettered_at) throw new ConflictException('Only dead-lettered outbox events can be reprocessed');
+      if (row.processed_at)
+        throw new ConflictException('Processed outbox events cannot be reprocessed');
+      if (!row.dead_lettered_at)
+        throw new ConflictException('Only dead-lettered outbox events can be reprocessed');
 
       try {
         const result = await client.query<{ requeued: boolean }>(
@@ -281,7 +286,11 @@ function normalizeJobState(value: string | undefined): AsyncJobState | null {
   throw new BadRequestException(`state must be one of: all, ${allowed.join(', ')}`);
 }
 
-function normalizeOptionalText(value: string | undefined, field: string, max: number): string | null {
+function normalizeOptionalText(
+  value: string | undefined,
+  field: string,
+  max: number,
+): string | null {
   if (!value) return null;
   const normalized = value.trim();
   if (normalized.length < 1 || normalized.length > max) {
@@ -316,7 +325,9 @@ function requireReason(body: unknown): string {
 
 function requireUuid(value: string, field: string): string {
   const normalized = value.trim();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(normalized)
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
@@ -369,7 +380,8 @@ function mapJob(row: JobRow): AsyncJobRecord {
 }
 
 function mapDatabaseError(error: unknown): Error {
-  const code = typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
   if (code === '42501') return new ForbiddenException('Tenant admin permission is required');
   if (code === '22023') return new BadRequestException('Invalid async reprocessing request');
   if (error instanceof Error) return error;

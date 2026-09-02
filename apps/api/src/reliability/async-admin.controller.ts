@@ -2,7 +2,11 @@ import { Body, Controller, Get, Param, Post, Query } from '@nestjs/common';
 
 import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
 import { AsyncAdminService } from './async-admin.service.js';
-import type { AsyncJobRecord, AsyncOutboxRecord, AsyncReprocessResult } from './async-admin.types.js';
+import type {
+  AsyncJobRecord,
+  AsyncOutboxRecord,
+  AsyncReprocessResult,
+} from './async-admin.types.js';
 
 @Controller('api/v1/admin/async')
 @TenantAuthorized('audit.read')

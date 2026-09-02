@@ -1,9 +1,4 @@
-export type AsyncOutboxState =
-  | 'pending'
-  | 'retry_wait'
-  | 'leased'
-  | 'processed'
-  | 'dead_lettered';
+export type AsyncOutboxState = 'pending' | 'retry_wait' | 'leased' | 'processed' | 'dead_lettered';
 
 export interface AsyncOutboxRecord {
   readonly id: string;
@@ -28,12 +23,7 @@ export interface AsyncOutboxRecord {
 }
 
 export type AsyncJobState =
-  | 'pending'
-  | 'running'
-  | 'retry_wait'
-  | 'succeeded'
-  | 'dead_lettered'
-  | 'cancelled';
+  'pending' | 'running' | 'retry_wait' | 'succeeded' | 'dead_lettered' | 'cancelled';
 
 export interface AsyncJobRecord {
   readonly id: string;

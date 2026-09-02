@@ -29,7 +29,10 @@ async function run(): Promise<void> {
 
   const database = new TenantDatabaseService();
   const worker = new Pool({ connectionString: workerDatabaseUrl, max: 2 });
-  const admin = new AsyncAdminService(context('integration|nex55-admin-a', TENANT_A, ADMIN_A), database);
+  const admin = new AsyncAdminService(
+    context('integration|nex55-admin-a', TENANT_A, ADMIN_A),
+    database,
+  );
   const operations = new AsyncAdminService(
     context('integration|nex55-operations-a', TENANT_A, OPERATIONS_A),
     database,
@@ -48,11 +51,17 @@ async function run(): Promise<void> {
     assert.ok(initialEvent);
     assert.equal(initialEvent.idempotencyKey, OUTBOX_KEY);
     assert.equal(initialEvent.attempts, 0);
-    assert.equal((await otherTenant.listOutbox({ state: 'pending' })).some((item) => item.id === OUTBOX_ID), false);
+    assert.equal(
+      (await otherTenant.listOutbox({ state: 'pending' })).some((item) => item.id === OUTBOX_ID),
+      false,
+    );
 
     const firstOutboxClaim = await claimOutbox(worker, OUTBOX_ID);
     assert.equal(firstOutboxClaim.attempts, 1);
-    assert.equal(await failOutbox(worker, OUTBOX_ID, 'synthetic first notification failure'), 'retry_wait');
+    assert.equal(
+      await failOutbox(worker, OUTBOX_ID, 'synthetic first notification failure'),
+      'retry_wait',
+    );
 
     const retryOutbox = (await admin.listOutbox({ state: 'retry_wait' })).find(
       (item) => item.id === OUTBOX_ID,
@@ -64,7 +73,10 @@ async function run(): Promise<void> {
     await delay(1_200);
     const secondOutboxClaim = await claimOutbox(worker, OUTBOX_ID);
     assert.equal(secondOutboxClaim.attempts, 2);
-    assert.equal(await failOutbox(worker, OUTBOX_ID, 'synthetic terminal notification failure'), 'dead_lettered');
+    assert.equal(
+      await failOutbox(worker, OUTBOX_ID, 'synthetic terminal notification failure'),
+      'dead_lettered',
+    );
 
     const deadOutbox = (await admin.listOutbox({ state: 'dead_lettered' })).find(
       (item) => item.id === OUTBOX_ID,
