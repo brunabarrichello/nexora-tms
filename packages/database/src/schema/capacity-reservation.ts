@@ -24,11 +24,13 @@ import { tenantMatchesSession } from './rls.js';
 export const capacityReservationStatusEnum = pgEnum('capacity_reservation_status', [
   'active',
   'cancelled',
+  'released',
 ]);
 
 export const capacityReservationEventTypeEnum = pgEnum('capacity_reservation_event_type', [
   'approved',
   'cancelled',
+  'released',
 ]);
 
 export const capacityReservations = pgTable(
@@ -52,6 +54,11 @@ export const capacityReservations = pgTable(
     }),
     cancelledAt: timestamp('cancelled_at', { withTimezone: true }),
     cancelReason: varchar('cancel_reason', { length: 1000 }),
+    releasedByUserId: uuid('released_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    releasedAt: timestamp('released_at', { withTimezone: true }),
+    releaseReason: varchar('release_reason', { length: 1000 }),
     createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
@@ -94,11 +101,25 @@ export const capacityReservations = pgTable(
         AND ${table.cancelledByUserId} IS NULL
         AND ${table.cancelledAt} IS NULL
         AND ${table.cancelReason} IS NULL
+        AND ${table.releasedByUserId} IS NULL
+        AND ${table.releasedAt} IS NULL
+        AND ${table.releaseReason} IS NULL
       ) OR (
         ${table.status} = 'cancelled'
         AND ${table.cancelledByUserId} IS NOT NULL
         AND ${table.cancelledAt} IS NOT NULL
         AND length(trim(coalesce(${table.cancelReason}, ''))) > 0
+        AND ${table.releasedByUserId} IS NULL
+        AND ${table.releasedAt} IS NULL
+        AND ${table.releaseReason} IS NULL
+      ) OR (
+        ${table.status} = 'released'
+        AND ${table.cancelledByUserId} IS NULL
+        AND ${table.cancelledAt} IS NULL
+        AND ${table.cancelReason} IS NULL
+        AND ${table.releasedByUserId} IS NOT NULL
+        AND ${table.releasedAt} IS NOT NULL
+        AND length(trim(coalesce(${table.releaseReason}, ''))) > 0
       )`,
     ),
     uniqueIndex('capacity_reservations_active_request_unique')
@@ -153,7 +174,7 @@ export const capacityReservationEvents = pgTable(
     }).onDelete('restrict'),
     check(
       'capacity_reservation_events_reason_check',
-      sql`${table.type} <> 'cancelled' OR length(trim(coalesce(${table.reason}, ''))) > 0`,
+      sql`${table.type} = 'approved' OR length(trim(coalesce(${table.reason}, ''))) > 0`,
     ),
     index('capacity_reservation_events_reservation_created_idx').on(
       table.tenantId,

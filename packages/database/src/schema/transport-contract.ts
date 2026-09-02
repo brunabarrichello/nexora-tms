@@ -27,12 +27,14 @@ export const transportContractStatusEnum = pgEnum('transport_contract_status', [
   'confirmed',
   'refused',
   'cancelled',
+  'fulfilled',
 ]);
 
 export const transportContractEventTypeEnum = pgEnum('transport_contract_event_type', [
   'confirmed',
   'refused',
   'cancelled',
+  'fulfilled',
 ]);
 
 export const transportContracts = pgTable(
@@ -58,6 +60,10 @@ export const transportContracts = pgTable(
       onDelete: 'restrict',
     }),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    fulfilledByUserId: uuid('fulfilled_by_user_id').references(() => users.id, {
+      onDelete: 'restrict',
+    }),
+    fulfilledAt: timestamp('fulfilled_at', { withTimezone: true }),
     refusedByUserId: uuid('refused_by_user_id').references(() => users.id, {
       onDelete: 'restrict',
     }),
@@ -125,6 +131,20 @@ export const transportContracts = pgTable(
         ${table.status} = 'confirmed'
         AND ${table.confirmedByUserId} IS NOT NULL
         AND ${table.confirmedAt} IS NOT NULL
+        AND ${table.fulfilledByUserId} IS NULL
+        AND ${table.fulfilledAt} IS NULL
+        AND ${table.refusedByUserId} IS NULL
+        AND ${table.refusedAt} IS NULL
+        AND ${table.refusalReason} IS NULL
+        AND ${table.cancelledByUserId} IS NULL
+        AND ${table.cancelledAt} IS NULL
+        AND ${table.cancelReason} IS NULL
+      ) OR (
+        ${table.status} = 'fulfilled'
+        AND ${table.confirmedByUserId} IS NOT NULL
+        AND ${table.confirmedAt} IS NOT NULL
+        AND ${table.fulfilledByUserId} IS NOT NULL
+        AND ${table.fulfilledAt} IS NOT NULL
         AND ${table.refusedByUserId} IS NULL
         AND ${table.refusedAt} IS NULL
         AND ${table.refusalReason} IS NULL
@@ -135,6 +155,8 @@ export const transportContracts = pgTable(
         ${table.status} = 'refused'
         AND ${table.confirmedByUserId} IS NULL
         AND ${table.confirmedAt} IS NULL
+        AND ${table.fulfilledByUserId} IS NULL
+        AND ${table.fulfilledAt} IS NULL
         AND ${table.refusedByUserId} IS NOT NULL
         AND ${table.refusedAt} IS NOT NULL
         AND length(trim(coalesce(${table.refusalReason}, ''))) > 0
@@ -145,6 +167,8 @@ export const transportContracts = pgTable(
         ${table.status} = 'cancelled'
         AND ${table.confirmedByUserId} IS NOT NULL
         AND ${table.confirmedAt} IS NOT NULL
+        AND ${table.fulfilledByUserId} IS NULL
+        AND ${table.fulfilledAt} IS NULL
         AND ${table.refusedByUserId} IS NULL
         AND ${table.refusedAt} IS NULL
         AND ${table.refusalReason} IS NULL

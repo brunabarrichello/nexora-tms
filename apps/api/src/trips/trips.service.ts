@@ -158,12 +158,15 @@ export class TripsService {
       if (transition.status === 'ready') {
         await this.requireReadyPrerequisites(client, current.id);
       }
+      if (transition.status === 'completed') {
+        await this.requireCompletionPrerequisites(client, current.id);
+      }
 
       await client.query(
         `UPDATE trips
             SET status=$1::trip_status,
                 actual_start_at=CASE WHEN $1::trip_status='in_transit' THEN coalesce(actual_start_at,now()) ELSE actual_start_at END,
-                actual_end_at=CASE WHEN $1::trip_status='completed' THEN coalesce(actual_end_at,now()) ELSE actual_end_at END,
+                actual_end_at=CASE WHEN $1::trip_status IN ('completed','cancelled') AND actual_start_at IS NOT NULL THEN coalesce(actual_end_at,now()) ELSE actual_end_at END,
                 updated_by_user_id=$2::uuid,
                 updated_at=now()
           WHERE id=$3::uuid`,
@@ -182,6 +185,15 @@ export class TripsService {
           transition.reason,
         ],
       );
+      if (transition.status === 'completed' || transition.status === 'cancelled') {
+        await this.finalizeTerminalTrip(
+          client,
+          current.id,
+          transition.status,
+          transition.reason,
+          context.userId,
+        );
+      }
       return mapTrip(await this.requireTrip(client, current.id, false));
     });
   }
@@ -454,6 +466,169 @@ export class TripsService {
         );
       }
     }
+  }
+
+  private async requireCompletionPrerequisites(
+    client: TenantQueryClient,
+    tripId: string,
+  ): Promise<void> {
+    const result = await client.query<{ blocked_stops: number; blocked_checklists: number }>(
+      `SELECT
+         (SELECT count(*)::int
+            FROM trip_stops
+           WHERE trip_id=$1::uuid
+             AND (
+               (type IN ('pickup','delivery') AND status <> 'departed')
+               OR (type='support' AND status NOT IN ('departed','skipped','cancelled'))
+             )) AS blocked_stops,
+         (SELECT count(*)::int
+            FROM trip_checklists
+           WHERE trip_id=$1::uuid
+             AND required=true
+             AND status NOT IN ('completed','waived')) AS blocked_checklists`,
+      [tripId],
+    );
+    const readiness = result.rows[0];
+    if (!readiness)
+      throw new ConflictException('Trip completion prerequisites could not be evaluated');
+    if (readiness.blocked_stops > 0) {
+      throw new ConflictException('Trip cannot be completed while required stops are pending');
+    }
+    if (readiness.blocked_checklists > 0) {
+      throw new ConflictException(
+        'Trip cannot be completed while required checklist items are pending or failed',
+      );
+    }
+  }
+
+  private async finalizeTerminalTrip(
+    client: TenantQueryClient,
+    tripId: string,
+    status: 'completed' | 'cancelled',
+    reason: string | null,
+    userId: string,
+  ): Promise<void> {
+    const terminal = await client.query<{ terminal_at: Date }>(
+      `SELECT coalesce(actual_end_at,now()) AS terminal_at FROM trips WHERE id=$1::uuid`,
+      [tripId],
+    );
+    const terminalAt = terminal.rows[0]?.terminal_at;
+    if (!terminalAt) throw new ConflictException('Trip terminal timestamp could not be resolved');
+    const terminalIso = terminalAt.toISOString();
+
+    await client.query(
+      `UPDATE trip_drivers
+          SET ends_at=greatest(starts_at,$2::timestamptz),updated_by_user_id=$3::uuid,updated_at=now()
+        WHERE trip_id=$1::uuid AND ends_at IS NULL`,
+      [tripId, terminalIso, userId],
+    );
+    await client.query(
+      `UPDATE trip_assets
+          SET ends_at=greatest(starts_at,$2::timestamptz),updated_by_user_id=$3::uuid,updated_at=now()
+        WHERE trip_id=$1::uuid AND ends_at IS NULL`,
+      [tripId, terminalIso, userId],
+    );
+
+    const contracts = await client.query<{ id: string; reservation_id: string }>(
+      `SELECT c.id::text AS id,c.reservation_id::text AS reservation_id
+         FROM trip_transport_requests link
+         JOIN transport_contracts c
+           ON c.tenant_id=link.tenant_id
+          AND c.transport_request_id=link.transport_request_id
+          AND c.id=link.transport_contract_id
+        WHERE link.trip_id=$1::uuid
+          AND link.removed_at IS NULL
+          AND c.status='confirmed'
+        ORDER BY c.id
+        FOR UPDATE OF c`,
+      [tripId],
+    );
+
+    if (contracts.rows.length > 0) {
+      const contractIds = contracts.rows.map((row) => row.id);
+      const reservationIds = contracts.rows.map((row) => row.reservation_id);
+      if (status === 'completed') {
+        const releaseReason = `Released after trip ${tripId} completed`;
+        await client.query(
+          `UPDATE transport_contracts
+              SET status='fulfilled',fulfilled_by_user_id=$2::uuid,fulfilled_at=$3::timestamptz,updated_at=now()
+            WHERE id=ANY($1::uuid[]) AND status='confirmed'`,
+          [contractIds, userId, terminalIso],
+        );
+        await client.query(
+          `INSERT INTO transport_contract_events (tenant_id,contract_id,type,actor_user_id,reason)
+           SELECT current_setting('app.tenant_id')::uuid,id,'fulfilled',$2::uuid,$3
+             FROM unnest($1::uuid[]) AS id`,
+          [contractIds, userId, releaseReason],
+        );
+        await client.query(
+          `UPDATE capacity_reservations
+              SET status='released',released_by_user_id=$2::uuid,released_at=$3::timestamptz,
+                  release_reason=$4,updated_at=now()
+            WHERE id=ANY($1::uuid[]) AND status='active'`,
+          [reservationIds, userId, terminalIso, releaseReason],
+        );
+        await client.query(
+          `INSERT INTO capacity_reservation_events (tenant_id,reservation_id,type,actor_user_id,reason)
+           SELECT current_setting('app.tenant_id')::uuid,id,'released',$2::uuid,$3
+             FROM unnest($1::uuid[]) AS id`,
+          [reservationIds, userId, releaseReason],
+        );
+      } else {
+        const cancellationReason = reason ?? `Trip ${tripId} cancelled`;
+        await client.query(
+          `UPDATE transport_contracts
+              SET status='cancelled',cancelled_by_user_id=$2::uuid,cancelled_at=$3::timestamptz,
+                  cancel_reason=$4,updated_at=now()
+            WHERE id=ANY($1::uuid[]) AND status='confirmed'`,
+          [contractIds, userId, terminalIso, cancellationReason],
+        );
+        await client.query(
+          `INSERT INTO transport_contract_events (tenant_id,contract_id,type,actor_user_id,reason)
+           SELECT current_setting('app.tenant_id')::uuid,id,'cancelled',$2::uuid,$3
+             FROM unnest($1::uuid[]) AS id`,
+          [contractIds, userId, cancellationReason],
+        );
+        await client.query(
+          `UPDATE capacity_reservations
+              SET status='cancelled',cancelled_by_user_id=$2::uuid,cancelled_at=$3::timestamptz,
+                  cancel_reason=$4,updated_at=now()
+            WHERE id=ANY($1::uuid[]) AND status='active'`,
+          [reservationIds, userId, terminalIso, cancellationReason],
+        );
+        await client.query(
+          `INSERT INTO capacity_reservation_events (tenant_id,reservation_id,type,actor_user_id,reason)
+           SELECT current_setting('app.tenant_id')::uuid,id,'cancelled',$2::uuid,$3
+             FROM unnest($1::uuid[]) AS id`,
+          [reservationIds, userId, cancellationReason],
+        );
+      }
+    }
+
+    await client.query(
+      `UPDATE driver_availability availability
+          SET status='available',available_from=$2::timestamptz,available_until=NULL,
+              updated_by_user_id=$3::uuid,updated_at=now()
+        WHERE availability.status='assigned'
+          AND availability.driver_id IN (SELECT driver_id FROM trip_drivers WHERE trip_id=$1::uuid)
+          AND NOT EXISTS (
+            SELECT 1 FROM capacity_reservations reservation
+             WHERE reservation.driver_id=availability.driver_id AND reservation.status='active'
+          )`,
+      [tripId, terminalIso, userId],
+    );
+    await client.query(
+      `UPDATE capacity_asset_availability availability
+          SET status='available',available_from=$2::timestamptz,available_until=NULL,
+              updated_by_user_id=$3::uuid,updated_at=now()
+        WHERE availability.status='assigned'
+          AND availability.asset_id IN (SELECT asset_id FROM trip_assets WHERE trip_id=$1::uuid)
+          AND NOT EXISTS (
+            SELECT 1 FROM capacity_reservations reservation
+             WHERE reservation.vehicle_id=availability.asset_id AND reservation.status='active'
+          )`,
+      [tripId, terminalIso, userId],
+    );
   }
 
   private async listSubresource(
