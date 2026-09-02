@@ -15,7 +15,10 @@ const subjectId = '22222222-2222-4222-8222-222222222222';
 
 test('parses a blocking document compliance policy with safe defaults', () => {
   assert.deepEqual(
-    parseCompliancePolicy({ documentTypeId: typeId, requiredForContracting: true }),
+    parseCompliancePolicy({
+      documentTypeId: typeId,
+      requiredForContracting: true,
+    }),
     {
       documentTypeId: typeId,
       requiredForContracting: true,
