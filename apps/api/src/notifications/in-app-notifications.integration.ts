@@ -31,78 +31,84 @@ async function run(): Promise<void> {
   const otherTenantInbox = new InAppNotificationsService(otherTenantContext, database);
 
   try {
-    const emissions = await database.withTenantContext(operationsContext.require(), async (client) => {
-      const targetRoleCodes = ['operations_manager', 'dispatcher'] as const;
-      const freight = await emitInAppNotification(client, {
-        eventKey: 'integration.freight.created:request-001',
-        eventType: 'freight.transport_request.created',
-        module: 'freight',
-        aggregateType: 'transport_request',
-        aggregateId: 'request-001',
-        title: 'Nova carga criada',
-        body: 'Carga de integração pronta para acompanhamento.',
-        contextUrl: '/cargas',
-        targetRoleCodes,
-        payload: { transportRequestId: 'request-001' },
-      });
-      const negotiation = await emitInAppNotification(client, {
-        eventKey: 'integration.negotiation.confirmed:contract-001',
-        eventType: 'negotiation.transport_contract.confirmed',
-        module: 'negotiation',
-        aggregateType: 'transport_contract',
-        aggregateId: 'contract-001',
-        title: 'Contratação confirmada',
-        body: 'Contrato de integração confirmado.',
-        contextUrl: '/negociacoes',
-        targetRoleCodes,
-        payload: { transportContractId: 'contract-001' },
-      });
-      const trip = await emitInAppNotification(client, {
-        eventKey: 'integration.trip.status:trip-001:in-transit',
-        eventType: 'trips.status.changed',
-        module: 'trips',
-        aggregateType: 'trip',
-        aggregateId: 'trip-001',
-        title: 'Viagem em trânsito',
-        body: 'Viagem de integração iniciou execução.',
-        contextUrl: '/viagens',
-        targetRoleCodes,
-        payload: { tripId: 'trip-001', toStatus: 'in_transit' },
-      });
-      const document = await emitInAppNotification(client, {
-        eventKey: 'integration.document.validation:document-001',
-        eventType: 'documents.validation.recorded',
-        module: 'documents',
-        aggregateType: 'document',
-        aggregateId: 'document-001',
-        title: 'Documento rejeitado',
-        body: 'Documento de integração recebeu validação inválida.',
-        contextUrl: '/documentos',
-        severity: 'critical',
-        targetRoleCodes,
-        payload: { documentId: 'document-001', result: 'invalid' },
-      });
-      const duplicateFreight = await emitInAppNotification(client, {
-        eventKey: 'integration.freight.created:request-001',
-        eventType: 'freight.transport_request.created',
-        module: 'freight',
-        aggregateType: 'transport_request',
-        aggregateId: 'request-001',
-        title: 'Nova carga criada',
-        body: 'Carga de integração pronta para acompanhamento.',
-        contextUrl: '/cargas',
-        targetRoleCodes,
-        payload: { transportRequestId: 'request-001' },
-      });
+    const emissions = await database.withTenantContext(
+      operationsContext.require(),
+      async (client) => {
+        const targetRoleCodes = ['operations_manager', 'dispatcher'] as const;
+        const freight = await emitInAppNotification(client, {
+          eventKey: 'integration.freight.created:request-001',
+          eventType: 'freight.transport_request.created',
+          module: 'freight',
+          aggregateType: 'transport_request',
+          aggregateId: 'request-001',
+          title: 'Nova carga criada',
+          body: 'Carga de integração pronta para acompanhamento.',
+          contextUrl: '/cargas',
+          targetRoleCodes,
+          payload: { transportRequestId: 'request-001' },
+        });
+        const negotiation = await emitInAppNotification(client, {
+          eventKey: 'integration.negotiation.confirmed:contract-001',
+          eventType: 'negotiation.transport_contract.confirmed',
+          module: 'negotiation',
+          aggregateType: 'transport_contract',
+          aggregateId: 'contract-001',
+          title: 'Contratação confirmada',
+          body: 'Contrato de integração confirmado.',
+          contextUrl: '/negociacoes',
+          targetRoleCodes,
+          payload: { transportContractId: 'contract-001' },
+        });
+        const trip = await emitInAppNotification(client, {
+          eventKey: 'integration.trip.status:trip-001:in-transit',
+          eventType: 'trips.status.changed',
+          module: 'trips',
+          aggregateType: 'trip',
+          aggregateId: 'trip-001',
+          title: 'Viagem em trânsito',
+          body: 'Viagem de integração iniciou execução.',
+          contextUrl: '/viagens',
+          targetRoleCodes,
+          payload: { tripId: 'trip-001', toStatus: 'in_transit' },
+        });
+        const document = await emitInAppNotification(client, {
+          eventKey: 'integration.document.validation:document-001',
+          eventType: 'documents.validation.recorded',
+          module: 'documents',
+          aggregateType: 'document',
+          aggregateId: 'document-001',
+          title: 'Documento rejeitado',
+          body: 'Documento de integração recebeu validação inválida.',
+          contextUrl: '/documentos',
+          severity: 'critical',
+          targetRoleCodes,
+          payload: { documentId: 'document-001', result: 'invalid' },
+        });
+        const duplicateFreight = await emitInAppNotification(client, {
+          eventKey: 'integration.freight.created:request-001',
+          eventType: 'freight.transport_request.created',
+          module: 'freight',
+          aggregateType: 'transport_request',
+          aggregateId: 'request-001',
+          title: 'Nova carga criada',
+          body: 'Carga de integração pronta para acompanhamento.',
+          contextUrl: '/cargas',
+          targetRoleCodes,
+          payload: { transportRequestId: 'request-001' },
+        });
 
-      return { freight, negotiation, trip, document, duplicateFreight };
-    });
+        return { freight, negotiation, trip, document, duplicateFreight };
+      },
+    );
 
     assert.equal(emissions.freight.deliveryCount, 2);
     assert.equal(emissions.negotiation.deliveryCount, 2);
     assert.equal(emissions.trip.deliveryCount, 2);
     assert.equal(emissions.document.deliveryCount, 2);
-    assert.equal(emissions.duplicateFreight.notificationEventId, emissions.freight.notificationEventId);
+    assert.equal(
+      emissions.duplicateFreight.notificationEventId,
+      emissions.freight.notificationEventId,
+    );
     assert.equal(emissions.duplicateFreight.outboxEventId, emissions.freight.outboxEventId);
     assert.equal(emissions.duplicateFreight.deliveryCount, 2);
 

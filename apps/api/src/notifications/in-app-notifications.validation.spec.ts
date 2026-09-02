@@ -5,10 +5,7 @@ import type { TenantContext } from '../tenancy/tenant-context.js';
 import type { TenantDatabaseService } from '../tenancy/tenant-database.service.js';
 import { InAppNotificationsService } from './in-app-notifications.service.js';
 
-const service = new InAppNotificationsService(
-  {} as TenantContext,
-  {} as TenantDatabaseService,
-);
+const service = new InAppNotificationsService({} as TenantContext, {} as TenantDatabaseService);
 
 test('notification list rejects unsupported state before database access', async () => {
   await assert.rejects(service.list({ state: 'archived' }), /state must be one of/);

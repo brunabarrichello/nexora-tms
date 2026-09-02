@@ -77,12 +77,12 @@ O Outbox permanece disponível para NEX-55/NEX-57 consumirem efeitos assíncrono
 
 ## Catálogo v1
 
-| Evento | Origem | Perfis | Link |
-| --- | --- | --- | --- |
-| `freight.transport_request.created` | nova solicitação de transporte | Tenant Admin, Operations Manager, Dispatcher | `/cargas` |
-| `negotiation.transport_contract.confirmed` | contratação confirmada | Tenant Admin, Operations Manager, Dispatcher, Finance Manager | `/negociacoes` |
-| `trips.status.changed` | transição de status da viagem | Tenant Admin, Operations Manager, Dispatcher | `/viagens` |
-| `documents.validation.recorded` | resultado de validação documental | Tenant Admin, Operations Manager, Dispatcher | `/documentos` |
+| Evento                                     | Origem                            | Perfis                                                        | Link           |
+| ------------------------------------------ | --------------------------------- | ------------------------------------------------------------- | -------------- |
+| `freight.transport_request.created`        | nova solicitação de transporte    | Tenant Admin, Operations Manager, Dispatcher                  | `/cargas`      |
+| `negotiation.transport_contract.confirmed` | contratação confirmada            | Tenant Admin, Operations Manager, Dispatcher, Finance Manager | `/negociacoes` |
+| `trips.status.changed`                     | transição de status da viagem     | Tenant Admin, Operations Manager, Dispatcher                  | `/viagens`     |
+| `documents.validation.recorded`            | resultado de validação documental | Tenant Admin, Operations Manager, Dispatcher                  | `/documentos`  |
 
 Os produtores são triggers transacionais e só emitem quando `app.tenant_id` e `app.user_id` estão presentes. Inserts administrativos/seeds sem contexto de runtime permanecem neutros.
 

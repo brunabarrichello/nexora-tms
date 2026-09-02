@@ -221,7 +221,7 @@ function moduleLabel(value: NotificationItem['module']): string {
 }
 
 function severityLabel(value: NotificationItem['severity']): string {
-  return ({ info: 'Informativa', warning: 'Atenção', critical: 'Crítica' }[value] ?? value);
+  return { info: 'Informativa', warning: 'Atenção', critical: 'Crítica' }[value] ?? value;
 }
 
 function dateTime(value: string): string {
