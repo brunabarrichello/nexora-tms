@@ -153,7 +153,10 @@ export default async function Page({
               </label>
               <label className="form-field field-wide">
                 <span>Comprovante (Document ID)</span>
-                <input name="proofDocumentId" placeholder="UUID de documento financeiro no Document Core" />
+                <input
+                  name="proofDocumentId"
+                  placeholder="UUID de documento financeiro no Document Core"
+                />
               </label>
               <label className="form-field field-wide">
                 <span>Observações</span>
@@ -168,7 +171,11 @@ export default async function Page({
               <p>O banco rejeita baixa acima do saldo e reversão incoerente.</p>
             </div>
             <div className="sticky-actions">
-              <button className="button button-primary" type="submit" disabled={receivable.effectiveStatus === 'cancelled'}>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={receivable.effectiveStatus === 'cancelled'}
+              >
                 Registrar lançamento
               </button>
             </div>
@@ -189,7 +196,12 @@ export default async function Page({
             <div className="field-grid">
               <label className="form-field">
                 <span>Vencimento *</span>
-                <input name="dueDate" type="date" defaultValue={inputDate(receivable.dueAt)} required />
+                <input
+                  name="dueDate"
+                  type="date"
+                  defaultValue={inputDate(receivable.dueAt)}
+                  required
+                />
               </label>
               <label className="form-field">
                 <span>Referência fiscal</span>
@@ -212,7 +224,11 @@ export default async function Page({
               <p>Operação: {receivable.transportRequestId}</p>
             </div>
             <div className="sticky-actions">
-              <button className="button button-secondary" type="submit" disabled={receivable.effectiveStatus === 'cancelled'}>
+              <button
+                className="button button-secondary"
+                type="submit"
+                disabled={receivable.effectiveStatus === 'cancelled'}
+              >
                 Atualizar título
               </button>
             </div>
@@ -239,7 +255,9 @@ export default async function Page({
           kind: item.kind === 'receipt' ? 'Recebimento' : 'Reversão',
           amount: money(item.amount, receivable.currencyCode),
           proof: item.proofDocumentTitle ?? item.proofDocumentId ?? '—',
-          notes: item.notes ?? (item.relatedTransactionId ? `Reverte ${item.relatedTransactionId}` : '—'),
+          notes:
+            item.notes ??
+            (item.relatedTransactionId ? `Reverte ${item.relatedTransactionId}` : '—'),
         }))}
         totalRows={transactions.length}
         emptyTitle="Nenhuma baixa registrada"
@@ -313,23 +331,27 @@ function inputDate(value: string): string {
 }
 
 function statusLabel(value: string): string {
-  return {
-    open: 'Em aberto',
-    partially_received: 'Recebido parcialmente',
-    overdue: 'Vencido',
-    paid: 'Quitado',
-    cancelled: 'Cancelado',
-  }[value] ?? value;
+  return (
+    {
+      open: 'Em aberto',
+      partially_received: 'Recebido parcialmente',
+      overdue: 'Vencido',
+      paid: 'Quitado',
+      cancelled: 'Cancelado',
+    }[value] ?? value
+  );
 }
 
 function eventLabel(value: string): string {
-  return {
-    created: 'Criado',
-    due_at_changed: 'Vencimento alterado',
-    fiscal_changed: 'Documento fiscal alterado',
-    notes_changed: 'Observação alterada',
-    cancelled: 'Cancelado',
-    status_changed: 'Status alterado',
-    transaction_recorded: 'Lançamento registrado',
-  }[value] ?? value;
+  return (
+    {
+      created: 'Criado',
+      due_at_changed: 'Vencimento alterado',
+      fiscal_changed: 'Documento fiscal alterado',
+      notes_changed: 'Observação alterada',
+      cancelled: 'Cancelado',
+      status_changed: 'Status alterado',
+      transaction_recorded: 'Lançamento registrado',
+    }[value] ?? value
+  );
 }

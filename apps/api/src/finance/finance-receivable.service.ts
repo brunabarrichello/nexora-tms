@@ -223,7 +223,8 @@ export class FinanceReceivableService {
           ],
         );
         const id = result.rows[0]?.id;
-        if (!id) throw new ConflictException('customer receivable transaction could not be persisted');
+        if (!id)
+          throw new ConflictException('customer receivable transaction could not be persisted');
         return this.requireTransaction(client, id);
       } catch (error) {
         throwReceivableError(error);
@@ -270,7 +271,8 @@ export class FinanceReceivableService {
       [transactionId],
     );
     const row = result.rows[0];
-    if (!row) throw new NotFoundException('customer receivable transaction not found in current tenant');
+    if (!row)
+      throw new NotFoundException('customer receivable transaction not found in current tenant');
     return row;
   }
 }
@@ -282,7 +284,9 @@ function throwReceivableError(error: unknown): never {
     throw new ConflictException('customer receivable record already exists');
   }
   if (candidate?.code === 'P0001' || candidate?.code === '23503' || candidate?.code === '23514') {
-    throw new ConflictException(candidate.message ?? 'customer receivable rule rejected the operation');
+    throw new ConflictException(
+      candidate.message ?? 'customer receivable rule rejected the operation',
+    );
   }
   throw error;
 }

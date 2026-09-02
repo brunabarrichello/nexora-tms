@@ -42,7 +42,8 @@ export async function updateCustomerReceivable(formData: FormData): Promise<void
       notes,
     },
   );
-  if (result.kind !== 'ready') redirectWithError(`/financeiro/faturamento/${receivableId}`, result.message);
+  if (result.kind !== 'ready')
+    redirectWithError(`/financeiro/faturamento/${receivableId}`, result.message);
   revalidatePath('/financeiro/faturamento');
   revalidatePath(`/financeiro/faturamento/${receivableId}`);
   redirect(`/financeiro/faturamento/${receivableId}?updated=1`);
@@ -60,7 +61,8 @@ export async function recordCustomerReceipt(formData: FormData): Promise<void> {
     'POST',
     { kind, amount, relatedTransactionId, proofDocumentId, notes },
   );
-  if (result.kind !== 'ready') redirectWithError(`/financeiro/faturamento/${receivableId}`, result.message);
+  if (result.kind !== 'ready')
+    redirectWithError(`/financeiro/faturamento/${receivableId}`, result.message);
   revalidatePath('/financeiro/faturamento');
   revalidatePath(`/financeiro/faturamento/${receivableId}`);
   redirect(`/financeiro/faturamento/${receivableId}?transaction=1`);
@@ -74,7 +76,8 @@ export async function cancelCustomerReceivable(formData: FormData): Promise<void
     'POST',
     { reason },
   );
-  if (result.kind !== 'ready') redirectWithError(`/financeiro/faturamento/${receivableId}`, result.message);
+  if (result.kind !== 'ready')
+    redirectWithError(`/financeiro/faturamento/${receivableId}`, result.message);
   revalidatePath('/financeiro/faturamento');
   revalidatePath(`/financeiro/faturamento/${receivableId}`);
   redirect(`/financeiro/faturamento/${receivableId}?cancelled=1`);

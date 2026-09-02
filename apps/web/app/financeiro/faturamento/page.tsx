@@ -85,7 +85,10 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
               </label>
               <label className="form-field field-wide">
                 <span>Documento fiscal (Document ID)</span>
-                <input name="fiscalDocumentId" placeholder="UUID de documento financeiro no Document Core" />
+                <input
+                  name="fiscalDocumentId"
+                  placeholder="UUID de documento financeiro no Document Core"
+                />
               </label>
               <label className="form-field">
                 <span>Referência fiscal</span>
@@ -101,10 +104,16 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
             <div className="form-summary-card">
               <span className="eyebrow">Conta a receber</span>
               <h2>Saldo controlado pelo ledger</h2>
-              <p>Baixas posteriores serão append-only e o status será recalculado automaticamente.</p>
+              <p>
+                Baixas posteriores serão append-only e o status será recalculado automaticamente.
+              </p>
             </div>
             <div className="sticky-actions">
-              <button className="button button-primary" type="submit" disabled={candidates.length === 0}>
+              <button
+                className="button button-primary"
+                type="submit"
+                disabled={candidates.length === 0}
+              >
                 Criar título
               </button>
             </div>
@@ -161,7 +170,9 @@ export default async function Page({ searchParams }: Readonly<{ searchParams: Se
         }))}
         totalRows={receivables.length}
         emptyTitle={
-          receivablesResult.kind === 'ready' ? 'Nenhum título registrado' : 'Faturamento indisponível'
+          receivablesResult.kind === 'ready'
+            ? 'Nenhum título registrado'
+            : 'Faturamento indisponível'
         }
         emptyDescription={
           receivablesResult.kind === 'ready'
@@ -186,11 +197,13 @@ function date(value: string): string {
 }
 
 function statusLabel(value: string): string {
-  return {
-    open: 'Em aberto',
-    partially_received: 'Recebido parcialmente',
-    overdue: 'Vencido',
-    paid: 'Quitado',
-    cancelled: 'Cancelado',
-  }[value] ?? value;
+  return (
+    {
+      open: 'Em aberto',
+      partially_received: 'Recebido parcialmente',
+      overdue: 'Vencido',
+      paid: 'Quitado',
+      cancelled: 'Cancelado',
+    }[value] ?? value
+  );
 }
