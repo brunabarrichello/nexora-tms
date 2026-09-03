@@ -65,7 +65,10 @@ test('operations and dispatcher may send while finance, auditor and viewer remai
     false,
   );
   assert.equal(
-    hasPermission(TENANT_ROLE_TEMPLATES.AUDITOR.permissions, TENANT_PERMISSIONS.NOTIFICATIONS_WRITE),
+    hasPermission(
+      TENANT_ROLE_TEMPLATES.AUDITOR.permissions,
+      TENANT_PERMISSIONS.NOTIFICATIONS_WRITE,
+    ),
     false,
   );
   assert.equal(
