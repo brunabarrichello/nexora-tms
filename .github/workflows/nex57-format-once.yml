@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   format:
-    if: ${{ !contains(github.event.head_commit.message, 'chore(nex-57): apply Prettier formatting') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
@@ -34,12 +33,12 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Format NEX-57 TypeScript files
-        run: >-
-          pnpm exec prettier --write
-          apps/api/src/notifications/outbound-communications.controller.ts
-          apps/api/src/notifications/outbound-communications.service.ts
-          apps/api/src/notifications/outbound-communications.types.ts
-          apps/api/src/notifications/outbound-communications.validation.ts
+        run: |
+          pnpm exec prettier --write \
+            apps/api/src/notifications/outbound-communications.controller.ts \
+            apps/api/src/notifications/outbound-communications.service.ts \
+            apps/api/src/notifications/outbound-communications.types.ts \
+            apps/api/src/notifications/outbound-communications.validation.ts
 
       - name: Remove temporary formatter workflow
         run: git rm .github/workflows/nex57-format-once.yml
