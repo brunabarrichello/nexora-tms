@@ -54,7 +54,9 @@ export class OperationalAnalyticsService {
     private readonly database: TenantDatabaseService,
   ) {}
 
-  getOperationalDashboard(query: OperationalDashboardQuery): Promise<OperationalDashboardSnapshot> {
+  getOperationalDashboard(
+    query: OperationalDashboardQuery,
+  ): Promise<OperationalDashboardSnapshot> {
     const period = parsePeriod(query);
     const context = this.tenantContext.require();
 
@@ -171,7 +173,9 @@ export class OperationalAnalyticsService {
 
 function parsePeriod(query: OperationalDashboardQuery): { from: Date; to: Date } {
   const to = parseDate(query.to, 'to') ?? new Date();
-  const from = parseDate(query.from, 'from') ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const from =
+    parseDate(query.from, 'from') ??
+    new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
 
   if (from >= to) {
     throw new BadRequestException('from must be earlier than to');
@@ -186,7 +190,9 @@ function parseDate(value: string | undefined, field: string): Date | null {
   if (!value?.trim()) return null;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
-    throw new BadRequestException(`${field} must be a valid ISO date or timestamp`);
+    throw new BadRequestException(
+      `${field} must be a valid ISO date or timestamp`,
+    );
   }
   return date;
 }
@@ -196,9 +202,14 @@ function toCount(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-function normalizeCounts(value: Record<string, number> | null | undefined): Readonly<Record<string, number>> {
+function normalizeCounts(
+  value: Record<string, number> | null | undefined,
+): Readonly<Record<string, number>> {
   if (!value) return {};
   return Object.fromEntries(
-    Object.entries(value).map(([key, count]) => [key, Number.isFinite(Number(count)) ? Number(count) : 0]),
+    Object.entries(value).map(([key, count]) => [
+      key,
+      Number.isFinite(Number(count)) ? Number(count) : 0,
+    ]),
   );
 }
