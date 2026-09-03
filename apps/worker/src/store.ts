@@ -1,4 +1,9 @@
 import { Pool, type PoolConfig } from 'pg';
+
+import type {
+  CommunicationDeliveryPort,
+  CommunicationDeliveryTarget,
+} from './communication-delivery.js';
 import type { WorkerDatabaseConfig } from './config.js';
 import type { WebhookDeliveryPort, WebhookDeliveryTarget } from './webhook-delivery.js';
 
@@ -32,7 +37,7 @@ export interface DurableJobWorkItem {
 
 export type FailureStatus = 'retry_wait' | 'dead_lettered' | null;
 
-export interface AsyncStore extends WebhookDeliveryPort {
+export interface AsyncStore extends WebhookDeliveryPort, CommunicationDeliveryPort {
   connect(): Promise<{ role: string; database: string }>;
   close(): Promise<void>;
   reapExpiredLeases(workerId: string, batchSize: number): Promise<{ outbox: number; jobs: number }>;
@@ -212,6 +217,44 @@ export class PgAsyncStore implements AsyncStore {
         input.deliveryId,
         input.attempt,
         input.outcome,
+        input.statusCode,
+        input.durationMs,
+        input.errorMessage,
+        input.terminal,
+      ],
+    );
+    return result.rows[0]?.recorded === true;
+  }
+
+  async getCommunicationDelivery(
+    communicationId: string,
+  ): Promise<CommunicationDeliveryTarget | null> {
+    const result = await this.pool.query<CommunicationDeliveryTarget>(
+      'select * from nexora_worker_get_communication($1::uuid)',
+      [communicationId],
+    );
+    return result.rows[0] ?? null;
+  }
+
+  async recordCommunicationAttempt(input: {
+    readonly communicationId: string;
+    readonly jobAttempt: number;
+    readonly outcome: 'success' | 'failure' | 'cancelled';
+    readonly providerMessageId: string | null;
+    readonly statusCode: number | null;
+    readonly durationMs: number;
+    readonly errorMessage: string | null;
+    readonly terminal: boolean;
+  }): Promise<boolean> {
+    const result = await this.pool.query<{ recorded: boolean }>(
+      `select nexora_worker_record_communication_attempt(
+         $1::uuid,$2::integer,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::boolean
+       ) as recorded`,
+      [
+        input.communicationId,
+        input.jobAttempt,
+        input.outcome,
+        input.providerMessageId,
         input.statusCode,
         input.durationMs,
         input.errorMessage,
