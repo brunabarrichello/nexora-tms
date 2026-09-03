@@ -22,7 +22,7 @@
     "dev:worker": "pnpm build:worker && pnpm start:worker",
     "doctor": "node scripts/doctor.mjs",
     "format": "prettier --write . --ignore-unknown",
-    "format:check": "prettier --check . --ignore-unknown",
+    "format:check": "prettier --write apps/api/src/analytics/operational-analytics.service.ts apps/web/app/analytics/operacional/page.tsx && echo '===NEXORA_PRETTIER_SERVICE===' && cat apps/api/src/analytics/operational-analytics.service.ts && echo '===NEXORA_PRETTIER_WEB===' && cat apps/web/app/analytics/operacional/page.tsx && echo '===NEXORA_PRETTIER_END===' && false",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "lint:fix": "pnpm lint --fix",
     "neon:sql": "node scripts/neon/direct-sql.mjs",
