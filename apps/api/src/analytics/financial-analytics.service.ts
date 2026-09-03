@@ -86,7 +86,10 @@ export class FinancialAnalyticsService {
         parsed.customerPartyId,
       ];
       const indicators = await client.query<FinancialIndicatorRow>(financialIndicatorsSql(), values);
-      const customerOptions = await client.query<CustomerOptionRow>(customerOptionsSql(), values);
+      const customerOptions = await client.query<CustomerOptionRow>(customerOptionsSql(), [
+        parsed.from.toISOString(),
+        parsed.to.toISOString(),
+      ]);
 
       return {
         period: {
