@@ -1,3 +1,7 @@
+import {
+  createCommunicationDeliveryHandler,
+  type CommunicationDeliveryDependencies,
+} from './communication-delivery.js';
 import type { StructuredLogger } from './logger.js';
 import type { DurableJobWorkItem, OutboxWorkItem } from './store.js';
 import {
@@ -66,6 +70,7 @@ const IN_APP_NOTIFICATION_EVENT_TYPES = [
 export function createDefaultHandlerRegistry(
   logger: StructuredLogger,
   webhookDependencies?: WebhookDeliveryDependencies,
+  communicationDependencies?: CommunicationDeliveryDependencies,
 ): HandlerRegistry {
   const registry = new HandlerRegistry();
   const smokeHandler: WorkHandler = async (context) => {
@@ -93,15 +98,35 @@ export function createDefaultHandlerRegistry(
     });
   };
 
+  const outboundCommunicationQueuedHandler: WorkHandler = async (context) => {
+    context.signal.throwIfAborted();
+    const communicationId = requireCommunicationId(context.payload);
+    logger.info('worker.outbound_communication.queued_acknowledged', {
+      tenantId: context.tenantId,
+      correlationId: context.correlationId,
+      requestId: context.requestId,
+      idempotencyKey: context.idempotencyKey,
+      attempt: context.attempt,
+      communicationId,
+    });
+  };
+
   registry.registerOutbox('nexora.worker.smoke', smokeHandler);
   registry.registerJob('nexora.worker.smoke', smokeHandler);
   for (const eventType of IN_APP_NOTIFICATION_EVENT_TYPES) {
     registry.registerOutbox(eventType, inAppNotificationHandler);
   }
+  registry.registerOutbox('notifications.communication.queued', outboundCommunicationQueuedHandler);
   if (webhookDependencies) {
     registry.registerJob(
       'integrations.webhook.deliver',
       createWebhookDeliveryHandler(webhookDependencies),
+    );
+  }
+  if (communicationDependencies) {
+    registry.registerJob(
+      'notifications.communication.deliver',
+      createCommunicationDeliveryHandler(communicationDependencies),
     );
   }
   return registry;
@@ -134,4 +159,20 @@ function requireInAppNotificationPayload(payload: unknown): {
     module: record.module,
     contextUrl: record.contextUrl,
   };
+}
+
+function requireCommunicationId(payload: unknown): string {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Outbound communication payload must be an object');
+  }
+  const communicationId = (payload as Record<string, unknown>).communicationId;
+  if (
+    typeof communicationId !== 'string' ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      communicationId,
+    )
+  ) {
+    throw new Error('Outbound communication payload requires communicationId UUID');
+  }
+  return communicationId;
 }
