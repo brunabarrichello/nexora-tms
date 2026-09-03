@@ -156,7 +156,11 @@ function parseDate(value: string | undefined, field: string): Date | null {
 function parseOptionalUuid(value: string | undefined, field: string): string | null {
   if (!value?.trim()) return null;
   const normalized = value.trim().toLowerCase();
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)) {
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      normalized,
+    )
+  ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }
   return normalized;
