@@ -47,6 +47,19 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      - name: Diagnose NEX-57 Prettier diff
+        run: |
+          pnpm exec prettier --write \
+            apps/api/src/notifications/outbound-communications.controller.ts \
+            apps/api/src/notifications/outbound-communications.service.ts \
+            apps/api/src/notifications/outbound-communications.types.ts \
+            apps/api/src/notifications/outbound-communications.validation.ts
+          git diff --unified=3 -- \
+            apps/api/src/notifications/outbound-communications.controller.ts \
+            apps/api/src/notifications/outbound-communications.service.ts \
+            apps/api/src/notifications/outbound-communications.types.ts \
+            apps/api/src/notifications/outbound-communications.validation.ts
+
       - name: Check formatting
         run: pnpm format:check
 
