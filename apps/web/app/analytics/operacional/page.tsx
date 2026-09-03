@@ -25,11 +25,7 @@ type SearchParams = Promise<{ from?: string; to?: string }>;
 
 export const metadata = { title: 'Dashboard operacional' };
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: SearchParams;
-}) {
+export default async function Page({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
   const query = new URLSearchParams();
   if (params.from) query.set('from', normalizeBoundary(params.from, false));
@@ -47,13 +43,11 @@ export default async function Page({
           <span className="eyebrow">Analytics • NEX-58</span>
           <h1>Dashboard operacional</h1>
           <p>
-            Cargas, viagens, ocorrências e bloqueios documentais em uma
-            projeção read-only sobre os dados canônicos do tenant.
+            Cargas, viagens, ocorrências e bloqueios documentais em uma projeção read-only sobre os
+            dados canônicos do tenant.
           </p>
         </div>
-        <span className="status-badge">
-          {data ? 'API conectada' : 'API indisponível'}
-        </span>
+        <span className="status-badge">{data ? 'API conectada' : 'API indisponível'}</span>
       </section>
 
       <section className="panel">
@@ -83,10 +77,7 @@ export default async function Page({
 
       {data ? (
         <>
-          <section
-            className="metric-grid"
-            aria-label="Indicadores operacionais"
-          >
+          <section className="metric-grid" aria-label="Indicadores operacionais">
             <Metric
               label="Cargas no período"
               value={data.transportRequests.total}
@@ -110,14 +101,8 @@ export default async function Page({
           </section>
 
           <div className="dashboard-grid">
-            <StatusPanel
-              title="Cargas por status"
-              values={data.transportRequests.byStatus}
-            />
-            <StatusPanel
-              title="Viagens por status"
-              values={data.trips.byStatus}
-            />
+            <StatusPanel title="Cargas por status" values={data.transportRequests.byStatus} />
+            <StatusPanel title="Viagens por status" values={data.trips.byStatus} />
           </div>
 
           <section className="panel">
@@ -128,9 +113,9 @@ export default async function Page({
               </div>
             </div>
             <p>
-              {formatDate(data.period.from)} até {formatDate(data.period.to)}. O
-              tenant é derivado exclusivamente do contexto autenticado; não
-              existe parâmetro para consultar outro tenant.
+              {formatDate(data.period.from)} até {formatDate(data.period.to)}. O tenant é derivado
+              exclusivamente do contexto autenticado; não existe parâmetro para consultar outro
+              tenant.
             </p>
           </section>
         </>
@@ -144,15 +129,7 @@ export default async function Page({
   );
 }
 
-function Metric({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: number;
-  detail: string;
-}) {
+function Metric({ label, value, detail }: { label: string; value: number; detail: string }) {
   return (
     <article className="metric-card">
       <span>{label}</span>
@@ -194,9 +171,7 @@ function StatusPanel({
 }
 
 function statusLabel(value: string): string {
-  return value
-    .replaceAll('_', ' ')
-    .replace(/^./, (letter) => letter.toUpperCase());
+  return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function normalizeBoundary(value: string, endOfDay: boolean): string {
