@@ -6,9 +6,12 @@ on:
       - main
     paths:
       - 'apps/api/src/finance/**'
+      - 'apps/api/src/analytics/financial-analytics*'
+      - 'apps/api/src/analytics/analytics.module.ts'
       - 'apps/api/src/app.module.ts'
       - 'apps/api/src/tenancy/rbac-catalog.ts'
       - 'apps/web/app/financeiro/**'
+      - 'apps/web/app/analytics/financeiro/**'
       - 'packages/database/ci/nex50-finance-margin-fixtures.sql'
       - '.github/workflows/neon-finance-margin-gate.yml'
 
@@ -197,15 +200,24 @@ jobs:
           set -euo pipefail
           node apps/api/dist/finance/finance-margin.integration.js
 
+      - name: Run NEX-59 financial indicators integration against Neon
+        env:
+          DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_POOL_MAX: '2'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node apps/api/dist/analytics/financial-analytics.integration.js
+
       - name: Gate summary
         shell: bash
         run: |
           {
-            echo '## NEX-50 — Operation margin'
-            echo '- planned revenue/cost/margin: verified'
-            echo '- same request after confirmed contract: recalculated from contract values'
-            echo '- margin amount and percentage: verified'
-            echo '- tenant isolation: verified'
+            echo '## Finance analytics qualification'
+            echo '- NEX-50 planned and contracted margin: verified'
+            echo '- NEX-59 planned revenue, invoiced revenue and contracted cost: verified'
+            echo '- NEX-59 margin amount and percentage: verified'
+            echo '- customer filter and tenant isolation: verified'
             echo '- source aggregates remain canonical; no finance ledger duplicated'
           } >> "$GITHUB_STEP_SUMMARY"
 
