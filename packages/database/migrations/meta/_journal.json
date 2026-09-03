@@ -48,6 +48,8 @@
     {"idx":43,"version":"7","when":1788381600000,"tag":"0043_nex54_notification_function_hardening","breakpoints":true},
     {"idx":44,"version":"7","when":1788385200000,"tag":"0044_nex55_async_admin_reprocessing","breakpoints":true},
     {"idx":45,"version":"7","when":1788386100000,"tag":"0045_nex56_external_api_webhooks","breakpoints":true},
-    {"idx":46,"version":"7","when":1788387000000,"tag":"0046_nex56_webhook_delivery_hardening","breakpoints":true}
+    {"idx":46,"version":"7","when":1788387000000,"tag":"0046_nex56_webhook_delivery_hardening","breakpoints":true},
+    {"idx":47,"version":"7","when":1788387900000,"tag":"0047_nex57_multichannel_communications","breakpoints":true},
+    {"idx":48,"version":"7","when":1788388800000,"tag":"0048_nex57_multichannel_communications_hardening","breakpoints":true}
   ]
 }

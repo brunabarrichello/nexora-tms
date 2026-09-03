@@ -71,6 +71,14 @@ class FakeStore implements AsyncStore {
   async recordWebhookAttempt(): Promise<boolean> {
     return true;
   }
+
+  async getCommunicationDelivery(): Promise<null> {
+    return null;
+  }
+
+  async recordCommunicationAttempt(): Promise<boolean> {
+    return true;
+  }
 }
 
 function workerConfig(overrides: Record<string, string> = {}) {
