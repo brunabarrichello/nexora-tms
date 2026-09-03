@@ -13,7 +13,10 @@ interface OperationalDashboardSnapshot {
     readonly inProgress: number;
     readonly overdue: number;
   };
-  readonly occurrences: { readonly open: number; readonly criticalOpen: number };
+  readonly occurrences: {
+    readonly open: number;
+    readonly criticalOpen: number;
+  };
   readonly documents: { readonly blockingFindings: number };
   readonly generatedAt: string;
 }
@@ -22,13 +25,19 @@ type SearchParams = Promise<{ from?: string; to?: string }>;
 
 export const metadata = { title: 'Dashboard operacional' };
 
-export default async function Page({ searchParams }: { searchParams: SearchParams }) {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
   const params = await searchParams;
   const query = new URLSearchParams();
   if (params.from) query.set('from', normalizeBoundary(params.from, false));
   if (params.to) query.set('to', normalizeBoundary(params.to, true));
   const suffix = query.size ? `?${query.toString()}` : '';
-  const result = await apiGet<OperationalDashboardSnapshot>(`/api/v1/analytics/operational${suffix}`);
+  const result = await apiGet<OperationalDashboardSnapshot>(
+    `/api/v1/analytics/operational${suffix}`,
+  );
   const data = result.kind === 'ready' ? result.data : null;
 
   return (
@@ -38,10 +47,13 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
           <span className="eyebrow">Analytics • NEX-58</span>
           <h1>Dashboard operacional</h1>
           <p>
-            Cargas, viagens, ocorrências e bloqueios documentais em uma projeção read-only sobre os dados canônicos do tenant.
+            Cargas, viagens, ocorrências e bloqueios documentais em uma projeção read-only sobre os
+            dados canônicos do tenant.
           </p>
         </div>
-        <span className="status-badge">{data ? 'API conectada' : 'API indisponível'}</span>
+        <span className="status-badge">
+          {data ? 'API conectada' : 'API indisponível'}
+        </span>
       </section>
 
       <section className="panel">
@@ -60,22 +72,45 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
             Até
             <input name="to" type="date" defaultValue={params.to ?? ''} />
           </label>
-          <button className="button button-primary" type="submit">Aplicar</button>
-          <a className="button" href="/analytics/operacional">Últimos 30 dias</a>
+          <button className="button button-primary" type="submit">
+            Aplicar
+          </button>
+          <a className="button" href="/analytics/operacional">
+            Últimos 30 dias
+          </a>
         </form>
       </section>
 
       {data ? (
         <>
           <section className="metric-grid" aria-label="Indicadores operacionais">
-            <Metric label="Cargas no período" value={data.transportRequests.total} detail={`${data.transportRequests.withoutContract} sem contratação`} />
-            <Metric label="Viagens em trânsito" value={data.trips.inProgress} detail={`${data.trips.overdue} atrasadas`} />
-            <Metric label="Ocorrências abertas" value={data.occurrences.open} detail={`${data.occurrences.criticalOpen} críticas`} />
-            <Metric label="Bloqueios documentais" value={data.documents.blockingFindings} detail="Achados atuais de compliance" />
+            <Metric
+              label="Cargas no período"
+              value={data.transportRequests.total}
+              detail={`${data.transportRequests.withoutContract} sem contratação`}
+            />
+            <Metric
+              label="Viagens em trânsito"
+              value={data.trips.inProgress}
+              detail={`${data.trips.overdue} atrasadas`}
+            />
+            <Metric
+              label="Ocorrências abertas"
+              value={data.occurrences.open}
+              detail={`${data.occurrences.criticalOpen} críticas`}
+            />
+            <Metric
+              label="Bloqueios documentais"
+              value={data.documents.blockingFindings}
+              detail="Achados atuais de compliance"
+            />
           </section>
 
           <div className="dashboard-grid">
-            <StatusPanel title="Cargas por status" values={data.transportRequests.byStatus} />
+            <StatusPanel
+              title="Cargas por status"
+              values={data.transportRequests.byStatus}
+            />
             <StatusPanel title="Viagens por status" values={data.trips.byStatus} />
           </div>
 
@@ -87,7 +122,9 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
               </div>
             </div>
             <p>
-              {formatDate(data.period.from)} até {formatDate(data.period.to)}. O tenant é derivado exclusivamente do contexto autenticado; não existe parâmetro para consultar outro tenant.
+              {formatDate(data.period.from)} até {formatDate(data.period.to)}. O tenant é derivado
+              exclusivamente do contexto autenticado; não existe parâmetro para consultar outro
+              tenant.
             </p>
           </section>
         </>
@@ -101,7 +138,15 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
   );
 }
 
-function Metric({ label, value, detail }: { label: string; value: number; detail: string }) {
+function Metric({
+  label,
+  value,
+  detail,
+}: {
+  label: string;
+  value: number;
+  detail: string;
+}) {
   return (
     <article className="metric-card">
       <span>{label}</span>
@@ -111,18 +156,32 @@ function Metric({ label, value, detail }: { label: string; value: number; detail
   );
 }
 
-function StatusPanel({ title, values }: { title: string; values: Readonly<Record<string, number>> }) {
+function StatusPanel({
+  title,
+  values,
+}: {
+  title: string;
+  values: Readonly<Record<string, number>>;
+}) {
   const entries = Object.entries(values);
   return (
     <section className="panel">
-      <div className="panel-header"><h2>{title}</h2></div>
+      <div className="panel-header">
+        <h2>{title}</h2>
+      </div>
       <div className="roadmap-list">
-        {entries.length ? entries.map(([status, count]) => (
-          <div className="roadmap-item" key={status}>
-            <div className="roadmap-copy"><strong>{statusLabel(status)}</strong></div>
-            <span className="status-badge">{count}</span>
-          </div>
-        )) : <p>Nenhum registro no período.</p>}
+        {entries.length ? (
+          entries.map(([status, count]) => (
+            <div className="roadmap-item" key={status}>
+              <div className="roadmap-copy">
+                <strong>{statusLabel(status)}</strong>
+              </div>
+              <span className="status-badge">{count}</span>
+            </div>
+          ))
+        ) : (
+          <p>Nenhum registro no período.</p>
+        )}
       </div>
     </section>
   );
@@ -137,5 +196,8 @@ function normalizeBoundary(value: string, endOfDay: boolean): string {
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return new Intl.DateTimeFormat('pt-BR', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(value));
 }
