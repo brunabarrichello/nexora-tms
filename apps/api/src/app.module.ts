@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 
+import { AnalyticsModule } from './analytics/analytics.module.js';
 import { ApiController } from './api.controller.js';
 import { CapacityModule } from './capacity/capacity.module.js';
 import { DocumentsModule } from './documents/documents.module.js';
@@ -33,6 +34,7 @@ import { TripsModule } from './trips/trips.module.js';
     NotificationsModule,
     ReliabilityModule,
     IntegrationsModule,
+    AnalyticsModule,
   ],
   controllers: [ApiController, HealthController],
 })
