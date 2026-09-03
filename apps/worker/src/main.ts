@@ -1,6 +1,11 @@
 import 'reflect-metadata';
 import { Module } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+
+import {
+  CommunicationProviderRegistry,
+  DeterministicCommunicationProvider,
+} from './communication-delivery.js';
 import { loadWorkerConfig } from './config.js';
 import { createDefaultHandlerRegistry } from './handlers.js';
 import { WorkerHealthServer } from './health.js';
@@ -16,10 +21,21 @@ async function bootstrap(): Promise<void> {
   const logger = new StructuredLogger(config.workerId, config.environment);
   const app = await NestFactory.createApplicationContext(WorkerModule, { logger: false });
   const store = new PgAsyncStore(config.database, config.maxConcurrency);
-  const handlers = createDefaultHandlerRegistry(logger, {
-    port: store,
-    integrationSecretKey: process.env.NEXORA_INTEGRATION_SECRET_KEY,
-  });
+  const communicationProviders = new CommunicationProviderRegistry();
+  if (
+    config.environment !== 'production' &&
+    process.env.NEXORA_ENABLE_DETERMINISTIC_COMMUNICATION_PROVIDER === 'true'
+  ) {
+    communicationProviders.register(new DeterministicCommunicationProvider());
+  }
+  const handlers = createDefaultHandlerRegistry(
+    logger,
+    {
+      port: store,
+      integrationSecretKey: process.env.NEXORA_INTEGRATION_SECRET_KEY,
+    },
+    { port: store, providers: communicationProviders },
+  );
   const runtime = new WorkerRuntime(config, store, handlers, logger);
   const health = new WorkerHealthServer(config, runtime, logger);
   let shuttingDown = false;
