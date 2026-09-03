@@ -7,11 +7,22 @@ import { FinancialAnalyticsController } from './financial-analytics.controller.j
 import { FinancialAnalyticsService } from './financial-analytics.service.js';
 import { OperationalAnalyticsController } from './operational-analytics.controller.js';
 import { OperationalAnalyticsService } from './operational-analytics.service.js';
+import { OperationalReportController } from './operational-report.controller.js';
+import { OperationalReportService } from './operational-report.service.js';
 
 @Module({
   imports: [AuthenticationModule, TenancyModule],
-  controllers: [FinancialAnalyticsController, OperationalAnalyticsController],
-  providers: [FinancialAnalyticsService, OperationalAnalyticsService, TenantRuntimeGateGuard],
-  exports: [FinancialAnalyticsService, OperationalAnalyticsService],
+  controllers: [
+    FinancialAnalyticsController,
+    OperationalAnalyticsController,
+    OperationalReportController,
+  ],
+  providers: [
+    FinancialAnalyticsService,
+    OperationalAnalyticsService,
+    OperationalReportService,
+    TenantRuntimeGateGuard,
+  ],
+  exports: [FinancialAnalyticsService, OperationalAnalyticsService, OperationalReportService],
 })
 export class AnalyticsModule {}
