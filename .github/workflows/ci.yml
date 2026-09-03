@@ -8,25 +8,21 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  nex57-fix:
-    if: ${{ github.event.pull_request.number == 175 }}
-    name: NEX-57 apply formatting and worker contract fix
+  quality:
+    name: Build, typecheck and test
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
     steps:
-      - name: Checkout PR head
+      - name: Checkout
         uses: actions/checkout@v7
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
@@ -39,66 +35,41 @@ jobs:
         with:
           node-version: 24.20.0
 
+      - name: Toolchain doctor
+        run: node scripts/doctor.mjs
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply exact Prettier formatting
-        run: |
-          pnpm exec prettier --write \
-            apps/api/src/notifications/outbound-communications-rbac.controller.spec.ts \
-            apps/api/src/notifications/outbound-communications.controller.ts \
-            apps/api/src/notifications/outbound-communications.service.ts \
-            apps/api/src/notifications/outbound-communications.types.ts \
-            apps/api/src/notifications/outbound-communications.validation.ts
+      - name: Production dependency security audit
+        run: pnpm audit:prod
 
-      - name: Update worker FakeStore contract
-        run: |
-          python - <<'PY'
-          from pathlib import Path
+      - name: Lint
+        run: pnpm lint
 
-          path = Path('apps/worker/src/runtime.test.ts')
-          text = path.read_text()
-          if 'async getCommunicationDelivery()' not in text:
-              needle = """  async recordWebhookAttempt(): Promise<boolean> {
-              return true;
-            }
-          """
-              replacement = needle + """
-            async getCommunicationDelivery(): Promise<null> {
-              return null;
-            }
+      - name: Check formatting
+        run: pnpm format:check
 
-            async recordCommunicationAttempt(): Promise<boolean> {
-              return true;
-            }
-          """
-              if needle not in text:
-                  raise SystemExit('FakeStore insertion point not found')
-              path.write_text(text.replace(needle, replacement))
-          PY
-          pnpm exec prettier --write apps/worker/src/runtime.test.ts
+      - name: Typecheck
+        run: pnpm typecheck
 
-      - name: Commit fixes to PR head
-        env:
-          BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          if git diff --quiet; then
-            echo "No NEX-57 fixes to commit."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add \
-            apps/api/src/notifications/outbound-communications-rbac.controller.spec.ts \
-            apps/api/src/notifications/outbound-communications.controller.ts \
-            apps/api/src/notifications/outbound-communications.service.ts \
-            apps/api/src/notifications/outbound-communications.types.ts \
-            apps/api/src/notifications/outbound-communications.validation.ts \
-            apps/worker/src/runtime.test.ts
-          git commit -m "fix(nex-57): satisfy formatting and worker store contract"
-          git push --no-verify origin "HEAD:${BRANCH}"
+      - name: Test
+        run: pnpm test
 
-      - name: Validate corrected tree
-        run: |
-          pnpm format:check
-          pnpm typecheck
+      - name: Build
+        run: pnpm build
+
+      - name: Validate Docker Compose model
+        run: docker compose config --quiet
+
+      - name: Generate Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:generate
+
+      - name: Check Drizzle migrations
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: pnpm --filter @nexora/database db:check
+
+      - name: Verify Drizzle artifacts are versioned
+        if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
+        run: git diff --exit-code -- packages/database/migrations

@@ -1,0 +1,392 @@
+name: Neon Multichannel Communications Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'apps/api/src/notifications/**'
+      - 'apps/api/src/tenancy/rbac-catalog.ts'
+      - 'apps/worker/src/communication-delivery*'
+      - 'apps/worker/src/handlers.ts'
+      - 'apps/worker/src/main.ts'
+      - 'apps/worker/src/store.ts'
+      - 'apps/worker/src/runtime.test.ts'
+      - 'packages/database/migrations/**'
+      - 'packages/database/ci/nex54-in-app-notifications-fixtures.sql'
+      - 'packages/database/ci/nex57-multichannel-communications-fixtures.sql'
+      - '.github/workflows/neon-multichannel-communications-gate.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: neon-multichannel-communications-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+
+jobs:
+  multichannel:
+    name: Tenant-safe email, WhatsApp and SMS delivery
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v7
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon API secret
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
+
+      - name: Set ephemeral branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-multichannel-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - name: Create isolated Neon branch — attempt 1
+        id: admin1
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off after transient Neon capacity failure
+        if: ${{ steps.admin1.outcome != 'success' }}
+        shell: bash
+        run: sleep 30
+
+      - name: Create isolated Neon branch — attempt 2
+        id: admin2
+        if: ${{ steps.admin1.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Back off before final Neon branch attempt
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        shell: bash
+        run: sleep 60
+
+      - name: Create isolated Neon branch — attempt 3
+        id: admin3
+        if: ${{ steps.admin1.outcome != 'success' && steps.admin2.outcome != 'success' }}
+        continue-on-error: true
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: neondb_owner
+          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Require isolated Neon branch
+        env:
+          BRANCH_ID: ${{ steps.admin1.outputs.branch_id || steps.admin2.outputs.branch_id || steps.admin3.outputs.branch_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${BRANCH_ID:-}" || { echo "Unable to allocate an isolated Neon branch after bounded retries." >&2; exit 1; }
+
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+
+      - name: Bootstrap migration capability
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$ADMIN_DATABASE_URL"
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Resolve migrator connection
+        id: migrator
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_migrator
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Apply full migration chain
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Seed NEX-54 identity baseline and NEX-57 recipients
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex54-in-app-notifications-fixtures.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex57-multichannel-communications-fixtures.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          INSERT INTO role_permissions (tenant_id, role_id, permission_id)
+          SELECT r.tenant_id, r.id, p.id
+            FROM roles r
+            JOIN permissions p ON p.key = 'notifications.read'
+           WHERE r.code IN ('tenant_admin','operations_manager','dispatcher','finance_manager','auditor','viewer')
+          ON CONFLICT DO NOTHING;
+          INSERT INTO role_permissions (tenant_id, role_id, permission_id)
+          SELECT r.tenant_id, r.id, p.id
+            FROM roles r
+            JOIN permissions p ON p.key = 'notifications.write'
+           WHERE r.code IN ('tenant_admin','operations_manager','dispatcher')
+          ON CONFLICT DO NOTHING;
+          SQL
+
+      - name: Verify schema, RLS and least privilege
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE v_missing integer;
+          BEGIN
+            SELECT count(*) INTO v_missing
+              FROM (VALUES
+                ('communication_provider_routes'),
+                ('communication_templates'),
+                ('communication_preferences'),
+                ('outbound_communications'),
+                ('outbound_communication_attempts')
+              ) AS expected(name)
+             WHERE NOT EXISTS (
+               SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                WHERE n.nspname='public' AND c.relname=expected.name AND c.relrowsecurity
+             );
+            IF v_missing <> 0 THEN RAISE EXCEPTION 'NEX-57 tables must all have RLS enabled'; END IF;
+            IF has_column_privilege('nexora_app','public.outbound_communications','destination','SELECT')
+               OR has_column_privilege('nexora_app','public.outbound_communications','variables','SELECT')
+               OR has_column_privilege('nexora_app','public.outbound_communications','rendered_body','SELECT') THEN
+              RAISE EXCEPTION 'nexora_app must not read communication PII payload columns directly';
+            END IF;
+            IF has_table_privilege('nexora_worker','public.outbound_communications','SELECT')
+               OR has_table_privilege('nexora_worker','public.outbound_communication_attempts','SELECT') THEN
+              RAISE EXCEPTION 'nexora_worker must not have direct communication table SELECT';
+            END IF;
+            IF NOT has_function_privilege('nexora_worker','public.nexora_worker_get_communication(uuid)','EXECUTE')
+               OR NOT has_function_privilege('nexora_worker','public.nexora_worker_record_communication_attempt(uuid,integer,text,text,integer,integer,text,boolean)','EXECUTE') THEN
+              RAISE EXCEPTION 'worker communication function grants are incomplete';
+            END IF;
+            IF has_function_privilege('nexora_app','public.nexora_worker_get_communication(uuid)','EXECUTE') THEN
+              RAISE EXCEPTION 'nexora_app must not execute worker delivery functions';
+            END IF;
+            IF NOT has_function_privilege('nexora_app','public.nexora_queue_communication(uuid,text,uuid,jsonb,text,integer)','EXECUTE') THEN
+              RAISE EXCEPTION 'nexora_app queue function grant is missing';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Resolve nexora_app connection
+        id: app
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_app
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Queue allowed and blocked communications as nexora_app
+        env:
+          APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$APP_DATABASE_URL"
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT set_config('app.tenant_id','77000000-0000-4000-8000-000000000001',false);
+          SELECT set_config('app.user_id','77000000-0000-4000-8000-000000000101',false);
+          SELECT nexora_upsert_communication_provider_route('whatsapp','deterministic','active');
+          SELECT nexora_create_communication_template(
+            'nex57.gate.trip_started','whatsapp','pt-BR',1,NULL,'Trip {{tripCode}} started','active'
+          );
+          SELECT nexora_upsert_communication_preference(
+            'driver','77000000-0000-4000-8000-000000000821'::uuid,'whatsapp',true,
+            'granted','ci-gate',now(),'nex57-v1'
+          );
+          SELECT * FROM nexora_queue_communication(
+            (SELECT id FROM communication_templates WHERE template_key='nex57.gate.trip_started' AND channel='whatsapp' AND version=1),
+            'driver','77000000-0000-4000-8000-000000000821'::uuid,
+            '{"tripCode":"TRIP-57"}'::jsonb,'nex57-gate-allowed',3
+          );
+          SELECT nexora_upsert_communication_preference(
+            'driver','77000000-0000-4000-8000-000000000821'::uuid,'whatsapp',false,
+            'denied','ci-gate',NULL,'nex57-v1'
+          );
+          SELECT * FROM nexora_queue_communication(
+            (SELECT id FROM communication_templates WHERE template_key='nex57.gate.trip_started' AND channel='whatsapp' AND version=1),
+            'driver','77000000-0000-4000-8000-000000000821'::uuid,
+            '{"tripCode":"TRIP-58"}'::jsonb,'nex57-gate-blocked',3
+          );
+          SQL
+
+      - name: Verify queue, idempotency and blocking invariants
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          DECLARE v_allowed outbound_communications%ROWTYPE; v_blocked outbound_communications%ROWTYPE;
+          BEGIN
+            SELECT * INTO STRICT v_allowed FROM outbound_communications WHERE idempotency_key='nex57-gate-allowed';
+            SELECT * INTO STRICT v_blocked FROM outbound_communications WHERE idempotency_key='nex57-gate-blocked';
+            IF v_allowed.status <> 'queued' OR v_allowed.durable_job_id IS NULL OR v_allowed.outbox_event_id IS NULL THEN
+              RAISE EXCEPTION 'allowed communication was not durably queued';
+            END IF;
+            IF v_allowed.destination <> '551199991002' OR v_allowed.provider_code <> 'deterministic' OR v_allowed.rendered_body <> 'Trip TRIP-57 started' THEN
+              RAISE EXCEPTION 'destination/provider/template rendering invariant failed';
+            END IF;
+            IF v_blocked.status <> 'blocked' OR v_blocked.blocked_reason <> 'channel_preference_not_granted' OR v_blocked.durable_job_id IS NOT NULL THEN
+              RAISE EXCEPTION 'consent blocking invariant failed';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM durable_jobs WHERE id=v_allowed.durable_job_id AND job_type='notifications.communication.deliver') THEN
+              RAISE EXCEPTION 'durable communication job missing';
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM outbox_events WHERE id=v_allowed.outbox_event_id AND event_type='notifications.communication.queued') THEN
+              RAISE EXCEPTION 'communication outbox event missing';
+            END IF;
+          END $$;
+          SQL
+
+      - name: Resolve nexora_worker connection
+        id: worker
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch: production
+          branch_name: ${{ env.NEON_TEST_BRANCH }}
+          database: neondb
+          role: nexora_worker
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Verify worker delivery contract and attempt recording
+        env:
+          WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$WORKER_DATABASE_URL"
+          COMMUNICATION_ID="$(psql "$OWNER_DATABASE_URL" -Atqc "select id from outbound_communications where idempotency_key='nex57-gate-allowed'")"
+          test -n "$COMMUNICATION_ID"
+          psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -v communication_id="$COMMUNICATION_ID" <<'SQL'
+          SELECT * FROM nexora_worker_get_communication(:'communication_id'::uuid);
+          SELECT nexora_worker_record_communication_attempt(
+            :'communication_id'::uuid,1,'success','det-nex57-gate',202,5,NULL,true
+          );
+          SQL
+          STATUS="$(psql "$OWNER_DATABASE_URL" -Atqc "select status from outbound_communications where id='$COMMUNICATION_ID'::uuid")"
+          ATTEMPTS="$(psql "$OWNER_DATABASE_URL" -Atqc "select count(*) from outbound_communication_attempts where communication_id='$COMMUNICATION_ID'::uuid")"
+          AUDIT_COUNT="$(psql "$OWNER_DATABASE_URL" -Atqc "select count(*) from audit_events where entity_id='$COMMUNICATION_ID' and action='notification.communication.sent' and source='worker'")"
+          test "$STATUS" = 'sent'
+          test "$ATTEMPTS" = '1'
+          test "$AUDIT_COUNT" = '1'
+
+      - name: Verify cross-tenant isolation as nexora_app
+        env:
+          APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMUNICATION_ID="$(psql "$OWNER_DATABASE_URL" -Atqc "select id from outbound_communications where idempotency_key='nex57-gate-allowed'")"
+          RESULT="$(psql "$APP_DATABASE_URL" -At -v ON_ERROR_STOP=1 <<SQL
+          SELECT set_config('app.tenant_id','77000000-0000-4000-8000-000000000002',false);
+          SELECT set_config('app.user_id','77000000-0000-4000-8000-000000000201',false);
+          SELECT count(*)::text || '|' || coalesce(nexora_resolve_communication_destination(
+            'driver','77000000-0000-4000-8000-000000000821'::uuid,'whatsapp'
+          ),'')
+          FROM outbound_communications
+          WHERE id='$COMMUNICATION_ID'::uuid;
+          SQL
+          )"
+          LAST_LINE="$(printf '%s\n' "$RESULT" | tail -n 1)"
+          test "$LAST_LINE" = '0|'
+
+      - name: Run communication provider unit coverage
+        run: pnpm --filter @nexora/worker test
+
+      - name: Gate summary
+        shell: bash
+        run: |
+          {
+            echo '## NEX-57 — Multichannel communications'
+            echo '- email/WhatsApp/SMS schema + RLS: verified'
+            echo '- PII least privilege for nexora_app/nexora_worker: verified'
+            echo '- recipient destination resolution: verified'
+            echo '- consent/preference blocking: verified'
+            echo '- transactional Outbox + Durable Job queueing: verified'
+            echo '- deterministic provider delivery contract: verified'
+            echo '- append-only attempt + audit trail: verified'
+            echo '- cross-tenant isolation: verified'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Delete isolated Neon branch
+        if: ${{ always() && (steps.admin1.outputs.branch_id != '' || steps.admin2.outputs.branch_id != '' || steps.admin3.outputs.branch_id != '') }}
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.admin1.outputs.branch_id || steps.admin2.outputs.branch_id || steps.admin3.outputs.branch_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
