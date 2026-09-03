@@ -171,7 +171,9 @@ export class OperationalAnalyticsService {
   }
 }
 
-function parsePeriod(query: OperationalDashboardQuery): { from: Date; to: Date } {
+function parsePeriod(
+  query: OperationalDashboardQuery,
+): { from: Date; to: Date } {
   const to = parseDate(query.to, 'to') ?? new Date();
   const from =
     parseDate(query.from, 'from') ??
