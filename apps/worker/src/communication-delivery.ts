@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-import type { HandlerContext, WorkHandler } from './handlers.js';
+import type { WorkHandler } from './handlers.js';
 
 export type CommunicationChannel = 'email' | 'whatsapp' | 'sms';
 
@@ -109,9 +109,9 @@ export function createCommunicationDeliveryHandler(
       return;
     }
 
-    const provider = dependencies.providers.resolve(target.provider_code, target.channel);
     const startedAt = Date.now();
     try {
+      const provider = dependencies.providers.resolve(target.provider_code, target.channel);
       const result = await provider.send({
         tenantId: target.tenant_id,
         channel: target.channel,
