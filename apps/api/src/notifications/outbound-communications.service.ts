@@ -181,7 +181,10 @@ export class OutboundCommunicationsService {
     });
   }
 
-  async setTemplateStatus(templateIdValue: string, body: unknown): Promise<CommunicationTemplateRecord> {
+  async setTemplateStatus(
+    templateIdValue: string,
+    body: unknown,
+  ): Promise<CommunicationTemplateRecord> {
     const templateId = requireUuid(templateIdValue, 'templateId');
     const input = parseTemplateStatus(body);
     const context = this.tenantContext.require();

@@ -118,8 +118,13 @@ export function parseTemplateStatus(body: unknown): SetCommunicationTemplateStat
 
 export function parsePreference(body: unknown): UpsertCommunicationPreferenceInput {
   const record = requireRecord(body);
-  const recipientType = parseRecipientType(requireString(record.recipientType, 'recipientType', 3, 30));
-  const recipientId = requireUuid(requireString(record.recipientId, 'recipientId', 36, 36), 'recipientId');
+  const recipientType = parseRecipientType(
+    requireString(record.recipientType, 'recipientType', 3, 30),
+  );
+  const recipientId = requireUuid(
+    requireString(record.recipientId, 'recipientId', 36, 36),
+    'recipientId',
+  );
   const channel = parseChannel(requireString(record.channel, 'channel', 3, 20));
   if (typeof record.enabled !== 'boolean') {
     throw new BadRequestException('enabled must be a boolean');
@@ -151,9 +156,17 @@ export function parsePreference(body: unknown): UpsertCommunicationPreferenceInp
 
 export function parseQueueCommunication(body: unknown): QueueCommunicationInput {
   const record = requireRecord(body);
-  const templateId = requireUuid(requireString(record.templateId, 'templateId', 36, 36), 'templateId');
-  const recipientType = parseRecipientType(requireString(record.recipientType, 'recipientType', 3, 30));
-  const recipientId = requireUuid(requireString(record.recipientId, 'recipientId', 36, 36), 'recipientId');
+  const templateId = requireUuid(
+    requireString(record.templateId, 'templateId', 36, 36),
+    'templateId',
+  );
+  const recipientType = parseRecipientType(
+    requireString(record.recipientType, 'recipientType', 3, 30),
+  );
+  const recipientId = requireUuid(
+    requireString(record.recipientId, 'recipientId', 36, 36),
+    'recipientId',
+  );
   const variables = record.variables === undefined ? {} : requireRecord(record.variables);
   const idempotencyKey = requireString(record.idempotencyKey, 'idempotencyKey', 3, 180);
   const maxAttempts =
@@ -178,16 +191,13 @@ function requireRecord(value: unknown): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
-function requireString(
-  value: unknown,
-  field: string,
-  minimum: number,
-  maximum: number,
-): string {
+function requireString(value: unknown, field: string, minimum: number, maximum: number): string {
   if (typeof value !== 'string') throw new BadRequestException(`${field} must be a string`);
   const normalized = value.trim();
   if (normalized.length < minimum || normalized.length > maximum) {
-    throw new BadRequestException(`${field} must contain between ${minimum} and ${maximum} characters`);
+    throw new BadRequestException(
+      `${field} must contain between ${minimum} and ${maximum} characters`,
+    );
   }
   return normalized;
 }

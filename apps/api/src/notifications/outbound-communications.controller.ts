@@ -73,10 +73,7 @@ export class OutboundCommunicationsController {
   }
 
   @Get('communications/:communicationId/attempts')
-  listAttempts(
-    @Param('communicationId') communicationId: string,
-    @Query('limit') limit?: string,
-  ) {
+  listAttempts(@Param('communicationId') communicationId: string, @Query('limit') limit?: string) {
     return this.communications.listAttempts(communicationId, limit);
   }
 }

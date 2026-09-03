@@ -3,12 +3,7 @@ export type CommunicationRecipientType = 'driver' | 'party_contact';
 export type CommunicationTemplateStatus = 'draft' | 'active' | 'retired';
 export type CommunicationConsentStatus = 'granted' | 'denied' | 'unknown';
 export type OutboundCommunicationStatus =
-  | 'queued'
-  | 'retry_wait'
-  | 'sent'
-  | 'failed'
-  | 'blocked'
-  | 'cancelled';
+  'queued' | 'retry_wait' | 'sent' | 'failed' | 'blocked' | 'cancelled';
 
 export interface CommunicationProviderRouteRecord {
   readonly id: string;
