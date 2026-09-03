@@ -35,6 +35,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
     `/api/v1/analytics/operational${suffix}`,
   );
   const data = result.kind === 'ready' ? result.data : null;
+  const message = result.kind === 'ready' ? null : result.message;
 
   return (
     <div className="page-stack">
@@ -122,7 +123,7 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
       ) : (
         <section className="panel">
           <h2>Dashboard indisponível</h2>
-          <p>{result.message}</p>
+          <p>{message}</p>
         </section>
       )}
     </div>
