@@ -47,8 +47,8 @@ export default async function Page({
           <span className="eyebrow">Analytics • NEX-58</span>
           <h1>Dashboard operacional</h1>
           <p>
-            Cargas, viagens, ocorrências e bloqueios documentais em uma projeção read-only sobre os
-            dados canônicos do tenant.
+            Cargas, viagens, ocorrências e bloqueios documentais em uma
+            projeção read-only sobre os dados canônicos do tenant.
           </p>
         </div>
         <span className="status-badge">
@@ -83,7 +83,10 @@ export default async function Page({
 
       {data ? (
         <>
-          <section className="metric-grid" aria-label="Indicadores operacionais">
+          <section
+            className="metric-grid"
+            aria-label="Indicadores operacionais"
+          >
             <Metric
               label="Cargas no período"
               value={data.transportRequests.total}
@@ -111,7 +114,10 @@ export default async function Page({
               title="Cargas por status"
               values={data.transportRequests.byStatus}
             />
-            <StatusPanel title="Viagens por status" values={data.trips.byStatus} />
+            <StatusPanel
+              title="Viagens por status"
+              values={data.trips.byStatus}
+            />
           </div>
 
           <section className="panel">
@@ -122,9 +128,9 @@ export default async function Page({
               </div>
             </div>
             <p>
-              {formatDate(data.period.from)} até {formatDate(data.period.to)}. O tenant é derivado
-              exclusivamente do contexto autenticado; não existe parâmetro para consultar outro
-              tenant.
+              {formatDate(data.period.from)} até {formatDate(data.period.to)}. O
+              tenant é derivado exclusivamente do contexto autenticado; não
+              existe parâmetro para consultar outro tenant.
             </p>
           </section>
         </>
@@ -188,7 +194,9 @@ function StatusPanel({
 }
 
 function statusLabel(value: string): string {
-  return value.replaceAll('_', ' ').replace(/^./, (letter) => letter.toUpperCase());
+  return value
+    .replaceAll('_', ' ')
+    .replace(/^./, (letter) => letter.toUpperCase());
 }
 
 function normalizeBoundary(value: string, endOfDay: boolean): string {
