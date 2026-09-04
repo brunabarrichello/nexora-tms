@@ -8,10 +8,7 @@ describe('parseAdvancedKpisQuery', () => {
     const result = parseAdvancedKpisQuery({});
     assert.equal(result.to.getTime() - result.from.getTime(), 30 * 86_400_000);
     assert.equal(result.comparisonTo.getTime(), result.from.getTime());
-    assert.equal(
-      result.comparisonTo.getTime() - result.comparisonFrom.getTime(),
-      30 * 86_400_000,
-    );
+    assert.equal(result.comparisonTo.getTime() - result.comparisonFrom.getTime(), 30 * 86_400_000);
   });
 
   it('rejects an inverted period', () => {

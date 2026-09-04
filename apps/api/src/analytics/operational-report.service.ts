@@ -89,10 +89,7 @@ export class OperationalReportService {
 
   async getReport(query: OperationalReportQuery): Promise<OperationalReportResult> {
     const parsed = parseOperationalReportQuery(query);
-    const filters: string[] = [
-      'r.created_at >= $1::timestamptz',
-      'r.created_at < $2::timestamptz',
-    ];
+    const filters: string[] = ['r.created_at >= $1::timestamptz', 'r.created_at < $2::timestamptz'];
     const params: unknown[] = [parsed.from.toISOString(), parsed.to.toISOString()];
 
     const addSingle = (sql: string, value: unknown) => {
@@ -183,7 +180,9 @@ export class OperationalReportService {
   }
 }
 
-export function parseOperationalReportQuery(query: OperationalReportQuery): ParsedOperationalReportQuery {
+export function parseOperationalReportQuery(
+  query: OperationalReportQuery,
+): ParsedOperationalReportQuery {
   const to = parseDate(query.to, 'to') ?? new Date();
   const from = parseDate(query.from, 'from') ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
   if (from >= to) throw new BadRequestException('from must be earlier than to');
@@ -236,7 +235,12 @@ function normalizeTextFilter(value: string | undefined): string | undefined {
   return normalized;
 }
 
-function parsePositiveInt(value: string | undefined, field: string, fallback: number, max: number): number {
+function parsePositiveInt(
+  value: string | undefined,
+  field: string,
+  fallback: number,
+  max: number,
+): number {
   if (!value?.trim()) return fallback;
   const parsed = Number(value);
   if (!Number.isInteger(parsed) || parsed < 1 || parsed > max) {

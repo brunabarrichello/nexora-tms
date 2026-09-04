@@ -14,8 +14,24 @@ import { OperationalReportService } from './operational-report.service.js';
 
 @Module({
   imports: [AuthenticationModule, TenancyModule],
-  controllers: [AdvancedKpisController, FinancialAnalyticsController, OperationalAnalyticsController, OperationalReportController],
-  providers: [AdvancedKpisService, FinancialAnalyticsService, OperationalAnalyticsService, OperationalReportService, TenantRuntimeGateGuard],
-  exports: [AdvancedKpisService, FinancialAnalyticsService, OperationalAnalyticsService, OperationalReportService],
+  controllers: [
+    AdvancedKpisController,
+    FinancialAnalyticsController,
+    OperationalAnalyticsController,
+    OperationalReportController,
+  ],
+  providers: [
+    AdvancedKpisService,
+    FinancialAnalyticsService,
+    OperationalAnalyticsService,
+    OperationalReportService,
+    TenantRuntimeGateGuard,
+  ],
+  exports: [
+    AdvancedKpisService,
+    FinancialAnalyticsService,
+    OperationalAnalyticsService,
+    OperationalReportService,
+  ],
 })
 export class AnalyticsModule {}
