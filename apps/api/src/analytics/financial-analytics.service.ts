@@ -80,12 +80,11 @@ export class FinancialAnalyticsService {
     const context = this.tenantContext.require();
 
     return this.database.withTenantContext(context, async (client) => {
-      const values = [
-        parsed.from.toISOString(),
-        parsed.to.toISOString(),
-        parsed.customerPartyId,
-      ];
-      const indicators = await client.query<FinancialIndicatorRow>(financialIndicatorsSql(), values);
+      const values = [parsed.from.toISOString(), parsed.to.toISOString(), parsed.customerPartyId];
+      const indicators = await client.query<FinancialIndicatorRow>(
+        financialIndicatorsSql(),
+        values,
+      );
       const customerOptions = await client.query<CustomerOptionRow>(customerOptionsSql(), [
         parsed.from.toISOString(),
         parsed.to.toISOString(),
@@ -130,8 +129,7 @@ export function parseFinancialAnalyticsQuery(
   query: FinancialAnalyticsQuery,
 ): ParsedFinancialAnalyticsQuery {
   const to = parseDate(query.to, 'to') ?? new Date();
-  const from =
-    parseDate(query.from, 'from') ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const from = parseDate(query.from, 'from') ?? new Date(to.getTime() - 30 * 24 * 60 * 60 * 1000);
   const customerPartyId = parseOptionalUuid(query.customerPartyId, 'customerPartyId');
 
   if (from >= to) {
@@ -157,9 +155,7 @@ function parseOptionalUuid(value: string | undefined, field: string): string | n
   if (!value?.trim()) return null;
   const normalized = value.trim().toLowerCase();
   if (
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
-      normalized,
-    )
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(normalized)
   ) {
     throw new BadRequestException(`${field} must be a valid UUID`);
   }

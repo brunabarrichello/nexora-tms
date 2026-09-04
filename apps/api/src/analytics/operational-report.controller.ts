@@ -1,7 +1,10 @@
 import { Controller, Get, Query } from '@nestjs/common';
 
 import { TenantAuthorized } from '../security/tenant-authorized.decorator.js';
-import { OperationalReportService, type OperationalReportResult } from './operational-report.service.js';
+import {
+  OperationalReportService,
+  type OperationalReportResult,
+} from './operational-report.service.js';
 
 @Controller('api/v1/analytics')
 @TenantAuthorized('trips.read')

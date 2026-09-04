@@ -33,10 +33,7 @@ test('operational report rejects invalid customer', () => {
 });
 
 test('operational report rejects invalid status', () => {
-  assert.throws(
-    () => parseOperationalReportQuery({ status: 'unknown' }),
-    /status must be one of/,
-  );
+  assert.throws(() => parseOperationalReportQuery({ status: 'unknown' }), /status must be one of/);
 });
 
 test('operational report rejects periods longer than 366 days', () => {

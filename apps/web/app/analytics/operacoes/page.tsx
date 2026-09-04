@@ -45,7 +45,9 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
     if (value) query.set(key, value);
   }
   const suffix = query.size ? `?${query.toString()}` : '';
-  const result = await apiGet<OperationalReportResult>(`/api/v1/analytics/operational-report${suffix}`);
+  const result = await apiGet<OperationalReportResult>(
+    `/api/v1/analytics/operational-report${suffix}`,
+  );
   const data = result.kind === 'ready' ? result.data : null;
   const message = result.kind === 'ready' ? null : result.message;
   const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
@@ -58,7 +60,9 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
           <h1>Relatório operacional</h1>
           <p>Consulta paginada de cargas, contratação e viagem para conferência operacional.</p>
         </div>
-        <span className="status-badge">{data ? `${data.total} operações` : 'API indisponível'}</span>
+        <span className="status-badge">
+          {data ? `${data.total} operações` : 'API indisponível'}
+        </span>
       </section>
 
       <section className="panel">
@@ -100,8 +104,12 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
               <option value="cancelled">Cancelada</option>
             </select>
           </label>
-          <button className="button button-primary" type="submit">Aplicar</button>
-          <a className="button" href="/analytics/operacoes">Últimos 30 dias</a>
+          <button className="button button-primary" type="submit">
+            Aplicar
+          </button>
+          <a className="button" href="/analytics/operacoes">
+            Últimos 30 dias
+          </a>
         </form>
       </section>
 
@@ -110,7 +118,9 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
           <div className="panel-header">
             <div>
               <span className="eyebrow">Resultado</span>
-              <h2>Página {data.page} de {totalPages}</h2>
+              <h2>
+                Página {data.page} de {totalPages}
+              </h2>
             </div>
             <span className="status-badge">{data.rows.length} nesta página</span>
           </div>
@@ -130,24 +140,45 @@ export default async function Page({ searchParams }: { searchParams: SearchParam
               <tbody>
                 {data.rows.map((row) => (
                   <tr key={row.transportRequestId}>
-                    <td><strong>{row.cargoDescription}</strong><br /><small>{row.requestStatus}</small></td>
+                    <td>
+                      <strong>{row.cargoDescription}</strong>
+                      <br />
+                      <small>{row.requestStatus}</small>
+                    </td>
                     <td>{row.customer}</td>
                     <td>{row.origin}</td>
                     <td>{row.destination}</td>
                     <td>{row.contractStatus ?? '—'}</td>
                     <td>{row.tripCode ? `${row.tripCode} · ${row.tripStatus}` : '—'}</td>
-                    <td>{formatDate(row.plannedPickupAt)}<br />até {formatDate(row.plannedDeliveryAt)}</td>
+                    <td>
+                      {formatDate(row.plannedPickupAt)}
+                      <br />
+                      até {formatDate(row.plannedDeliveryAt)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-          {!data.rows.length ? <p>Nenhuma operação encontrada para os filtros selecionados.</p> : null}
+          {!data.rows.length ? (
+            <p>Nenhuma operação encontrada para os filtros selecionados.</p>
+          ) : null}
           <div className="filter-bar">
-            {data.page > 1 ? <a className="button" href={buildPageHref(params, data.page - 1)}>Anterior</a> : null}
-            {data.page < totalPages ? <a className="button button-primary" href={buildPageHref(params, data.page + 1)}>Próxima</a> : null}
+            {data.page > 1 ? (
+              <a className="button" href={buildPageHref(params, data.page - 1)}>
+                Anterior
+              </a>
+            ) : null}
+            {data.page < totalPages ? (
+              <a className="button button-primary" href={buildPageHref(params, data.page + 1)}>
+                Próxima
+              </a>
+            ) : null}
           </div>
-          <p>Janela: {formatDate(data.period.from)} até {formatDate(data.period.to)}. Tenant derivado do contexto autenticado e protegido por RLS.</p>
+          <p>
+            Janela: {formatDate(data.period.from)} até {formatDate(data.period.to)}. Tenant derivado
+            do contexto autenticado e protegido por RLS.
+          </p>
         </section>
       ) : (
         <section className="panel">
@@ -164,7 +195,9 @@ function normalizeBoundary(value: string, endOfDay: boolean): string {
 }
 
 function formatDate(value: string): string {
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(value));
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(
+    new Date(value),
+  );
 }
 
 function buildPageHref(params: Awaited<SearchParams>, page: number): string {

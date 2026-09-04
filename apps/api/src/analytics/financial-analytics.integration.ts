@@ -53,9 +53,7 @@ async function run(): Promise<void> {
     assert.equal(brlA.contractedOperationCount, 1);
     assert.equal(brlA.marginEligibleOperationCount, 1);
     assert.equal(brlA.invoicedReceivableCount, 1);
-    assert.deepEqual(tenantA.customers, [
-      { id: CUSTOMER_A, name: 'NEX-50 Customer A' },
-    ]);
+    assert.deepEqual(tenantA.customers, [{ id: CUSTOMER_A, name: 'NEX-50 Customer A' }]);
 
     const tenantB = await financialB.getFinancialIndicators({
       from: '2026-09-01T00:00:00.000Z',
@@ -69,7 +67,10 @@ async function run(): Promise<void> {
     assert.equal(brlB.contractedCostAmount, '0.00');
     assert.equal(brlB.marginAmount, '0.00');
     assert.equal(brlB.marginPercentage, null);
-    assert.equal(tenantB.customers.some((customer) => customer.id === CUSTOMER_A), false);
+    assert.equal(
+      tenantB.customers.some((customer) => customer.id === CUSTOMER_A),
+      false,
+    );
   } finally {
     await database.onModuleDestroy();
   }

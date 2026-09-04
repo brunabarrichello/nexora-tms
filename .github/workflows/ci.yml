@@ -18,7 +18,7 @@ jobs:
   quality:
     name: Build, typecheck and test
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout
@@ -38,17 +38,51 @@ jobs:
       - name: Toolchain doctor
         run: node scripts/doctor.mjs
 
+      - name: Configure npm registry
+        run: pnpm config set registry https://registry.npmjs.org/
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Production dependency security audit
-        run: pnpm audit:prod
+        shell: bash
+        run: |
+          set -uo pipefail
+
+          for attempt in 1 2 3; do
+            echo "Security audit attempt ${attempt}/3"
+            audit_log="$(mktemp)"
+
+            if pnpm audit:prod 2>&1 | tee "$audit_log"; then
+              rm -f "$audit_log"
+              echo "Production dependency security audit: PASS"
+              exit 0
+            fi
+
+            if grep -Eiq 'timeout|timed out|operation was aborted|ECONNRESET|ECONNREFUSED|ETIMEDOUT|ENETUNREACH|EAI_AGAIN|registry.npmjs.org' "$audit_log"; then
+              if [ "$attempt" -lt 3 ]; then
+                echo "npm advisory registry/network failure detected; retrying in 30 seconds..."
+                rm -f "$audit_log"
+                sleep 30
+                continue
+              fi
+              echo "Production dependency security audit: FAIL — advisory registry/network unavailable after 3 attempts."
+              rm -f "$audit_log"
+              exit 2
+            fi
+
+            echo "Production dependency security audit: FAIL — vulnerability audit returned a non-network failure."
+            rm -f "$audit_log"
+            exit 1
+          done
+
+          exit 2
 
       - name: Lint
         run: pnpm lint
 
       - name: Check formatting
-        run: pnpm format:check
+        run: pnpm exec prettier --check . --ignore-unknown
 
       - name: Typecheck
         run: pnpm typecheck
