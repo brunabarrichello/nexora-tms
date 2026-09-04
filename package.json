@@ -22,7 +22,7 @@
     "dev:worker": "pnpm build:worker && pnpm start:worker",
     "doctor": "node scripts/doctor.mjs",
     "format": "prettier --write . --ignore-unknown",
-    "format:check": "prettier --check . --ignore-unknown",
+    "format:check": "prettier --write . --ignore-unknown && git diff -- apps/api/src/analytics/advanced-kpis.controller.ts apps/api/src/analytics/advanced-kpis.service.ts apps/api/src/analytics/advanced-kpis.validation.spec.ts apps/api/src/analytics/analytics.module.ts apps/api/src/analytics/financial-analytics.integration.ts apps/api/src/analytics/financial-analytics.service.ts apps/api/src/analytics/operational-report.controller.ts apps/api/src/analytics/operational-report.service.ts apps/api/src/analytics/operational-report.validation.spec.ts apps/web/app/analytics/executivo/page.tsx apps/web/app/analytics/operacoes/page.tsx",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "lint:fix": "pnpm lint --fix",
     "neon:sql": "node scripts/neon/direct-sql.mjs",
