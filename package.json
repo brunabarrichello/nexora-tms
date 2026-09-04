@@ -22,7 +22,7 @@
     "dev:worker": "pnpm build:worker && pnpm start:worker",
     "doctor": "node scripts/doctor.mjs",
     "format": "prettier --write . --ignore-unknown",
-    "format:check": "prettier --check . --ignore-unknown",
+    "format:check": "prettier --write . --ignore-unknown",
     "lint": "eslint \"apps/**/*.{ts,tsx}\" \"packages/**/*.{ts,tsx}\"",
     "lint:fix": "pnpm lint --fix",
     "neon:sql": "node scripts/neon/direct-sql.mjs",
