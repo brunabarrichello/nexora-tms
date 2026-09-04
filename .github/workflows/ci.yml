@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -48,30 +48,7 @@ jobs:
         run: pnpm lint
 
       - name: Check formatting
-        run: prettier --write . --ignore-unknown
-
-      - name: Commit deterministic formatting
-        if: ${{ github.event_name == 'pull_request' && github.head_ref == 'feat/nex-61-advanced-kpis' }}
-        run: |
-          if git diff --quiet; then
-            echo "No formatting changes detected."
-            exit 0
-          fi
-          mkdir -p /tmp/nexora-format
-          for file in apps/api/src/analytics/advanced-kpis.controller.ts apps/api/src/analytics/advanced-kpis.service.ts apps/api/src/analytics/advanced-kpis.validation.spec.ts apps/api/src/analytics/analytics.module.ts apps/api/src/analytics/financial-analytics.integration.ts apps/api/src/analytics/financial-analytics.service.ts apps/api/src/analytics/operational-report.controller.ts apps/api/src/analytics/operational-report.service.ts apps/api/src/analytics/operational-report.validation.spec.ts apps/web/app/analytics/executivo/page.tsx apps/web/app/analytics/operacoes/page.tsx; do
-            mkdir -p "/tmp/nexora-format/$(dirname "$file")"
-            cp "$file" "/tmp/nexora-format/$file"
-          done
-          git fetch origin "refs/heads/${{ github.head_ref }}:refs/remotes/origin/${{ github.head_ref }}"
-          git reset --hard "origin/${{ github.head_ref }}"
-          for file in apps/api/src/analytics/advanced-kpis.controller.ts apps/api/src/analytics/advanced-kpis.service.ts apps/api/src/analytics/advanced-kpis.validation.spec.ts apps/api/src/analytics/analytics.module.ts apps/api/src/analytics/financial-analytics.integration.ts apps/api/src/analytics/financial-analytics.service.ts apps/api/src/analytics/operational-report.controller.ts apps/api/src/analytics/operational-report.service.ts apps/api/src/analytics/operational-report.validation.spec.ts apps/web/app/analytics/executivo/page.tsx apps/web/app/analytics/operacoes/page.tsx; do
-            cp "/tmp/nexora-format/$file" "$file"
-          done
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add apps/api/src/analytics/advanced-kpis.controller.ts apps/api/src/analytics/advanced-kpis.service.ts apps/api/src/analytics/advanced-kpis.validation.spec.ts apps/api/src/analytics/analytics.module.ts apps/api/src/analytics/financial-analytics.integration.ts apps/api/src/analytics/financial-analytics.service.ts apps/api/src/analytics/operational-report.controller.ts apps/api/src/analytics/operational-report.service.ts apps/api/src/analytics/operational-report.validation.spec.ts apps/web/app/analytics/executivo/page.tsx apps/web/app/analytics/operacoes/page.tsx
-          git commit -m "style: format analytics sources"
-          git push --no-verify origin "HEAD:${{ github.head_ref }}"
+        run: pnpm exec prettier --check . --ignore-unknown
 
       - name: Typecheck
         run: pnpm typecheck
