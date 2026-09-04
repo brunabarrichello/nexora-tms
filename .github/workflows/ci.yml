@@ -61,7 +61,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add apps/api/src/analytics/advanced-kpis.controller.ts apps/api/src/analytics/advanced-kpis.service.ts apps/api/src/analytics/advanced-kpis.validation.spec.ts apps/api/src/analytics/analytics.module.ts apps/api/src/analytics/financial-analytics.integration.ts apps/api/src/analytics/financial-analytics.service.ts apps/api/src/analytics/operational-report.controller.ts apps/api/src/analytics/operational-report.service.ts apps/api/src/analytics/operational-report.validation.spec.ts apps/web/app/analytics/executivo/page.tsx apps/web/app/analytics/operacoes/page.tsx
           git commit -m "style: format analytics sources"
-          git push
+          git push origin HEAD:${{ github.head_ref }}
 
       - name: Typecheck
         run: pnpm typecheck
