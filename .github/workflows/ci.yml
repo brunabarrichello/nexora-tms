@@ -57,9 +57,11 @@ jobs:
             echo "No formatting changes detected."
             exit 0
           fi
+          git diff > /tmp/nexora-format.patch
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git reset --soft "${{ github.event.pull_request.head.sha }}"
+          git reset --hard "${{ github.event.pull_request.head.sha }}"
+          git apply /tmp/nexora-format.patch
           git add apps/api/src/analytics/advanced-kpis.controller.ts apps/api/src/analytics/advanced-kpis.service.ts apps/api/src/analytics/advanced-kpis.validation.spec.ts apps/api/src/analytics/analytics.module.ts apps/api/src/analytics/financial-analytics.integration.ts apps/api/src/analytics/financial-analytics.service.ts apps/api/src/analytics/operational-report.controller.ts apps/api/src/analytics/operational-report.service.ts apps/api/src/analytics/operational-report.validation.spec.ts apps/web/app/analytics/executivo/page.tsx apps/web/app/analytics/operacoes/page.tsx
           git commit -m "style: format analytics sources"
           git push --no-verify origin HEAD:${{ github.head_ref }}
