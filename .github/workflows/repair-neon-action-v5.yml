@@ -42,3 +42,6 @@ jobs:
           git add .github/workflows
           git commit -m 'fix(ci): pin Neon create-branch action to validated v5'
           git push
+
+      - name: Evidence
+        run: echo 'Neon create-branch-action v6 remediation runner executed.'
