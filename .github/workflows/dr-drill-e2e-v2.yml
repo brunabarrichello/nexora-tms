@@ -30,7 +30,6 @@ jobs:
     name: Native Restore → DB → API → Worker → Web → Jobs
     runs-on: ubuntu-24.04
     timeout-minutes: 35
-    environment: production
     steps:
       - name: T0
         run: |
