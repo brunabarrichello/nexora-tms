@@ -4,16 +4,23 @@ on:
   push:
     branches:
       - fix/gate-09-railway-config-remediation
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   repair:
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push' }}
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+          fetch-depth: 0
 
       - name: Pin Neon create-branch action to validated v5
         shell: bash
@@ -29,6 +36,16 @@ jobs:
             sed -i 's#neondatabase/create-branch-action@v6#neondatabase/create-branch-action@v5#g' "$file"
           done <<< "$files"
 
+      - name: Verify no v6 references remain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -RIn --include='*.yml' --include='*.yaml' 'neondatabase/create-branch-action@v6' .github/workflows; then
+            echo 'ERROR: Neon create-branch-action@v6 reference remains.' >&2
+            exit 1
+          fi
+          echo 'Neon create-branch-action version gate: v5 only.'
+
       - name: Commit repaired workflow references
         shell: bash
         run: |
@@ -41,7 +58,7 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add .github/workflows
           git commit -m 'fix(ci): pin Neon create-branch action to validated v5'
-          git push
+          git push origin HEAD:${{ github.head_ref || github.ref_name }}
 
       - name: Evidence
         run: echo 'Neon create-branch-action v6 remediation runner executed.'
