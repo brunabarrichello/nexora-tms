@@ -153,7 +153,7 @@ jobs:
           test -f apps/api/dist/integrations/external-integrations.integration.js
           echo 'Preparing repeatable isolated fixture lifecycle after Worker recovery validation.'
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           begin;
           select set_config('app.user_id','78200000-0000-4000-8000-000000000101',true);
           select set_config('app.tenant_id','78200000-0000-4000-8000-000000000001',true);
