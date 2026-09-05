@@ -3,10 +3,10 @@ name: DR Drill E2E v2 — Native Restore
 on:
   push:
     branches: [chore/dr-drill-e2e]
-    paths: ['.github/workflows/dr-drill-e2e-v2.yml']
+    paths: ['.github/workflows/dr-drill-e2e-v2.yml', 'apps/api/src/integrations/external-integrations.integration.ts']
   pull_request:
     branches: [main]
-    paths: ['.github/workflows/dr-drill-e2e-v2.yml']
+    paths: ['.github/workflows/dr-drill-e2e-v2.yml', 'apps/api/src/integrations/external-integrations.integration.ts']
 
 permissions:
   contents: read
@@ -146,35 +146,31 @@ jobs:
         run: |
           set -euo pipefail
           test -f apps/api/dist/integrations/external-integrations.integration.js
-          echo 'Preparing repeatable isolated fixture lifecycle after Worker recovery validation.'
+          echo 'Preparing a fresh deterministic webhook job on the isolated restore branch.'
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
-          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          begin;
-          select set_config('app.user_id','78200000-0000-4000-8000-000000000101',true);
-          select set_config('app.tenant_id','78200000-0000-4000-8000-000000000001',true);
-          do $$
-          declare v_job uuid; v_requeued boolean;
-          begin
-            select id into v_job from durable_jobs where tenant_id='78200000-0000-4000-8000-000000000001' and source_outbox_event_id='78200000-0000-4000-8000-000000000701' and job_type='integrations.webhook.deliver' order by created_at desc limit 1;
-            if v_job is null then raise exception 'NEX-56 durable fixture job was not found'; end if;
-            select nexora_admin_requeue_durable_job(v_job,'DR drill fixture reset before lifecycle') into v_requeued;
-            if not coalesce(v_requeued,false) then raise exception 'NEX-56 durable fixture requeue was rejected'; end if;
-          end $$;
-          commit;
+          export DR_FIXTURE_IDEMPOTENCY_KEY="nex56:dr:${GITHUB_RUN_ID}"
+          echo "DR_FIXTURE_IDEMPOTENCY_KEY=$DR_FIXTURE_IDEMPOTENCY_KEY" >> "$GITHUB_ENV"
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
+          insert into outbox_events (
+            id,tenant_id,aggregate_type,aggregate_id,event_type,event_version,payload,
+            idempotency_key,correlation_id,request_id,available_at,max_attempts
+          ) values (
+            gen_random_uuid(),
+            '78200000-0000-4000-8000-000000000001',
+            'integration_drill',
+            'dr-${GITHUB_RUN_ID}',
+            'nex56.integration.test',
+            1,
+            jsonb_build_object('fixture','nex56-dr','runId','${GITHUB_RUN_ID}'),
+            '${DR_FIXTURE_IDEMPOTENCY_KEY}',
+            'nex56-dr-correlation-${GITHUB_RUN_ID}',
+            'nex56-dr-request-${GITHUB_RUN_ID}',
+            now(),
+            3
+          )
+          on conflict (tenant_id,idempotency_key) do nothing;
           SQL
-          # The claim API intentionally returns a bounded batch. The persistent isolated
-          # restore can contain unrelated historical jobs, so normalize the compiled gate
-          # to a larger deterministic window without changing production code or schema.
-          python3 - <<'PY'
-          from pathlib import Path
-          p=Path('apps/api/dist/integrations/external-integrations.integration.js')
-          s=p.read_text()
-          old="['nex56-worker', 10, 30]"
-          new="['nex56-worker', 500, 30]"
-          if s.count(old) != 3:
-              raise SystemExit(f'expected 3 claim calls, found {s.count(old)}')
-          p.write_text(s.replace(old,new))
-          PY
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select 'dr-fixture-jobs='||count(*) from durable_jobs where tenant_id='78200000-0000-4000-8000-000000000001' and job_type='integrations.webhook.deliver' and idempotency_key='$DR_FIXTURE_IDEMPOTENCY_KEY'"
           node apps/api/dist/integrations/external-integrations.integration.js
 
       - name: T8 — webhook receiver contract
