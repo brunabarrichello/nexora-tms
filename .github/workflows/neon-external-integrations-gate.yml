@@ -180,6 +180,15 @@ jobs:
         shell: bash
         run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
 
+      - name: Resolve NEX-56 durable job idempotency key
+        shell: bash
+        run: |
+          set -euo pipefail
+          key="$(psql "$OWNER_DATABASE_URL" -Atc "select idempotency_key from durable_jobs where tenant_id='78200000-0000-4000-8000-000000000001' and source_outbox_event_id='78200000-0000-4000-8000-000000000701' and job_type='integrations.webhook.deliver' limit 1")"
+          test -n "$key" || { echo "Unable to resolve NEX-56 durable job idempotency key." >&2; exit 1; }
+          echo "::add-mask::$key"
+          echo "DR_FIXTURE_IDEMPOTENCY_KEY=$key" >> "$GITHUB_ENV"
+
       - name: Resolve nexora_app connection
         id: app
         uses: neondatabase/create-branch-action@v6
