@@ -52,23 +52,21 @@ jobs:
           set -euo pipefail
           test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
 
-      - name: Set ephemeral branch name and expiry
+      - name: Set ephemeral branch name
         shell: bash
         run: |
           set -euo pipefail
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-api-${{ github.run_id }}" >> "$GITHUB_ENV"
-          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
       - name: Create isolated branch from staging
         id: create-neon
         uses: neondatabase/create-branch-action@v5
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
+          parent: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: nexora_migrator
-          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
+          username: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Ensure PostgreSQL client is available
