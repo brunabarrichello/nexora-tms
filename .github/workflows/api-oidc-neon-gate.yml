@@ -82,6 +82,15 @@ jobs:
           fi
           psql --version
 
+      - name: Migrate isolated nexora database
+        shell: bash
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          DATABASE_URL="$MIGRATOR_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
       - name: Seed external identity fixtures through owner capability
         shell: bash
         env:
