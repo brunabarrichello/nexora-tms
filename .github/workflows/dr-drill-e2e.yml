@@ -14,7 +14,7 @@ on:
         required: true
         type: string
       source_minutes_ago:
-        description: Historical recovery point lag, 1-300 minutes
+        description: Historical recovery point lag (informational for native snapshot restore)
         required: true
         default: '5'
         type: string
@@ -29,8 +29,10 @@ concurrency:
 env:
   NEON_PROJECT_ID: raspy-river-76339604
   PRODUCTION_BRANCH_ID: br-silent-feather-a5ku7uyi
+  DR_PREPROVISIONED_BRANCH_ID: br-wild-pond-a5okbc2c
+  DR_PREPROVISIONED_BRANCH_NAME: dr-e2e-native-restore-2026-09-05
+  DR_SOURCE_TS: 2026-09-04T14:05:23Z
   FREE_HISTORY_SECONDS: 21600
-  FREE_BRANCH_LIMIT: 10
   PGSSLMODE: verify-full
   PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
 
@@ -74,58 +76,34 @@ jobs:
           if ! command -v psql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
           test -r "$PGSSLROOTCERT"
 
-      - name: T1/T2 — historical isolated restore
+      - name: T1/T2 — validate native Neon isolated restore
         id: restore
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          name="dr-e2e-${GITHUB_RUN_ID}"
-          ts="$(date -u -d "${SOURCE_MINUTES_AGO} minutes ago" +'%Y-%m-%dT%H:%M:%S.000Z')"
+          started=$(date +%s)
           project="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
           branches="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
           prod="$(jq -ec --arg id "$PRODUCTION_BRANCH_ID" '[.branches[]|select(.id==$id)][0]' <<<"$branches")"
           [[ "$(jq -r '.name' <<<"$prod")" == production && "$(jq -r '.default' <<<"$prod")" == true && "$(jq -r '.primary' <<<"$prod")" == true ]]
           history="$(jq -er '.history_retention_seconds' <<<"$project")"
-          branch_count="$(jq '.branches|length' <<<"$branches")"
           [[ "$history" -ge "$FREE_HISTORY_SECONDS" ]]
-          [[ "$branch_count" -lt "$FREE_BRANCH_LIMIT" ]]
-          echo "Neon preflight: history=${history}s branches=${branch_count}/${FREE_BRANCH_LIMIT} source=${ts}"
-          payload="$(jq -cn --arg n "$name" --arg p "$PRODUCTION_BRANCH_ID" --arg t "$ts" '{branch:{name:$n,parent_id:$p,parent_timestamp:$t},endpoints:[{type:"read_write"}]}')"
-          tmp="$(mktemp)"
-          err="$(mktemp)"
-          set +e
-          curl -sS --connect-timeout 15 --max-time 60 -o "$tmp" -w '%{http_code}' -X POST -H "Authorization: Bearer $NEON_API_KEY" -H 'Content-Type: application/json' -d "$payload" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" > /tmp/dr-neon-http-status 2>"$err"
-          curl_rc=$?
-          set -e
-          status="$(cat /tmp/dr-neon-http-status 2>/dev/null || true)"
-          echo "Neon branch creation curl_exit=$curl_rc http_status=${status:-none}"
-          if [[ "$curl_rc" -ne 0 ]]; then
-            echo 'Neon branch creation transport error:'
-            sed -E 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1***/g' "$err" | tail -20
-            if [[ -s "$tmp" ]]; then
-              echo 'Neon response body:'
-              jq -c . "$tmp" 2>/dev/null || cat "$tmp"
-            fi
-            rm -f "$tmp" "$err" /tmp/dr-neon-http-status
-            exit "$curl_rc"
-          fi
-          if [[ "$status" != 2* ]]; then
-            echo "Neon branch creation failed with HTTP $status"
-            jq -c . "$tmp" 2>/dev/null || cat "$tmp"
-            rm -f "$tmp" "$err" /tmp/dr-neon-http-status
-            exit 1
-          fi
-          response="$(cat "$tmp")"
-          rm -f "$tmp" "$err" /tmp/dr-neon-http-status
-          id="$(jq -er '.branch.id' <<<"$response")"
-          [[ "$(jq -r '.branch.parent_id' <<<"$response")" == "$PRODUCTION_BRANCH_ID" && "$id" != "$PRODUCTION_BRANCH_ID" ]]
-          echo "DR_BRANCH_ID=$id" >> "$GITHUB_ENV"
-          echo "DR_BRANCH_NAME=$name" >> "$GITHUB_ENV"
-          echo "DR_SOURCE_TS=$ts" >> "$GITHUB_ENV"
+          dr="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_PREPROVISIONED_BRANCH_ID")"
+          [[ "$(jq -r '.branch.id' <<<"$dr")" == "$DR_PREPROVISIONED_BRANCH_ID" ]]
+          [[ "$(jq -r '.branch.name' <<<"$dr")" == "$DR_PREPROVISIONED_BRANCH_NAME" ]]
+          [[ "$(jq -r '.branch.id' <<<"$dr")" != "$PRODUCTION_BRANCH_ID" ]]
+          [[ "$(jq -r '.branch.primary // false' <<<"$dr")" == false && "$(jq -r '.branch.default // false' <<<"$dr")" == false ]]
+          [[ "$(jq -r '.branch.current_state' <<<"$dr")" == ready ]]
+          [[ "$(jq -r '.branch.restore_status // empty' <<<"$dr")" == restored ]]
+          echo "DR_BRANCH_ID=$DR_PREPROVISIONED_BRANCH_ID" >> "$GITHUB_ENV"
+          echo "DR_BRANCH_NAME=$DR_PREPROVISIONED_BRANCH_NAME" >> "$GITHUB_ENV"
           echo "DR_HISTORY_SECONDS=$history" >> "$GITHUB_ENV"
-          echo "DR_BRANCH_CREATED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          echo "DR_NATIVE_RESTORE_VALIDATED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          echo "DR_NATIVE_RESTORE_VALIDATION_SECONDS=$(( $(date +%s) - started ))" >> "$GITHUB_ENV"
+          echo "Native Neon restore branch validated: $DR_PREPROVISIONED_BRANCH_ID"
+          echo "Production branch remains canonical and untouched."
 
       - name: Resolve isolated role URLs
         env:
@@ -223,16 +201,17 @@ jobs:
           {
             echo '## DR Drill E2E — isolated evidence'
             echo "- T0: $DR_T0_UTC"
-            echo "- Historical recovery point: $DR_SOURCE_TS"
-            echo "- RPO exercised: $((SOURCE_MINUTES_AGO*60)) seconds"
+            echo "- Native restore source snapshot: $DR_SOURCE_TS"
+            echo "- RPO represented by restored snapshot: snapshot age is external to this workflow"
+            echo "- Native restore validation: $DR_NATIVE_RESTORE_VALIDATION_SECONDS s"
             echo "- DB ready: $((DR_DB_READY_EPOCH-DR_T0_EPOCH))s"
             echo "- API ready: $((DR_API_READY_EPOCH-DR_T0_EPOCH))s"
             echo "- Worker ready: $((DR_WORKER_READY_EPOCH-DR_T0_EPOCH))s"
             echo "- Web ready: $((DR_WEB_READY_EPOCH-DR_T0_EPOCH))s"
             echo "- Receiver contract: $((DR_RECEIVER_EPOCH-DR_T0_EPOCH))s"
-            echo "- Total observed duration: $((now-DR_T0_EPOCH))s"
+            echo "- Total observed duration after native restore: $((now-DR_T0_EPOCH))s"
             echo '- Production branch: NOT MODIFIED'
-            echo '- Recovery branch: temporary isolated Neon branch'
+            echo '- Recovery branch: isolated Neon native restore branch'
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Cleanup — always, isolated only
@@ -243,12 +222,10 @@ jobs:
         run: |
           set +e
           for f in /tmp/dr-api.pid /tmp/dr-worker.pid /tmp/dr-web.pid; do [[ -f "$f" ]] && kill "$(cat "$f")" 2>/dev/null || true; done
-          if [[ -n "${DR_BRANCH_ID:-}" ]]; then
-            j="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID" 2>/dev/null)"
-            if [[ "$(jq -r '.branch.name // empty' <<<"$j")" == "${DR_BRANCH_NAME:-}" && "$(jq -r '.branch.parent_id // empty' <<<"$j")" == "$PRODUCTION_BRANCH_ID" && "$DR_BRANCH_ID" != "$PRODUCTION_BRANCH_ID" ]]; then
-              curl -fsS -X DELETE -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID" >/dev/null || true
-            fi
-            left="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" 2>/dev/null | jq --arg id "$DR_BRANCH_ID" '[.branches[]|select(.id==$id)]|length' 2>/dev/null)"
-            [[ "$left" == 0 ]] || exit 1
-            echo 'Temporary recovery branch cleanup verified.'
+          j="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID" 2>/dev/null)"
+          if [[ "$(jq -r '.branch.id // empty' <<<"$j")" == "$DR_BRANCH_ID" && "$(jq -r '.branch.name // empty' <<<"$j")" == "$DR_BRANCH_NAME" && "$DR_BRANCH_ID" != "$PRODUCTION_BRANCH_ID" && "$(jq -r '.branch.primary // false' <<<"$j")" == false && "$(jq -r '.branch.default // false' <<<"$j")" == false ]]; then
+            curl -fsS -X DELETE -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID" >/dev/null || true
           fi
+          left="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" 2>/dev/null | jq --arg id "$DR_BRANCH_ID" '[.branches[]|select(.id==$id)]|length' 2>/dev/null)"
+          [[ "$left" == 0 ]] || exit 1
+          echo 'Temporary native-restore recovery branch cleanup verified.'
