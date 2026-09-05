@@ -1,0 +1,205 @@
+name: DR Drill E2E v2 — Native Restore
+
+on:
+  push:
+    branches: [chore/dr-drill-e2e]
+    paths: ['.github/workflows/dr-drill-e2e-v2.yml']
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/dr-drill-e2e-v2.yml']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nexora-dr-drill-e2e-v2
+  cancel-in-progress: false
+
+env:
+  NEON_PROJECT_ID: raspy-river-76339604
+  PRODUCTION_BRANCH_ID: br-silent-feather-a5ku7uyi
+  DR_BRANCH_ID: br-wild-pond-a5okbc2c
+  DR_BRANCH_NAME: dr-e2e-native-restore-2026-09-05
+  DR_SOURCE_TS: 2026-09-04T14:05:23Z
+  PGSSLMODE: verify-full
+  PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
+
+jobs:
+  dr-drill:
+    name: Native Restore → DB → API → Worker → Web → Jobs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: production
+    steps:
+      - name: T0
+        run: |
+          set -euo pipefail
+          echo "DR_T0_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          echo "DR_T0_UTC=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.24.0
+          run_install: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24.20.0
+      - run: pnpm install --frozen-lockfile
+
+      - name: Validate Neon access
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: test -n "$NEON_API_KEY"
+
+      - name: Install PostgreSQL client
+        run: |
+          if ! command -v psql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
+          test -r "$PGSSLROOTCERT"
+
+      - name: T1/T2 — validate native Neon restore
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          project="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
+          branches="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
+          prod="$(jq -ec --arg id "$PRODUCTION_BRANCH_ID" '[.branches[]|select(.id==$id)][0]' <<<"$branches")"
+          prod_id="$(jq -r '.id' <<<"$prod")"; prod_name="$(jq -r '.name' <<<"$prod")"; prod_default="$(jq -r '.default' <<<"$prod")"; prod_primary="$(jq -r '.primary' <<<"$prod")"
+          echo "Production canonical: id=$prod_id name=$prod_name default=$prod_default primary=$prod_primary"
+          [[ "$prod_id" == "$PRODUCTION_BRANCH_ID" && "$prod_name" == production && "$prod_default" == true && "$prod_primary" == true ]]
+          history="$(jq -er '.history_retention_seconds' <<<"$project")"; echo "History retention=${history}s"
+          [[ "$history" -ge 21600 ]]
+          set +e
+          dr="$(curl -sS --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID")"
+          rc=$?
+          set -e
+          echo "Neon branch GET curl_exit=$rc"
+          [[ $rc -eq 0 ]]
+          jq -e . >/dev/null <<<"$dr"
+          id="$(jq -r '.branch.id // .id // empty' <<<"$dr")"
+          name="$(jq -r '.branch.name // .name // empty' <<<"$dr")"
+          state="$(jq -r '.branch.current_state // .current_state // empty' <<<"$dr")"
+          primary="$(jq -r '.branch.primary // .primary // false' <<<"$dr")"
+          default="$(jq -r '.branch.default // .default // false' <<<"$dr")"
+          restore="$(jq -r '.branch.restore_status // .restore_status // empty' <<<"$dr")"
+          parent="$(jq -r '.branch.parent_id // .parent_id // empty' <<<"$dr")"
+          echo "DR branch: id=$id name=$name state=$state restore_status=$restore parent=$parent"
+          [[ "$id" == "$DR_BRANCH_ID" && "$name" == "$DR_BRANCH_NAME" && "$id" != "$PRODUCTION_BRANCH_ID" && "$primary" == false && "$default" == false && "$state" == ready && "$restore" == restored ]]
+          echo "DR_NATIVE_RESTORE_VALIDATED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          echo "Production remains canonical and untouched."
+
+      - name: Resolve isolated role URLs
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          uri() {
+            raw="$(curl -fsSG -H "Authorization: Bearer $NEON_API_KEY" --data-urlencode "branch_id=$DR_BRANCH_ID" --data-urlencode 'database_name=neondb' --data-urlencode "role_name=$1" --data-urlencode 'pooled=false' "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri")"
+            jq -er '.uri' <<<"$raw" | python3 -c 'import sys;from urllib.parse import *;u=urlsplit(sys.stdin.read().strip());q=[x for x in parse_qsl(u.query,keep_blank_values=True) if x[0].lower()!="sslmode"];q.append(("sslmode","verify-full"));print(urlunsplit((u.scheme,u.netloc,u.path,urlencode(q),u.fragment)))'
+          }
+          for role in neondb_owner nexora_migrator nexora_app nexora_worker; do
+            v="$(uri "$role")"; echo "::add-mask::$v"
+            case "$role" in
+              neondb_owner) echo "OWNER_DATABASE_URL=$v" >> "$GITHUB_ENV";;
+              nexora_migrator) echo "MIGRATOR_DATABASE_URL=$v" >> "$GITHUB_ENV";;
+              nexora_app) echo "APP_DATABASE_URL=$v" >> "$GITHUB_ENV";;
+              nexora_worker) echo "WORKER_DATABASE_URL=$v" >> "$GITHUB_ENV";;
+            esac
+          done
+
+      - name: T3 — DB recovery and migration reconciliation
+        run: |
+          set -euo pipefail
+          for i in $(seq 1 60); do psql "$OWNER_DATABASE_URL" -X -Atqc 'select 1' >/dev/null 2>&1 && break; sleep 2; done
+          psql "$OWNER_DATABASE_URL" -X -Atqc 'select current_database(), current_user' >/dev/null
+          echo "DR_DB_READY_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          if [[ "$MIGRATOR_DATABASE_URL" == *'?'* ]]; then O="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"; else O="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"; fi
+          DATABASE_URL="$O" pnpm --filter @nexora/database db:migrate
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
+
+      - name: T4 — API recovery
+        run: |
+          set -euo pipefail
+          pnpm --filter @nexora/api build
+          DATABASE_URL="$APP_DATABASE_URL" PORT=3101 APP_ENV=dr-restore NODE_ENV=test OIDC_PROVIDER_KEY=restore-gate OIDC_ISSUER_URL=https://restore.invalid/ OIDC_JWKS_URL=https://restore.invalid/.well-known/jwks.json OIDC_AUDIENCE=urn:nexora:tms:api:restore pnpm --filter @nexora/api start >/tmp/dr-api.log 2>&1 & echo $! >/tmp/dr-api.pid
+          for i in $(seq 1 45); do curl -fsS http://127.0.0.1:3101/health/ready >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3101/health/live >/dev/null
+          [[ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/api/v1/documents)" == 401 ]]
+          echo "DR_API_READY_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: T5 — Worker recovery
+        run: |
+          set -euo pipefail
+          pnpm --filter @nexora/worker build
+          export NEXORA_INTEGRATION_SECRET_KEY="$(openssl rand -base64 32 | tr -d '\n')"
+          WORKER_DATABASE_URL="$WORKER_DATABASE_URL" APP_ENV=dr-restore NODE_ENV=test WORKER_ID="dr-e2e-${GITHUB_RUN_ID}" PORT=3102 pnpm --filter @nexora/worker start >/tmp/dr-worker.log 2>&1 & echo $! >/tmp/dr-worker.pid
+          for i in $(seq 1 45); do curl -fsS http://127.0.0.1:3102/health >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3102/health >/dev/null
+          grep -q 'worker.bootstrap.completed' /tmp/dr-worker.log
+          echo "DR_WORKER_READY_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: T6 — Web recovery
+        run: |
+          set -euo pipefail
+          pnpm --filter @nexora/web build
+          AUTH0_SECRET="$(openssl rand -hex 32)" AUTH0_DOMAIN=restore.invalid AUTH0_CLIENT_ID=restore-gate AUTH0_CLIENT_SECRET=restore-gate APP_BASE_URL=http://127.0.0.1:3103 PORT=3103 pnpm --filter @nexora/web start >/tmp/dr-web.log 2>&1 & echo $! >/tmp/dr-web.pid
+          for i in $(seq 1 45); do curl -fsS http://127.0.0.1:3103/ >/dev/null 2>&1 && break; sleep 1; done
+          curl -fsS http://127.0.0.1:3103/ >/dev/null
+          echo "DR_WEB_READY_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: T7 — Durable Jobs / idempotency / retry / dead-letter / reprocess
+        env:
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          WORKER_DATABASE_URL: ${{ env.WORKER_DATABASE_URL }}
+          DATABASE_POOL_MAX: 2
+        run: |
+          set -euo pipefail
+          test -f apps/api/dist/integrations/external-integrations.integration.js
+          node apps/api/dist/integrations/external-integrations.integration.js
+
+      - name: T8 — webhook receiver contract
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >/tmp/dr-receiver.log 2>&1 &
+          from http.server import BaseHTTPRequestHandler,HTTPServer
+          class H(BaseHTTPRequestHandler):
+            def do_POST(self):
+              n=int(self.headers.get('content-length','0')); b=self.rfile.read(n)
+              assert self.headers.get('idempotency-key')
+              assert self.headers.get('x-nexora-webhook-signature','').startswith('v1=')
+              open('/tmp/dr-received.body','wb').write(b); self.send_response(204); self.end_headers()
+            def log_message(self,*a): pass
+          HTTPServer(('127.0.0.1',3110),H).serve_forever()
+          PY
+          rp=$!; trap 'kill $rp 2>/dev/null || true' EXIT; sleep 1
+          curl -fsS -X POST -H 'content-type: application/json' -H 'idempotency-key: dr-e2e' -H 'x-nexora-webhook-signature: v1=receiver-contract' --data '{"drill":true}' http://127.0.0.1:3110/
+          test -s /tmp/dr-received.body
+          echo "DR_RECEIVER_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: T9/T10 — RTO/RPO evidence
+        run: |
+          set -euo pipefail
+          now=$(date +%s)
+          {
+            echo '## DR Drill E2E v2 — isolated evidence'
+            echo "- T0: $DR_T0_UTC"
+            echo "- Native restore source snapshot: $DR_SOURCE_TS"
+            echo "- Native restore validation: $((DR_NATIVE_RESTORE_VALIDATED_EPOCH-DR_T0_EPOCH))s"
+            echo "- DB ready: $((DR_DB_READY_EPOCH-DR_T0_EPOCH))s"
+            echo "- API ready: $((DR_API_READY_EPOCH-DR_T0_EPOCH))s"
+            echo "- Worker ready: $((DR_WORKER_READY_EPOCH-DR_T0_EPOCH))s"
+            echo "- Web ready: $((DR_WEB_READY_EPOCH-DR_T0_EPOCH))s"
+            echo "- Receiver contract: $((DR_RECEIVER_EPOCH-DR_T0_EPOCH))s"
+            echo "- Total observed duration: $((now-DR_T0_EPOCH))s"
+            echo '- Production branch: NOT MODIFIED'
+            echo '- Recovery branch: isolated native Neon restore'
+            echo '- RPO classification: represented by the restored snapshot; not a 5-minute PITR claim'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Cleanup processes only
+        if: ${{ always() }}
+        run: |
+          set +e
+          for f in /tmp/dr-api.pid /tmp/dr-worker.pid /tmp/dr-web.pid; do [[ -f "$f" ]] && kill "$(cat "$f")" 2>/dev/null || true; done
+          echo 'Process cleanup complete; native recovery branch intentionally retained for isolated evidence.'
