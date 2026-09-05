@@ -50,7 +50,7 @@ jobs:
           if [[ "$GITHUB_EVENT_NAME" == workflow_dispatch ]]; then
             [[ "${{ inputs.confirmation }}" == DR-DRILL-ISOLATED ]] || exit 1
           fi
-          n='${{ inputs.source_minutes_ago || '5' }}'
+          n="${{ inputs.source_minutes_ago || '5' }}"
           [[ "$n" =~ ^[0-9]+$ && "$n" -ge 1 && "$n" -le 300 ]] || exit 1
           echo "SOURCE_MINUTES_AGO=$n" >> "$GITHUB_ENV"
           echo "DR_T0_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
@@ -87,16 +87,23 @@ jobs:
           project="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
           branches="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
           prod="$(jq -ec --arg id "$PRODUCTION_BRANCH_ID" '[.branches[]|select(.id==$id)][0]' <<<"$branches")"
-          [[ "$(jq -r '.name' <<<"$prod")" == production && "$(jq -r '.default' <<<"$prod")" == true && "$(jq -r '.primary' <<<"$prod")" == true ]]
+          [[ "$(jq -r '.name' <<<"$prod")" == production && "$(jq -r '.default' <<<"$prod")" == true && "$(jq -r '.primary' <<<"$prod")" == true ]] || { echo 'Production canonical-branch guard failed.'; exit 1; }
           history="$(jq -er '.history_retention_seconds' <<<"$project")"
-          [[ "$history" -ge "$FREE_HISTORY_SECONDS" ]]
-          dr="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_PREPROVISIONED_BRANCH_ID")"
-          [[ "$(jq -r '.branch.id' <<<"$dr")" == "$DR_PREPROVISIONED_BRANCH_ID" ]]
-          [[ "$(jq -r '.branch.name' <<<"$dr")" == "$DR_PREPROVISIONED_BRANCH_NAME" ]]
-          [[ "$(jq -r '.branch.id' <<<"$dr")" != "$PRODUCTION_BRANCH_ID" ]]
-          [[ "$(jq -r '.branch.primary // false' <<<"$dr")" == false && "$(jq -r '.branch.default // false' <<<"$dr")" == false ]]
-          [[ "$(jq -r '.branch.current_state' <<<"$dr")" == ready ]]
-          [[ "$(jq -r '.branch.restore_status // empty' <<<"$dr")" == restored ]]
+          [[ "$history" -ge "$FREE_HISTORY_SECONDS" ]] || { echo "History retention below required floor: $history"; exit 1; }
+          dr_json="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_PREPROVISIONED_BRANCH_ID")"
+          dr="$(jq -ec '.branch // .' <<<"$dr_json")"
+          dr_id="$(jq -r '.id // empty' <<<"$dr")"
+          dr_name="$(jq -r '.name // empty' <<<"$dr")"
+          dr_primary="$(jq -r '.primary // false' <<<"$dr")"
+          dr_default="$(jq -r '.default // false' <<<"$dr")"
+          dr_state="$(jq -r '.current_state // empty' <<<"$dr")"
+          dr_restore="$(jq -r '.restore_status // empty' <<<"$dr")"
+          [[ "$dr_id" == "$DR_PREPROVISIONED_BRANCH_ID" ]] || { echo "Unexpected DR branch id: $dr_id"; exit 1; }
+          [[ "$dr_name" == "$DR_PREPROVISIONED_BRANCH_NAME" ]] || { echo "Unexpected DR branch name: $dr_name"; exit 1; }
+          [[ "$dr_id" != "$PRODUCTION_BRANCH_ID" ]] || exit 1
+          [[ "$dr_primary" == false && "$dr_default" == false ]] || exit 1
+          [[ "$dr_state" == ready ]] || { echo "DR branch state is not ready: $dr_state"; exit 1; }
+          [[ "$dr_restore" == restored ]] || { echo "DR restore status is not restored: $dr_restore"; exit 1; }
           echo "DR_BRANCH_ID=$DR_PREPROVISIONED_BRANCH_ID" >> "$GITHUB_ENV"
           echo "DR_BRANCH_NAME=$DR_PREPROVISIONED_BRANCH_NAME" >> "$GITHUB_ENV"
           echo "DR_HISTORY_SECONDS=$history" >> "$GITHUB_ENV"
@@ -132,7 +139,6 @@ jobs:
           if [[ "$MIGRATOR_DATABASE_URL" == *'?'* ]]; then O="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"; else O="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"; fi
           echo "::add-mask::$O"
           DATABASE_URL="$O" pnpm --filter @nexora/database db:migrate
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
 
       - name: T4 — API recovery
         shell: bash
@@ -172,7 +178,10 @@ jobs:
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
           WORKER_DATABASE_URL: ${{ env.WORKER_DATABASE_URL }}
           DATABASE_POOL_MAX: 2
-        run: node apps/api/dist/integrations/external-integrations.integration.js
+        run: |
+          set -euo pipefail
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
+          node apps/api/dist/integrations/external-integrations.integration.js
 
       - name: T8 — test receiver contract
         shell: bash
@@ -216,16 +225,8 @@ jobs:
 
       - name: Cleanup — always, isolated only
         if: ${{ always() }}
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         shell: bash
         run: |
           set +e
           for f in /tmp/dr-api.pid /tmp/dr-worker.pid /tmp/dr-web.pid; do [[ -f "$f" ]] && kill "$(cat "$f")" 2>/dev/null || true; done
-          j="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID" 2>/dev/null)"
-          if [[ "$(jq -r '.branch.id // empty' <<<"$j")" == "$DR_BRANCH_ID" && "$(jq -r '.branch.name // empty' <<<"$j")" == "$DR_BRANCH_NAME" && "$DR_BRANCH_ID" != "$PRODUCTION_BRANCH_ID" && "$(jq -r '.branch.primary // false' <<<"$j")" == false && "$(jq -r '.branch.default // false' <<<"$j")" == false ]]; then
-            curl -fsS -X DELETE -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID" >/dev/null || true
-          fi
-          left="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" 2>/dev/null | jq --arg id "$DR_BRANCH_ID" '[.branches[]|select(.id==$id)]|length' 2>/dev/null)"
-          [[ "$left" == 0 ]] || exit 1
-          echo 'Temporary native-restore recovery branch cleanup verified.'
+          echo 'Local recovery processes stopped. Preprovisioned native DR branch retained for the next isolated drill; no Neon branch deletion is performed by this workflow.'
