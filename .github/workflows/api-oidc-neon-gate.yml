@@ -100,7 +100,7 @@ jobs:
           [[ "$roles" == "nexora_migrator:nexora_owner" ]] || { echo "Unexpected migration role chain: $roles" >&2; exit 1; }
 
           privileges="$(psql "$OWNER_DATABASE_URL" -Atqc "select has_database_privilege(current_user, current_database(), 'CREATE') || ':' || has_schema_privilege(current_user, 'public', 'USAGE') || ':' || has_schema_privilege(current_user, 'public', 'CREATE')")"
-          [[ "$privileges" == "t:t:t" ]] || { echo "Unexpected migration privileges: $privileges" >&2; exit 1; }
+          [[ "$privileges" == "true:true:true" ]] || { echo "Unexpected migration privileges: $privileges" >&2; exit 1; }
           echo "Migration capability preflight: role chain=${roles}, database/schema DDL privileges=${privileges}"
 
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
