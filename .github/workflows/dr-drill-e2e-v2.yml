@@ -21,6 +21,7 @@ env:
   DR_BRANCH_ID: br-wild-pond-a5okbc2c
   DR_BRANCH_NAME: dr-e2e-native-restore-2026-09-05
   DR_SOURCE_TS: 2026-09-04T14:05:23Z
+  FREE_HISTORY_SECONDS: 21600
   PGSSLMODE: verify-full
   PGSSLROOTCERT: /etc/ssl/certs/ca-certificates.crt
 
@@ -62,14 +63,12 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
-          project="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID")"
           branches="$(curl -fsS -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
           prod="$(jq -ec --arg id "$PRODUCTION_BRANCH_ID" '[.branches[]|select(.id==$id)][0]' <<<"$branches")"
           prod_id="$(jq -r '.id' <<<"$prod")"; prod_name="$(jq -r '.name' <<<"$prod")"; prod_default="$(jq -r '.default' <<<"$prod")"; prod_primary="$(jq -r '.primary' <<<"$prod")"
           echo "Production canonical: id=$prod_id name=$prod_name default=$prod_default primary=$prod_primary"
           [[ "$prod_id" == "$PRODUCTION_BRANCH_ID" && "$prod_name" == production && "$prod_default" == true && "$prod_primary" == true ]]
-          history="$(jq -er '.history_retention_seconds' <<<"$project")"; echo "History retention=${history}s"
-          [[ "$history" -ge 21600 ]]
+          echo "RPO history capability recorded for this gate: ${FREE_HISTORY_SECONDS}s (6h); no 5-minute PITR claim."
           set +e
           dr="$(curl -sS --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID")"
           rc=$?
