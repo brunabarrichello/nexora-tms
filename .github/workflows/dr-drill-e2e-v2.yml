@@ -115,7 +115,6 @@ jobs:
           echo "DR_DB_READY_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
           if [[ "$MIGRATOR_DATABASE_URL" == *'?'* ]]; then O="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"; else O="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"; fi
           DATABASE_URL="$O" pnpm --filter @nexora/database db:migrate
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
 
       - name: T4 — API recovery
         run: |
@@ -127,7 +126,7 @@ jobs:
           [[ "$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:3101/api/v1/documents)" == 401 ]]
           echo "DR_API_READY_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
 
-      - name: T5 — Worker recovery
+      - name: T5 — Worker recovery only (no fixture execution)
         run: |
           set -euo pipefail
           pnpm --filter @nexora/worker build
@@ -137,6 +136,10 @@ jobs:
           curl -fsS http://127.0.0.1:3102/health >/dev/null
           grep -q 'worker.bootstrap.completed' /tmp/dr-worker.log
           echo "DR_WORKER_READY_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+          kill "$(cat /tmp/dr-worker.pid)" 2>/dev/null || true
+          wait "$(cat /tmp/dr-worker.pid)" 2>/dev/null || true
+          rm -f /tmp/dr-worker.pid
+          echo "Worker recovery validated; Worker execution stopped before fixture-driven T7."
 
       - name: T6 — Web recovery
         run: |
@@ -155,6 +158,8 @@ jobs:
         run: |
           set -euo pipefail
           test -f apps/api/dist/integrations/external-integrations.integration.js
+          echo 'Creating integration fixtures only after Worker recovery has been validated and its process stopped.'
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
           node apps/api/dist/integrations/external-integrations.integration.js
 
       - name: T8 — webhook receiver contract
