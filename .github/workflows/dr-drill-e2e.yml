@@ -94,15 +94,31 @@ jobs:
           echo "Neon preflight: history=${history}s branches=${branch_count}/${FREE_BRANCH_LIMIT} source=${ts}"
           payload="$(jq -cn --arg n "$name" --arg p "$PRODUCTION_BRANCH_ID" --arg t "$ts" '{branch:{name:$n,parent_id:$p,parent_timestamp:$t},endpoints:[{type:"read_write"}]}')"
           tmp="$(mktemp)"
-          status="$(curl -sS -o "$tmp" -w '%{http_code}' -X POST -H "Authorization: Bearer $NEON_API_KEY" -H 'Content-Type: application/json' -d "$payload" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
+          err="$(mktemp)"
+          set +e
+          curl -sS --connect-timeout 15 --max-time 60 -o "$tmp" -w '%{http_code}' -X POST -H "Authorization: Bearer $NEON_API_KEY" -H 'Content-Type: application/json' -d "$payload" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches" > /tmp/dr-neon-http-status 2>"$err"
+          curl_rc=$?
+          set -e
+          status="$(cat /tmp/dr-neon-http-status 2>/dev/null || true)"
+          echo "Neon branch creation curl_exit=$curl_rc http_status=${status:-none}"
+          if [[ "$curl_rc" -ne 0 ]]; then
+            echo 'Neon branch creation transport error:'
+            sed -E 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1***/g' "$err" | tail -20
+            if [[ -s "$tmp" ]]; then
+              echo 'Neon response body:'
+              jq -c . "$tmp" 2>/dev/null || cat "$tmp"
+            fi
+            rm -f "$tmp" "$err" /tmp/dr-neon-http-status
+            exit "$curl_rc"
+          fi
           if [[ "$status" != 2* ]]; then
             echo "Neon branch creation failed with HTTP $status"
             jq -c . "$tmp" 2>/dev/null || cat "$tmp"
-            rm -f "$tmp"
+            rm -f "$tmp" "$err" /tmp/dr-neon-http-status
             exit 1
           fi
           response="$(cat "$tmp")"
-          rm -f "$tmp"
+          rm -f "$tmp" "$err" /tmp/dr-neon-http-status
           id="$(jq -er '.branch.id' <<<"$response")"
           [[ "$(jq -r '.branch.parent_id' <<<"$response")" == "$PRODUCTION_BRANCH_ID" && "$id" != "$PRODUCTION_BRANCH_ID" ]]
           echo "DR_BRANCH_ID=$id" >> "$GITHUB_ENV"
