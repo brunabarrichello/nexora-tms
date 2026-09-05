@@ -69,21 +69,14 @@ jobs:
           echo "Production canonical: id=$prod_id name=$prod_name default=$prod_default primary=$prod_primary"
           [[ "$prod_id" == "$PRODUCTION_BRANCH_ID" && "$prod_name" == production && "$prod_default" == true && "$prod_primary" == true ]]
           echo "RPO history capability recorded for this gate: ${FREE_HISTORY_SECONDS}s (6h); no 5-minute PITR claim."
-          set +e
-          dr="$(curl -sS --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID")"
-          rc=$?
-          set -e
-          echo "Neon branch GET curl_exit=$rc"
-          [[ $rc -eq 0 ]]
-          jq -e . >/dev/null <<<"$dr"
+          dr="$(curl -fsS --connect-timeout 15 --max-time 60 -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$DR_BRANCH_ID")"
           id="$(jq -r '.branch.id // .id // empty' <<<"$dr")"
           name="$(jq -r '.branch.name // .name // empty' <<<"$dr")"
           state="$(jq -r '.branch.current_state // .current_state // empty' <<<"$dr")"
           primary="$(jq -r '.branch.primary // .primary // false' <<<"$dr")"
           default="$(jq -r '.branch.default // .default // false' <<<"$dr")"
           restore="$(jq -r '.branch.restore_status // .restore_status // empty' <<<"$dr")"
-          parent="$(jq -r '.branch.parent_id // .parent_id // empty' <<<"$dr")"
-          echo "DR branch: id=$id name=$name state=$state restore_status=$restore parent=$parent"
+          echo "DR branch: id=$id name=$name state=$state restore_status=$restore"
           [[ "$id" == "$DR_BRANCH_ID" && "$name" == "$DR_BRANCH_NAME" && "$id" != "$PRODUCTION_BRANCH_ID" && "$primary" == false && "$default" == false && "$state" == ready && "$restore" == restored ]]
           echo "DR_NATIVE_RESTORE_VALIDATED_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
           echo "Production remains canonical and untouched."
@@ -158,8 +151,34 @@ jobs:
         run: |
           set -euo pipefail
           test -f apps/api/dist/integrations/external-integrations.integration.js
-          echo 'Creating integration fixtures only after Worker recovery has been validated and its process stopped.'
+          echo 'Preparing repeatable isolated fixture lifecycle after Worker recovery validation.'
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          begin;
+          select set_config('app.user_id','78200000-0000-4000-8000-000000000101',true);
+          select set_config('app.tenant_id','78200000-0000-4000-8000-000000000001',true);
+          do $$
+          declare
+            v_job uuid;
+            v_requeued boolean;
+          begin
+            select id into v_job
+              from durable_jobs
+             where tenant_id='78200000-0000-4000-8000-000000000001'
+               and source_outbox_event_id='78200000-0000-4000-8000-000000000701'
+               and job_type='integrations.webhook.deliver'
+             order by created_at desc
+             limit 1;
+            if v_job is null then
+              raise exception 'NEX-56 durable fixture job was not found';
+            end if;
+            select nexora_admin_requeue_durable_job(v_job,'DR drill fixture reset before lifecycle') into v_requeued;
+            if not coalesce(v_requeued,false) then
+              raise exception 'NEX-56 durable fixture requeue was rejected';
+            end if;
+          end $$;
+          commit;
+          SQL
           node apps/api/dist/integrations/external-integrations.integration.js
 
       - name: T8 — webhook receiver contract
