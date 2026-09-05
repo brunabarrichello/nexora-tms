@@ -60,7 +60,7 @@ jobs:
 
       - name: Create isolated Neon branch
         id: admin
-        uses: neondatabase/create-branch-action@v6
+        uses: neondatabase/create-branch-action@v5
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
@@ -94,7 +94,7 @@ jobs:
 
       - name: Resolve migrator connection
         id: migrator
-        uses: neondatabase/create-branch-action@v6
+        uses: neondatabase/create-branch-action@v5
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
@@ -125,7 +125,7 @@ jobs:
 
       - name: Resolve nexora_app connection
         id: app
-        uses: neondatabase/create-branch-action@v6
+        uses: neondatabase/create-branch-action@v5
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
