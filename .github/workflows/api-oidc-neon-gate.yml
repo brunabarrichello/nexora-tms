@@ -82,7 +82,7 @@ jobs:
           fi
           psql --version
 
-      - name: Migrate isolated nexora database
+      - name: Migrate isolated nexora database through owner capability
         shell: bash
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
@@ -171,6 +171,7 @@ jobs:
             echo "- Parent branch: staging"
             echo "- Ephemeral branch: ${NEON_TEST_BRANCH}"
             echo "- Migration provisioning role chain: nexora_migrator -> nexora_owner"
+            echo "- Provisioning capabilities: database CREATE + public USAGE/CREATE"
             echo "- Runtime role: nexora_app"
             echo "- Runtime BYPASSRLS: false"
             echo "- Active external identity mapping: verified"
