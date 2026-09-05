@@ -4,6 +4,9 @@ on:
   push:
     branches: [chore/dr-drill-e2e]
     paths: ['.github/workflows/dr-drill-e2e.yml']
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/dr-drill-e2e.yml']
   workflow_dispatch:
     inputs:
       confirmation:
@@ -85,10 +88,21 @@ jobs:
           prod="$(jq -ec --arg id "$PRODUCTION_BRANCH_ID" '[.branches[]|select(.id==$id)][0]' <<<"$branches")"
           [[ "$(jq -r '.name' <<<"$prod")" == production && "$(jq -r '.default' <<<"$prod")" == true && "$(jq -r '.primary' <<<"$prod")" == true ]]
           history="$(jq -er '.history_retention_seconds' <<<"$project")"
+          branch_count="$(jq '.branches|length' <<<"$branches")"
           [[ "$history" -ge "$FREE_HISTORY_SECONDS" ]]
-          [[ "$(jq '.branches|length' <<<"$branches")" -lt "$FREE_BRANCH_LIMIT" ]]
+          [[ "$branch_count" -lt "$FREE_BRANCH_LIMIT" ]]
+          echo "Neon preflight: history=${history}s branches=${branch_count}/${FREE_BRANCH_LIMIT} source=${ts}"
           payload="$(jq -cn --arg n "$name" --arg p "$PRODUCTION_BRANCH_ID" --arg t "$ts" '{branch:{name:$n,parent_id:$p,parent_timestamp:$t},endpoints:[{type:"read_write"}]}')"
-          response="$(curl -fsS -X POST -H "Authorization: Bearer $NEON_API_KEY" -H 'Content-Type: application/json' -d "$payload" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
+          tmp="$(mktemp)"
+          status="$(curl -sS -o "$tmp" -w '%{http_code}' -X POST -H "Authorization: Bearer $NEON_API_KEY" -H 'Content-Type: application/json' -d "$payload" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
+          if [[ "$status" != 2* ]]; then
+            echo "Neon branch creation failed with HTTP $status"
+            jq -c . "$tmp" 2>/dev/null || cat "$tmp"
+            rm -f "$tmp"
+            exit 1
+          fi
+          response="$(cat "$tmp")"
+          rm -f "$tmp"
           id="$(jq -er '.branch.id' <<<"$response")"
           [[ "$(jq -r '.branch.parent_id' <<<"$response")" == "$PRODUCTION_BRANCH_ID" && "$id" != "$PRODUCTION_BRANCH_ID" ]]
           echo "DR_BRANCH_ID=$id" >> "$GITHUB_ENV"
