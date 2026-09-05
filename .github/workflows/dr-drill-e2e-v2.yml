@@ -148,8 +148,7 @@ jobs:
           test -f apps/api/dist/integrations/external-integrations.integration.js
           echo 'Preparing a fresh deterministic webhook job on the isolated restore branch.'
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex56-external-integrations-fixtures.sql
-          export DR_FIXTURE_IDEMPOTENCY_KEY="nex56:dr:${GITHUB_RUN_ID}"
-          echo "DR_FIXTURE_IDEMPOTENCY_KEY=$DR_FIXTURE_IDEMPOTENCY_KEY" >> "$GITHUB_ENV"
+          export DR_SOURCE_IDEMPOTENCY_KEY="nex56:dr:${GITHUB_RUN_ID}"
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<SQL
           insert into outbox_events (
             id,tenant_id,aggregate_type,aggregate_id,event_type,event_version,payload,
@@ -162,7 +161,7 @@ jobs:
             'nex56.integration.test',
             1,
             jsonb_build_object('fixture','nex56-dr','runId','${GITHUB_RUN_ID}'),
-            '${DR_FIXTURE_IDEMPOTENCY_KEY}',
+            '${DR_SOURCE_IDEMPOTENCY_KEY}',
             'nex56-dr-correlation-${GITHUB_RUN_ID}',
             'nex56-dr-request-${GITHUB_RUN_ID}',
             now(),
@@ -170,7 +169,10 @@ jobs:
           )
           on conflict (tenant_id,idempotency_key) do nothing;
           SQL
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select 'dr-fixture-jobs='||count(*) from durable_jobs where tenant_id='78200000-0000-4000-8000-000000000001' and job_type='integrations.webhook.deliver' and idempotency_key='$DR_FIXTURE_IDEMPOTENCY_KEY'"
+          export DR_FIXTURE_IDEMPOTENCY_KEY="$(psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select dj.idempotency_key from durable_jobs dj join outbox_events oe on oe.tenant_id=dj.tenant_id and oe.id=dj.source_outbox_event_id where oe.tenant_id='78200000-0000-4000-8000-000000000001' and oe.idempotency_key='$DR_SOURCE_IDEMPOTENCY_KEY' and dj.job_type='integrations.webhook.deliver' order by dj.created_at desc limit 1")"
+          test -n "$DR_FIXTURE_IDEMPOTENCY_KEY"
+          echo "DR_FIXTURE_IDEMPOTENCY_KEY=$DR_FIXTURE_IDEMPOTENCY_KEY" >> "$GITHUB_ENV"
+          echo "Fresh durable job created for this drill: yes"
           node apps/api/dist/integrations/external-integrations.integration.js
 
       - name: T8 — webhook receiver contract
