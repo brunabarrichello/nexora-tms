@@ -106,7 +106,7 @@ jobs:
           [[ "$role_chain" == "nexora_owner" ]] || { echo "Unexpected Neon role chain: $role_chain" >&2; exit 1; }
 
           owner_capabilities="$(psql "$ADMIN_DATABASE_URL" -Atqc "select has_schema_privilege('nexora_owner','public','CREATE') || ':' || pg_has_role('nexora_migrator','nexora_owner','member')")"
-          [[ "$owner_capabilities" == "t:t" ]] || { echo "Unexpected Neon owner capabilities: $owner_capabilities" >&2; exit 1; }
+          [[ "$owner_capabilities" == "true:true" ]] || { echo "Unexpected Neon owner capabilities: $owner_capabilities" >&2; exit 1; }
 
       - name: Resolve owner connection through bootstrap role
         id: owner
