@@ -40,7 +40,11 @@ async function bootstrap(): Promise<void> {
   const health = new WorkerHealthServer(config, runtime, logger);
   let shuttingDown = false;
 
-  const shutdown = async (signal: string, exitCode = 0, cause?: unknown): Promise<void> => {
+  const shutdown = async (
+    signal: string,
+    exitCode = 0,
+    cause?: unknown,
+  ): Promise<void> => {
     if (shuttingDown) {
       return;
     }
