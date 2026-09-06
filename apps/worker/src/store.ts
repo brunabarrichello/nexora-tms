@@ -42,27 +42,11 @@ export interface AsyncStore extends WebhookDeliveryPort, CommunicationDeliveryPo
   close(): Promise<void>;
   reapExpiredLeases(workerId: string, batchSize: number): Promise<{ outbox: number; jobs: number }>;
   claimOutbox(workerId: string, batchSize: number, leaseSeconds: number): Promise<OutboxWorkItem[]>;
-  claimJobs(
-    workerId: string,
-    batchSize: number,
-    leaseSeconds: number,
-  ): Promise<DurableJobWorkItem[]>;
+  claimJobs(workerId: string, batchSize: number, leaseSeconds: number): Promise<DurableJobWorkItem[]>;
   completeOutbox(id: string, workerId: string): Promise<boolean>;
   completeJob(id: string, workerId: string): Promise<boolean>;
-  failOutbox(
-    id: string,
-    workerId: string,
-    error: string,
-    baseBackoffSeconds: number,
-    maxBackoffSeconds: number,
-  ): Promise<FailureStatus>;
-  failJob(
-    id: string,
-    workerId: string,
-    error: string,
-    baseBackoffSeconds: number,
-    maxBackoffSeconds: number,
-  ): Promise<FailureStatus>;
+  failOutbox(id: string, workerId: string, error: string, baseBackoffSeconds: number, maxBackoffSeconds: number): Promise<FailureStatus>;
+  failJob(id: string, workerId: string, error: string, baseBackoffSeconds: number, maxBackoffSeconds: number): Promise<FailureStatus>;
 }
 
 function databasePoolConfig(database: WorkerDatabaseConfig): PoolConfig {
@@ -83,13 +67,13 @@ function databasePoolConfig(database: WorkerDatabaseConfig): PoolConfig {
 export class PgAsyncStore implements AsyncStore {
   private readonly pool: Pool;
 
-  constructor(database: WorkerDatabaseConfig, maxConnections: number) {
+  constructor(database: WorkerDatabaseConfig, maxConnections: number, connectionTimeoutMs: number) {
     this.pool = new Pool({
       ...databasePoolConfig(database),
       application_name: 'nexora-tms-worker',
       max: Math.max(2, maxConnections + 2),
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
+      connectionTimeoutMillis: connectionTimeoutMs,
     });
   }
 
@@ -104,6 +88,9 @@ export class PgAsyncStore implements AsyncStore {
     if (row.role !== 'nexora_worker') {
       throw new Error(`Worker database identity mismatch: expected nexora_worker, got ${row.role}`);
     }
+    if (row.database !== 'nexora') {
+      throw new Error(`Worker database target mismatch: expected nexora, got ${row.database}`);
+    }
     return row;
   }
 
@@ -111,155 +98,67 @@ export class PgAsyncStore implements AsyncStore {
     await this.pool.end();
   }
 
-  async reapExpiredLeases(
-    workerId: string,
-    batchSize: number,
-  ): Promise<{ outbox: number; jobs: number }> {
+  async reapExpiredLeases(workerId: string, batchSize: number): Promise<{ outbox: number; jobs: number }> {
     const result = await this.pool.query<{ outbox: number; jobs: number }>(
-      `select
-         nexora_reap_expired_outbox_leases($1, $2)::integer as outbox,
-         nexora_reap_expired_durable_job_leases($1, $2)::integer as jobs`,
+      `select nexora_reap_expired_outbox_leases($1, $2)::integer as outbox,
+              nexora_reap_expired_durable_job_leases($1, $2)::integer as jobs`,
       [workerId, batchSize],
     );
     return result.rows[0] ?? { outbox: 0, jobs: 0 };
   }
 
-  async claimOutbox(
-    workerId: string,
-    batchSize: number,
-    leaseSeconds: number,
-  ): Promise<OutboxWorkItem[]> {
-    const result = await this.pool.query<OutboxWorkItem>(
-      'select * from nexora_claim_outbox_events($1, $2, $3)',
-      [workerId, batchSize, leaseSeconds],
-    );
+  async claimOutbox(workerId: string, batchSize: number, leaseSeconds: number): Promise<OutboxWorkItem[]> {
+    const result = await this.pool.query<OutboxWorkItem>('select * from nexora_claim_outbox_events($1, $2, $3)', [workerId, batchSize, leaseSeconds]);
     return result.rows;
   }
 
-  async claimJobs(
-    workerId: string,
-    batchSize: number,
-    leaseSeconds: number,
-  ): Promise<DurableJobWorkItem[]> {
-    const result = await this.pool.query<DurableJobWorkItem>(
-      'select * from nexora_claim_durable_jobs($1, $2, $3)',
-      [workerId, batchSize, leaseSeconds],
-    );
+  async claimJobs(workerId: string, batchSize: number, leaseSeconds: number): Promise<DurableJobWorkItem[]> {
+    const result = await this.pool.query<DurableJobWorkItem>('select * from nexora_claim_durable_jobs($1, $2, $3)', [workerId, batchSize, leaseSeconds]);
     return result.rows;
   }
 
   async completeOutbox(id: string, workerId: string): Promise<boolean> {
-    const result = await this.pool.query<{ completed: boolean }>(
-      'select nexora_complete_outbox_event($1, $2) as completed',
-      [id, workerId],
-    );
+    const result = await this.pool.query<{ completed: boolean }>('select nexora_complete_outbox_event($1, $2) as completed', [id, workerId]);
     return result.rows[0]?.completed === true;
   }
 
   async completeJob(id: string, workerId: string): Promise<boolean> {
-    const result = await this.pool.query<{ completed: boolean }>(
-      'select nexora_complete_durable_job($1, $2) as completed',
-      [id, workerId],
-    );
+    const result = await this.pool.query<{ completed: boolean }>('select nexora_complete_durable_job($1, $2) as completed', [id, workerId]);
     return result.rows[0]?.completed === true;
   }
 
-  async failOutbox(
-    id: string,
-    workerId: string,
-    error: string,
-    baseBackoffSeconds: number,
-    maxBackoffSeconds: number,
-  ): Promise<FailureStatus> {
-    const result = await this.pool.query<{ status: FailureStatus }>(
-      'select nexora_fail_outbox_event($1, $2, $3, $4, $5) as status',
-      [id, workerId, error, baseBackoffSeconds, maxBackoffSeconds],
-    );
+  async failOutbox(id: string, workerId: string, error: string, baseBackoffSeconds: number, maxBackoffSeconds: number): Promise<FailureStatus> {
+    const result = await this.pool.query<{ status: FailureStatus }>('select nexora_fail_outbox_event($1, $2, $3, $4, $5) as status', [id, workerId, error, baseBackoffSeconds, maxBackoffSeconds]);
     return result.rows[0]?.status ?? null;
   }
 
-  async failJob(
-    id: string,
-    workerId: string,
-    error: string,
-    baseBackoffSeconds: number,
-    maxBackoffSeconds: number,
-  ): Promise<FailureStatus> {
-    const result = await this.pool.query<{ status: FailureStatus }>(
-      'select nexora_fail_durable_job($1, $2, $3, $4, $5) as status',
-      [id, workerId, error, baseBackoffSeconds, maxBackoffSeconds],
-    );
+  async failJob(id: string, workerId: string, error: string, baseBackoffSeconds: number, maxBackoffSeconds: number): Promise<FailureStatus> {
+    const result = await this.pool.query<{ status: FailureStatus }>('select nexora_fail_durable_job($1, $2, $3, $4, $5) as status', [id, workerId, error, baseBackoffSeconds, maxBackoffSeconds]);
     return result.rows[0]?.status ?? null;
   }
 
   async getWebhookDelivery(deliveryId: string): Promise<WebhookDeliveryTarget | null> {
-    const result = await this.pool.query<WebhookDeliveryTarget>(
-      'select * from nexora_worker_get_webhook_delivery($1::uuid)',
-      [deliveryId],
-    );
+    const result = await this.pool.query<WebhookDeliveryTarget>('select * from nexora_worker_get_webhook_delivery($1::uuid)', [deliveryId]);
     return result.rows[0] ?? null;
   }
 
-  async recordWebhookAttempt(input: {
-    readonly deliveryId: string;
-    readonly attempt: number;
-    readonly outcome: 'success' | 'failure' | 'cancelled';
-    readonly statusCode: number | null;
-    readonly durationMs: number;
-    readonly errorMessage: string | null;
-    readonly terminal: boolean;
-  }): Promise<boolean> {
+  async recordWebhookAttempt(input: { readonly deliveryId: string; readonly attempt: number; readonly outcome: 'success' | 'failure' | 'cancelled'; readonly statusCode: number | null; readonly durationMs: number; readonly errorMessage: string | null; readonly terminal: boolean }): Promise<boolean> {
     const result = await this.pool.query<{ recorded: boolean }>(
-      `select nexora_worker_record_webhook_attempt(
-         $1::uuid,$2::integer,$3::text,$4::integer,$5::integer,$6::text,$7::boolean
-       ) as recorded`,
-      [
-        input.deliveryId,
-        input.attempt,
-        input.outcome,
-        input.statusCode,
-        input.durationMs,
-        input.errorMessage,
-        input.terminal,
-      ],
+      `select nexora_worker_record_webhook_attempt($1::uuid,$2::integer,$3::text,$4::integer,$5::integer,$6::text,$7::boolean) as recorded`,
+      [input.deliveryId, input.attempt, input.outcome, input.statusCode, input.durationMs, input.errorMessage, input.terminal],
     );
     return result.rows[0]?.recorded === true;
   }
 
-  async getCommunicationDelivery(
-    communicationId: string,
-  ): Promise<CommunicationDeliveryTarget | null> {
-    const result = await this.pool.query<CommunicationDeliveryTarget>(
-      'select * from nexora_worker_get_communication($1::uuid)',
-      [communicationId],
-    );
+  async getCommunicationDelivery(communicationId: string): Promise<CommunicationDeliveryTarget | null> {
+    const result = await this.pool.query<CommunicationDeliveryTarget>('select * from nexora_worker_get_communication($1::uuid)', [communicationId]);
     return result.rows[0] ?? null;
   }
 
-  async recordCommunicationAttempt(input: {
-    readonly communicationId: string;
-    readonly jobAttempt: number;
-    readonly outcome: 'success' | 'failure' | 'cancelled';
-    readonly providerMessageId: string | null;
-    readonly statusCode: number | null;
-    readonly durationMs: number;
-    readonly errorMessage: string | null;
-    readonly terminal: boolean;
-  }): Promise<boolean> {
+  async recordCommunicationAttempt(input: { readonly communicationId: string; readonly jobAttempt: number; readonly outcome: 'success' | 'failure' | 'cancelled'; readonly providerMessageId: string | null; readonly statusCode: number | null; readonly durationMs: number; readonly errorMessage: string | null; readonly terminal: boolean }): Promise<boolean> {
     const result = await this.pool.query<{ recorded: boolean }>(
-      `select nexora_worker_record_communication_attempt(
-         $1::uuid,$2::integer,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::boolean
-       ) as recorded`,
-      [
-        input.communicationId,
-        input.jobAttempt,
-        input.outcome,
-        input.providerMessageId,
-        input.statusCode,
-        input.durationMs,
-        input.errorMessage,
-        input.terminal,
-      ],
+      `select nexora_worker_record_communication_attempt($1::uuid,$2::integer,$3::text,$4::text,$5::integer,$6::integer,$7::text,$8::boolean) as recorded`,
+      [input.communicationId, input.jobAttempt, input.outcome, input.providerMessageId, input.statusCode, input.durationMs, input.errorMessage, input.terminal],
     );
     return result.rows[0]?.recorded === true;
   }
