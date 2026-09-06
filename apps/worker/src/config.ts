@@ -23,6 +23,7 @@ export interface WorkerConfig {
   batchSize: number;
   leaseSeconds: number;
   handlerTimeoutMs: number;
+  connectionTimeoutMs: number;
   maxConcurrency: number;
   baseBackoffSeconds: number;
   maxBackoffSeconds: number;
@@ -51,9 +52,32 @@ function readInteger(
   return value;
 }
 
+function validateWorkerDatabaseUrl(url: string): void {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error('WORKER_DATABASE_URL must be a valid PostgreSQL connection URL');
+  }
+
+  if (!['postgres:', 'postgresql:'].includes(parsed.protocol)) {
+    throw new Error('WORKER_DATABASE_URL must use postgres:// or postgresql://');
+  }
+
+  if (decodeURIComponent(parsed.username) !== 'nexora_worker') {
+    throw new Error('WORKER_DATABASE_URL must use the nexora_worker database user');
+  }
+
+  const database = decodeURIComponent(parsed.pathname.replace(/^\/+/, ''));
+  if (database !== 'nexora') {
+    throw new Error('WORKER_DATABASE_URL must target the nexora database');
+  }
+}
+
 function loadDatabaseConfig(env: Environment): WorkerDatabaseConfig {
   const url = env.WORKER_DATABASE_URL?.trim();
   if (url) {
+    validateWorkerDatabaseUrl(url);
     return { kind: 'url', url };
   }
 
@@ -74,7 +98,7 @@ function loadDatabaseConfig(env: Environment): WorkerDatabaseConfig {
     kind: 'parameters',
     host,
     port: readInteger(env, 'WORKER_DATABASE_PORT', 5432, 1, 65_535),
-    database: env.WORKER_DATABASE_NAME?.trim() || 'neondb',
+    database: env.WORKER_DATABASE_NAME?.trim() || 'nexora',
     user,
     password,
   };
@@ -103,6 +127,13 @@ export function loadWorkerConfig(env: Environment = process.env): WorkerConfig {
     batchSize: readInteger(env, 'WORKER_BATCH_SIZE', 20, 1, 500),
     leaseSeconds,
     handlerTimeoutMs,
+    connectionTimeoutMs: readInteger(
+      env,
+      'WORKER_DATABASE_CONNECTION_TIMEOUT_MS',
+      10_000,
+      1_000,
+      60_000,
+    ),
     maxConcurrency: readInteger(env, 'WORKER_MAX_CONCURRENCY', 8, 1, 100),
     baseBackoffSeconds: readInteger(env, 'WORKER_BASE_BACKOFF_SECONDS', 5, 1, 3_600),
     maxBackoffSeconds: readInteger(env, 'WORKER_MAX_BACKOFF_SECONDS', 900, 1, 86_400),
