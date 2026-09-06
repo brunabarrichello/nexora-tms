@@ -172,7 +172,7 @@ jobs:
         env:
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
           NODE_ENV: test
-        run: pnpm --filter @nexora/api test:e2e -- --runInBand
+        run: pnpm --filter @nexora/api test
 
       - name: Gate summary
         if: always()
