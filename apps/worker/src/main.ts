@@ -61,7 +61,11 @@ async function bootstrap(): Promise<void> {
       await app.close();
       logger.info('worker.shutdown.completed', { signal, exitCode });
     } catch (error) {
-      logger.error('worker.shutdown.failed', { signal, exitCode, ...errorFields(error) });
+      logger.error('worker.shutdown.failed', {
+        signal,
+        exitCode,
+        ...errorFields(error),
+      });
       exitCode = 1;
     }
 
@@ -72,8 +76,14 @@ async function bootstrap(): Promise<void> {
 
   process.once('SIGINT', () => void shutdown('SIGINT'));
   process.once('SIGTERM', () => void shutdown('SIGTERM'));
-  process.once('uncaughtException', (error) => void shutdown('uncaughtException', 1, error));
-  process.once('unhandledRejection', (reason) => void shutdown('unhandledRejection', 1, reason));
+  process.once(
+    'uncaughtException',
+    (error) => void shutdown('uncaughtException', 1, error),
+  );
+  process.once(
+    'unhandledRejection',
+    (reason) => void shutdown('unhandledRejection', 1, reason),
+  );
 
   try {
     await runtime.start();
