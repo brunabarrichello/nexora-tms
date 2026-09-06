@@ -37,21 +37,24 @@ test('loads bounded worker defaults and explicit runtime values', () => {
   assert.ok(config.readinessStaleAfterMs >= 15_000);
 });
 
-test('loads a TLS-enforced parameterized nexora_worker database configuration', () => {
-  const config = loadWorkerConfig({
-    WORKER_DATABASE_HOST: 'ep-example.us-east-2.aws.neon.tech',
-    WORKER_DATABASE_PASSWORD: 'secret',
-  });
+test(
+  'loads a TLS-enforced parameterized nexora_worker database configuration',
+  () => {
+    const config = loadWorkerConfig({
+      WORKER_DATABASE_HOST: 'ep-example.us-east-2.aws.neon.tech',
+      WORKER_DATABASE_PASSWORD: 'secret',
+    });
 
-  assert.deepEqual(config.database, {
-    kind: 'parameters',
-    host: 'ep-example.us-east-2.aws.neon.tech',
-    port: 5432,
-    database: 'neondb',
-    user: 'nexora_worker',
-    password: 'secret',
-  });
-});
+    assert.deepEqual(config.database, {
+      kind: 'parameters',
+      host: 'ep-example.us-east-2.aws.neon.tech',
+      port: 5432,
+      database: 'neondb',
+      user: 'nexora_worker',
+      password: 'secret',
+    });
+  },
+);
 
 test('rejects a non-worker database user', () => {
   assert.throws(
