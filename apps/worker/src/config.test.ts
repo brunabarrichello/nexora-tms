@@ -25,7 +25,10 @@ test('loads bounded worker defaults and explicit runtime values', () => {
     WORKER_MAX_CONCURRENCY: '4',
   });
 
-  assert.deepEqual(config.database, { kind: 'url', url: WORKER_DATABASE_URL });
+  assert.deepEqual(config.database, {
+    kind: 'url',
+    url: WORKER_DATABASE_URL,
+  });
   assert.equal(config.workerId, 'worker-test-1');
   assert.equal(config.environment, 'staging');
   assert.equal(config.port, 9090);
@@ -68,18 +71,29 @@ test('rejects a non-worker database user', () => {
 
 test('does not accept generic DATABASE_URL as a worker credential', () => {
   assert.throws(
-    () => loadWorkerConfig({ DATABASE_URL: 'postgresql://nexora_app:secret@example.invalid/nexora' }),
+    () =>
+      loadWorkerConfig({
+        DATABASE_URL: 'postgresql://nexora_app:secret@example.invalid/nexora',
+      }),
     /WORKER_DATABASE_URL or WORKER_DATABASE_HOST \+ WORKER_DATABASE_PASSWORD is required/,
   );
 });
 
 test('rejects worker URLs targeting the wrong database or role', () => {
   assert.throws(
-    () => loadWorkerConfig({ WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/neondb' }),
+    () =>
+      loadWorkerConfig({
+        WORKER_DATABASE_URL:
+          'postgresql://nexora_worker:secret@example.invalid/neondb',
+      }),
     /WORKER_DATABASE_URL must target the nexora database/,
   );
   assert.throws(
-    () => loadWorkerConfig({ WORKER_DATABASE_URL: 'postgresql://nexora_app:secret@example.invalid/nexora' }),
+    () =>
+      loadWorkerConfig({
+        WORKER_DATABASE_URL:
+          'postgresql://nexora_app:secret@example.invalid/nexora',
+      }),
     /WORKER_DATABASE_URL must use the nexora_worker database user/,
   );
 });
@@ -90,14 +104,23 @@ test('rejects unsafe worker bounds', () => {
     /WORKER_BATCH_SIZE must be an integer between 1 and 500/,
   );
   assert.throws(
-    () => loadWorkerConfig({ WORKER_DATABASE_URL, WORKER_DATABASE_CONNECTION_TIMEOUT_MS: '500' }),
+    () =>
+      loadWorkerConfig({
+        WORKER_DATABASE_URL,
+        WORKER_DATABASE_CONNECTION_TIMEOUT_MS: '500',
+      }),
     /WORKER_DATABASE_CONNECTION_TIMEOUT_MS must be an integer between 1000 and 60000/,
   );
 });
 
 test('rejects a handler deadline that can collide with lease expiry', () => {
   assert.throws(
-    () => loadWorkerConfig({ WORKER_DATABASE_URL, WORKER_LEASE_SECONDS: '5', WORKER_HANDLER_TIMEOUT_MS: '5000' }),
+    () =>
+      loadWorkerConfig({
+        WORKER_DATABASE_URL,
+        WORKER_LEASE_SECONDS: '5',
+        WORKER_HANDLER_TIMEOUT_MS: '5000',
+      }),
     /WORKER_HANDLER_TIMEOUT_MS must be an integer between 100 and 4000/,
   );
 });
