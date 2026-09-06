@@ -2,18 +2,15 @@ name: API Negotiation Collaboration Neon Gate
 
 on:
   pull_request:
-    branches:
-      - main
+    types: [opened, synchronize, reopened]
     paths:
-      - 'apps/api/src/negotiation/**'
-      - 'packages/database/**'
+      - 'apps/api/**'
+      - 'packages/**'
+      - 'infrastructure/neon/**'
       - '.github/workflows/api-negotiation-collaboration-neon-gate.yml'
 
-permissions:
-  contents: read
-
 concurrency:
-  group: api-negotiation-collaboration-neon-pr-${{ github.event.pull_request.number }}
+  group: api-negotiation-collaboration-neon-gate-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 env:
@@ -21,11 +18,11 @@ env:
   DATABASE_NAME: nexora
 
 jobs:
-  negotiation-collaboration-api:
+  integration:
     name: Negotiation collaboration API against nexora_app
-    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout PR
         uses: actions/checkout@v7
@@ -40,13 +37,12 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24.20.0
-          check-latest: false
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Validate Neon API secret
-        shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
@@ -54,7 +50,6 @@ jobs:
           test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
 
       - name: Set ephemeral branch
-        shell: bash
         run: |
           set -euo pipefail
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-neg-api-${{ github.run_id }}" >> "$GITHUB_ENV"
@@ -71,9 +66,15 @@ jobs:
           role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
+          api_host: https://console.neon.tech/api/v2
+          prisma: false
+          branch_type: default
+          ssl: require
+          suspend_timeout: 0
+          get_auth_url: false
+          get_data_api_url: false
 
       - name: Ensure PostgreSQL client
-        shell: bash
         run: |
           set -euo pipefail
           if ! command -v psql >/dev/null 2>&1; then
@@ -90,7 +91,6 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           GRANT nexora_owner TO nexora_migrator;
@@ -101,8 +101,11 @@ jobs:
           roles="$(psql "$ADMIN_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
           [[ "$roles" == "neondb_owner:neondb_owner" ]] || { echo "Unexpected bootstrap role: $roles" >&2; exit 1; }
 
-          owner_roles="$(psql "$ADMIN_DATABASE_URL" -Atqc "select has_database_privilege('nexora_migrator','nexora','CONNECT') || ':' || has_schema_privilege('nexora_owner','public','CREATE') || ':' || pg_has_role('nexora_migrator','nexora_owner','member')")"
-          [[ "$owner_roles" == "t:t:t" ]] || { echo "Unexpected Neon role capabilities: $owner_roles" >&2; exit 1; }
+          role_chain="$(psql "$ADMIN_DATABASE_URL" -Atqc "set role nexora_migrator; select current_user; set role nexora_owner; select current_user")"
+          [[ "$role_chain" == \$'nexora_migrator\nnexora_owner' ]] || { echo "Unexpected Neon role chain: $role_chain" >&2; exit 1; }
+
+          owner_capabilities="$(psql "$ADMIN_DATABASE_URL" -Atqc "select has_schema_privilege('nexora_owner','public','CREATE') || ':' || pg_has_role('nexora_migrator','nexora_owner','member')")"
+          [[ "$owner_capabilities" == "t:t" ]] || { echo "Unexpected Neon owner capabilities: $owner_capabilities" >&2; exit 1; }
 
       - name: Resolve owner connection through bootstrap role
         id: owner
@@ -143,27 +146,6 @@ jobs:
             ('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa','11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','active',now()),
             ('bbbbbbbb-2222-4222-8222-bbbbbbbbbbbb','22222222-2222-4222-8222-222222222222','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','active',now());
 
-          INSERT INTO business_parties(id,tenant_id,tax_id,legal_name,status) VALUES
-            ('a1000000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111','A100','Customer A','active'),
-            ('a1000000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111','A200','Shipper A','active'),
-            ('a1000000-0000-4000-8000-000000000003','11111111-1111-4111-8111-111111111111','A300','Consignee A','active');
-
-          INSERT INTO business_party_addresses(id,tenant_id,party_id,type,label,street,city,state,country_code) VALUES
-            ('a1100000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111','a1000000-0000-4000-8000-000000000002','pickup','Origin A','Rua A','Sao Paulo','SP','BR'),
-            ('a1100000-0000-4000-8000-000000000002','11111111-1111-4111-8111-111111111111','a1000000-0000-4000-8000-000000000003','delivery','Destination A','Rua B','Campinas','SP','BR');
-
-          INSERT INTO transport_requests(
-            id,tenant_id,customer_party_id,shipper_party_id,consignee_party_id,origin_address_id,destination_address_id,
-            planned_pickup_at,planned_delivery_at,cargo_description,status,created_by_user_id,updated_by_user_id
-          ) VALUES (
-            'a1200000-0000-4000-8000-000000000001','11111111-1111-4111-8111-111111111111',
-            'a1000000-0000-4000-8000-000000000001','a1000000-0000-4000-8000-000000000002','a1000000-0000-4000-8000-000000000003',
-            'a1100000-0000-4000-8000-000000000001','a1100000-0000-4000-8000-000000000002',
-            now(),now()+interval '1 day','Negotiation API cargo','in_negotiation',
-            'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-          );
-          SQL
-
       - name: Resolve nexora_app connection
         id: app
         shell: bash
@@ -185,31 +167,21 @@ jobs:
         run: pnpm --filter @nexora/api build
 
       - name: Run negotiation collaboration integration
-        shell: bash
         env:
           DATABASE_URL: ${{ env.APP_DATABASE_URL }}
-          DATABASE_POOL_MAX: '2'
-        run: |
-          set -euo pipefail
-          echo "::add-mask::$DATABASE_URL"
-          node apps/api/dist/negotiation/negotiation-collaboration.integration.js
+          NODE_ENV: test
+        run: pnpm --filter @nexora/api test:e2e -- --runInBand
 
       - name: Gate summary
-        shell: bash
+        if: always()
         run: |
-          {
-            echo '## Wave 0021 API Negotiation Collaboration Gate'
-            echo '- Thread creation and creator membership: verified'
-            echo '- Internal/external participant lifecycle: verified'
-            echo '- Message and reply persistence through nexora_app: verified'
-            echo '- Cross-tenant thread visibility: rejected by RLS'
-            echo '- Closed-thread mutations: rejected by service rules'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Negotiation collaboration Neon gate completed for database=${DATABASE_NAME}."
 
       - name: Delete isolated Neon branch
-        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
+        if: always() && env.NEON_TEST_BRANCH != ''
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
+          api_host: https://console.neon.tech/api/v2
