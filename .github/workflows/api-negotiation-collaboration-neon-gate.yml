@@ -60,14 +60,14 @@ jobs:
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
       - name: Create isolated Neon branch
-        id: admin
+        id: create-neon
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: neondb_owner
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -79,34 +79,12 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y postgresql-client
           fi
+          psql --version
 
-      - name: Bootstrap migration capability
-        env:
-          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+      - name: Resolve owner capability and apply migrations
         shell: bash
-        run: |
-          set -euo pipefail
-          echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE nexora TO nexora_owner;
-          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
-          SQL
-
-      - name: Resolve migrator connection
-        id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: ${{ env.DATABASE_NAME }}
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Apply migrations and seed collaboration fixtures
         env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
-        shell: bash
+          MIGRATOR_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
@@ -116,6 +94,10 @@ jobs:
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
+
+          roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
+          [[ "$roles" == "nexora_migrator:nexora_owner" ]] || { echo "Unexpected migration role chain: $roles" >&2; exit 1; }
+
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
@@ -189,7 +171,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
-        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
