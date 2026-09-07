@@ -18,11 +18,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-external-integrations-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   external-integrations:
@@ -72,8 +73,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -91,8 +92,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -110,8 +111,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -142,7 +143,7 @@ jobs:
           echo "::add-mask::$ADMIN_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$ADMIN_DATABASE_URL" >> "$GITHUB_ENV"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
@@ -153,7 +154,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -187,7 +188,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -198,7 +199,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_worker
           api_key: ${{ secrets.NEON_API_KEY }}
 
