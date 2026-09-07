@@ -47,7 +47,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Create isolated Neon branch
+      - name: Create isolated Neon branch as nexora_owner
         id: create-neon
         uses: neondatabase/create-branch-action@v6
         with:
@@ -55,7 +55,7 @@ jobs:
           parent_branch: production
           branch_name: pr-${{ github.event.pull_request.number }}-documents-${{ github.run_id }}
           database: nexora
-          role: neondb_owner
+          role: nexora_owner
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Ensure PostgreSQL client
@@ -67,14 +67,14 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
 
-      - name: Bootstrap DDL role
+      - name: Bootstrap DDL and runtime role connectivity
         env:
           ADMIN_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CONNECT ON DATABASE nexora TO nexora_owner, nexora_migrator, nexora_app, nexora_worker;
+          GRANT CONNECT ON DATABASE nexora TO nexora_migrator, nexora_app, nexora_worker;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
