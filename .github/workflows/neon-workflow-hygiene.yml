@@ -41,7 +41,7 @@ jobs:
               failures=$((failures + 1))
             fi
 
-            if grep -nE '^[[:space:]]*GRANT[[:space:]]+[^;]*DATABASE[[:space:]]+neondb([[:space:]]+|;)'; then
+            if grep -nE '^[[:space:]]*GRANT[[:space:]]+[^;]*DATABASE[[:space:]]+neondb([[:space:]]+|;)' "$file"; then
               echo "ERROR: $file grants database privileges on neondb; target nexora."
               failures=$((failures + 1))
             fi
