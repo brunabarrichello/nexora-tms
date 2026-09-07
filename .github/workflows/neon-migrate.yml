@@ -26,6 +26,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   migrate:
@@ -76,8 +77,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ steps.target.outputs.environment }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_owner
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Ensure PostgreSQL client
@@ -96,7 +97,7 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
@@ -107,7 +108,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ steps.target.outputs.environment }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
