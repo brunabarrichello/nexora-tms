@@ -2,8 +2,7 @@ name: Neon Audit Gate
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'packages/database/**'
       - '.github/workflows/neon-audit-gate.yml'
@@ -12,8 +11,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-audit-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
@@ -26,31 +25,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
-      - name: Checkout PR
-        uses: actions/checkout@v7
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          version: 11.24.0
-          run_install: false
-      - name: Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: 24.20.0
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+        with: {version: 11.24.0, run_install: false}
+      - uses: actions/setup-node@v7
+        with: {node-version: 24.20.0}
+      - run: pnpm install --frozen-lockfile
       - name: Validate Neon API secret
-        shell: bash
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          set -euo pipefail
-          test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
+        env: {NEON_API_KEY: ${{ secrets.NEON_API_KEY }}}
+        run: test -n "${NEON_API_KEY:-}"
       - name: Set ephemeral branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-audit-${{ github.run_id }}" >> "$GITHUB_ENV"
+        run: echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-audit-${{ github.run_id }}" >> "$GITHUB_ENV"
       - name: Create isolated Neon branch
         id: admin
         uses: neondatabase/create-branch-action@v6
@@ -62,24 +47,15 @@ jobs:
           role: neondb_owner
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Ensure PostgreSQL client
-        shell: bash
         run: |
           set -euo pipefail
-          if ! command -v psql >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y postgresql-client
-          fi
-          psql --version
+          if ! command -v psql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
       - name: Bootstrap nexora database access
-        env:
-          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
-        shell: bash
+        env: {ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }} }
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          -- neondb_owner is a member of nexora_owner. The latter owns the
-          -- application database, so grants on nexora must execute under it.
           SET ROLE nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator, nexora_app, nexora_worker;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
@@ -88,79 +64,40 @@ jobs:
           RESET ROLE;
           SQL
       - name: Resolve migrator connection
-        shell: bash
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        env: {NEON_API_KEY: ${{ secrets.NEON_API_KEY }}}
         run: |
           set -euo pipefail
-          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
-            --project-id "$NEON_PROJECT_ID" \
-            --database-name "$DATABASE_NAME" \
-            --role-name nexora_migrator)"
-          test -n "$MIGRATOR_DATABASE_URL"
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
+          url="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_migrator)"
+          echo "::add-mask::$url"
+          echo "MIGRATOR_DATABASE_URL=$url" >> "$GITHUB_ENV"
       - name: Verify migration connection and journal
-        shell: bash
         run: |
           set -euo pipefail
-          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT current_database() AS database, session_user, current_user, current_setting('role') AS role;
-          SELECT has_schema_privilege(current_user, 'public', 'CREATE') AS public_create;
-          SELECT to_regclass('drizzle.__drizzle_migrations') AS migration_journal;
-          SELECT COALESCE((SELECT count(*) FROM drizzle.__drizzle_migrations), 0) AS applied_migrations;
-          SQL
+          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT current_database(),session_user,current_user; SELECT has_schema_privilege(current_user,'public','CREATE');"
       - name: Apply migrations
-        shell: bash
-        env:
-          DEBUG: drizzle-kit:*
-        run: |
-          set -euo pipefail
-          DATABASE_URL="$MIGRATOR_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+        run: DATABASE_URL="$MIGRATOR_DATABASE_URL" pnpm --filter @nexora/database db:migrate
       - name: Verify Wave 0024 schema, RLS and grants
-        shell: bash
         run: psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
       - name: Resolve nexora_app connection
-        shell: bash
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        env: {NEON_API_KEY: ${{ secrets.NEON_API_KEY }}}
         run: |
           set -euo pipefail
-          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
-            --project-id "$NEON_PROJECT_ID" \
-            --database-name "$DATABASE_NAME" \
-            --role-name nexora_app)"
-          test -n "$APP_DATABASE_URL"
-          echo "::add-mask::$APP_DATABASE_URL"
-          echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
+          url="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_app)"
+          echo "::add-mask::$url"
+          echo "APP_DATABASE_URL=$url" >> "$GITHUB_ENV"
       - name: Verify runtime writes, sensitive payload guard and tenant isolation
-        shell: bash
-        run: |
-          set -euo pipefail
-          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-runtime.sql
+        run: psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-runtime.sql
       - name: Verify owner cannot mutate audit history
-        shell: bash
         run: psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-immutability.sql
       - name: Gate summary
-        shell: bash
         run: |
-          {
-            echo '### Wave 0024 Cross-Cutting Audit Gate'
-            echo '- audit_events + audit_changes: verified'
-            echo '- tenant RLS policies: verified'
-            echo '- nexora_app SELECT/INSERT-only grants: verified'
-            echo '- Tenant A → Tenant B read isolation: verified'
-            echo '- cross-tenant writes: blocked'
-            echo '- sensitive before/after payload persistence: blocked'
-            echo '- UPDATE/DELETE under owner: blocked by immutable triggers'
-            echo '- Production: untouched'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo '### Wave 0024 Cross-Cutting Audit Gate' >> "$GITHUB_STEP_SUMMARY"
+          echo '- schema/RLS/grants/tenant isolation/immutability: verified' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production: untouched' >> "$GITHUB_STEP_SUMMARY"
       - name: Delete isolated Neon branch
         if: ${{ always() && steps.admin.outputs.branch_id != '' }}
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          branch: ${{ env.NEON_TEST_BRANCH }}
+          branch: ${{ steps.admin.outputs.branch_id }}
           api_key: ${{ secrets.NEON_API_KEY }}
-
-# Re-run marker: grants on nexora execute under its owner role; production remains untouched.
