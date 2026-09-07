@@ -83,13 +83,13 @@ function databasePoolConfig(database: WorkerDatabaseConfig): PoolConfig {
 export class PgAsyncStore implements AsyncStore {
   private readonly pool: Pool;
 
-  constructor(database: WorkerDatabaseConfig, maxConnections: number) {
+  constructor(database: WorkerDatabaseConfig, maxConnections: number, connectionTimeoutMs: number) {
     this.pool = new Pool({
       ...databasePoolConfig(database),
       application_name: 'nexora-tms-worker',
       max: Math.max(2, maxConnections + 2),
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
+      connectionTimeoutMillis: connectionTimeoutMs,
     });
   }
 
@@ -103,6 +103,9 @@ export class PgAsyncStore implements AsyncStore {
     }
     if (row.role !== 'nexora_worker') {
       throw new Error(`Worker database identity mismatch: expected nexora_worker, got ${row.role}`);
+    }
+    if (row.database !== 'nexora') {
+      throw new Error(`Worker database target mismatch: expected nexora, got ${row.database}`);
     }
     return row;
   }
