@@ -163,3 +163,5 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
+
+# Re-run marker: force a fresh PR workflow revision after Neon migration diagnostics.
