@@ -78,8 +78,10 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE neon_superuser;
           GRANT CONNECT ON DATABASE nexora TO neondb_owner, nexora_migrator, nexora_app, nexora_worker;
           GRANT nexora_owner TO nexora_migrator;
+          RESET ROLE;
           SQL
       - name: Resolve migrator connection
         shell: bash
@@ -164,4 +166,4 @@ jobs:
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
-# Re-run marker: force a fresh PR workflow revision after Neon migration diagnostics.
+# Re-run marker: use neon_superuser for ephemeral-branch database ACL bootstrap.
