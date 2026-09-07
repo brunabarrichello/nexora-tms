@@ -59,7 +59,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: neondb_owner
+          role: nexora_owner
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Ensure PostgreSQL client
         shell: bash
@@ -82,22 +82,22 @@ jobs:
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
       - name: Resolve migrator connection
-        id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: ${{ env.DATABASE_NAME }}
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
-      - name: Apply migrations
+        shell: bash
         env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name nexora_migrator)"
+          test -n "$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
+      - name: Apply migrations
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
           if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"; else OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"; fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
@@ -106,22 +106,22 @@ jobs:
         shell: bash
         run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
       - name: Resolve nexora_app connection
-        id: app
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: ${{ env.DATABASE_NAME }}
-          role: nexora_app
-          api_key: ${{ secrets.NEON_API_KEY }}
-      - name: Verify runtime writes, sensitive payload guard and tenant isolation
+        shell: bash
         env:
-          APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name nexora_app)"
+          test -n "$APP_DATABASE_URL"
+          echo "::add-mask::$APP_DATABASE_URL"
+          echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
+      - name: Verify runtime writes, sensitive payload guard and tenant isolation
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$APP_DATABASE_URL"
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-runtime.sql
       - name: Verify owner cannot mutate audit history
         shell: bash
