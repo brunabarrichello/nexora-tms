@@ -29,12 +29,16 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-        with: {version: 11.24.0, run_install: false}
+        with:
+          version: 11.24.0
+          run_install: false
       - uses: actions/setup-node@v7
-        with: {node-version: 24.20.0}
+        with:
+          node-version: 24.20.0
       - run: pnpm install --frozen-lockfile
       - name: Validate Neon API secret
-        env: {NEON_API_KEY: ${{ secrets.NEON_API_KEY }}}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: test -n "${NEON_API_KEY:-}"
       - name: Set ephemeral branch
         run: echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-audit-${{ github.run_id }}" >> "$GITHUB_ENV"
@@ -53,7 +57,8 @@ jobs:
           set -euo pipefail
           if ! command -v psql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
       - name: Bootstrap nexora database access
-        env: {ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}}
+        env:
+          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
         run: |
           set -euo pipefail
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
@@ -63,7 +68,8 @@ jobs:
           GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO nexora_migrator;
           SQL
       - name: Resolve migrator connection
-        env: {NEON_API_KEY: ${{ secrets.NEON_API_KEY }}}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
           url="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_migrator)"
@@ -76,7 +82,8 @@ jobs:
       - name: Verify Wave 0024 schema, RLS and grants
         run: psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
       - name: Resolve nexora_app connection
-        env: {NEON_API_KEY: ${{ secrets.NEON_API_KEY }}}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
           url="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_app)"
