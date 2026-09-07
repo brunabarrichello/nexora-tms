@@ -17,6 +17,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   audit:
@@ -55,10 +56,10 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent: production
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          username: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: neondb_owner
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Ensure PostgreSQL client
         shell: bash
@@ -77,7 +78,7 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
       - name: Resolve migrator connection
@@ -85,10 +86,10 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent: production
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          username: nexora_migrator
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Apply migrations
         env:
@@ -109,10 +110,10 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent: production
+          parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          username: nexora_app
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Verify runtime writes, sensitive payload guard and tenant isolation
         env:
