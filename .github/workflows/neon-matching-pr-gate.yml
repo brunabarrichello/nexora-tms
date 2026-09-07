@@ -13,11 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-matching-gate-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   matching-runtime:
@@ -57,7 +58,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
@@ -78,7 +79,7 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CONNECT ON DATABASE nexora TO nexora_owner, nexora_migrator, nexora_app, nexora_worker;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
@@ -89,7 +90,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -106,6 +107,9 @@ jobs:
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
+          roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
+          [[ "$roles" == "nexora_migrator:nexora_owner" ]] || { echo "Unexpected migration role chain: $roles" >&2; exit 1; }
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0020-matching-owner.sql
 
@@ -116,7 +120,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -130,12 +134,8 @@ jobs:
 
       - name: Cleanup isolated Neon branch
         if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
-        run: |
-          set -euo pipefail
-          curl --fail-with-body --silent --show-error \
-            -X DELETE \
-            -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID"
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          branch: ${{ steps.create-neon.outputs.branch_id }}
+          api_key: ${{ secrets.NEON_API_KEY }}
