@@ -1,0 +1,71 @@
+name: Neon Workflow Hygiene
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  hygiene:
+    name: Validate Neon workflow conventions
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout PR
+        uses: actions/checkout@v7
+
+      - name: Validate Neon workflow conventions
+        shell: bash
+        run: |
+          set -euo pipefail
+          failures=0
+
+          echo '== Neon workflow hygiene =='
+          echo 'Canonical application database: nexora'
+          echo 'Production remains untouched by this check.'
+          echo
+
+          while IFS= read -r file; do
+            case "$file" in
+              *.yml|*.yaml) ;;
+              *) continue ;;
+            esac
+
+            if grep -nE '^[[:space:]]*database:[[:space:]]*neondb([[:space:]]*)$' "$file"; then
+              echo "ERROR: $file uses neondb as a database selector; use nexora."
+              failures=$((failures + 1))
+            fi
+
+            if grep -nE '^[[:space:]]*GRANT[[:space:]]+[^;]*DATABASE[[:space:]]+neondb([[:space:]]+|;)'; then
+              echo "ERROR: $file grants database privileges on neondb; target nexora."
+              failures=$((failures + 1))
+            fi
+
+            if grep -nE '^.*uses:[[:space:]]*neondatabase/create-branch-action@v6' "$file" >/dev/null; then
+              if grep -nE '^[[:space:]]*(username|parent):' "$file"; then
+                echo "ERROR: $file uses v5 create-branch-action inputs; use role/parent_branch."
+                failures=$((failures + 1))
+              fi
+            fi
+
+            if grep -nE '^concurrency:' "$file" >/dev/null; then
+              if grep -nE '^  group:[[:space:]]*neon-.*-pr-\$\{\{ github\.event\.pull_request\.number \}\}' "$file" >/dev/null && grep -nE '^  cancel-in-progress:[[:space:]]*true' "$file" >/dev/null; then
+                echo "ERROR: $file uses per-workflow cancel-in-progress=true; use shared Neon capacity concurrency with cancel-in-progress=false."
+                failures=$((failures + 1))
+              fi
+            fi
+          done < <(find .github/workflows -type f \( -name '*.yml' -o -name '*.yaml' \) -print | sort)
+
+          if (( failures > 0 )); then
+            echo
+            echo "Neon workflow hygiene failed with $failures violation(s)."
+            exit 1
+          fi
+
+          echo
+          echo 'Neon workflow hygiene passed.'
