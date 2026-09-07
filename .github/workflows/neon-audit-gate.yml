@@ -78,10 +78,14 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          -- neondb_owner is a member of nexora_owner. The latter owns the
+          -- application database, so grants on nexora must execute under it.
+          SET ROLE nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator, nexora_app, nexora_worker;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
           GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexora_migrator;
           GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO nexora_migrator;
+          RESET ROLE;
           SQL
       - name: Resolve migrator connection
         shell: bash
@@ -159,4 +163,4 @@ jobs:
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
-# Re-run marker: grant ephemeral nexora CONNECT as neondb_owner; production remains untouched.
+# Re-run marker: grants on nexora execute under its owner role; production remains untouched.
