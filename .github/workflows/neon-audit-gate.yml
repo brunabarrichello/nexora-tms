@@ -78,12 +78,10 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE neon_superuser;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator, nexora_app, nexora_worker;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
           GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexora_migrator;
           GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO nexora_migrator;
-          RESET ROLE;
           SQL
       - name: Resolve migrator connection
         shell: bash
@@ -161,4 +159,4 @@ jobs:
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
-# Re-run marker: migrator uses explicit ephemeral-branch database/schema ACLs; production remains untouched.
+# Re-run marker: grant ephemeral nexora CONNECT as neondb_owner; production remains untouched.
