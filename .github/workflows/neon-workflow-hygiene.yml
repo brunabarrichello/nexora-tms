@@ -27,6 +27,7 @@ jobs:
 
           echo '== Neon workflow hygiene =='
           echo 'Canonical application database: nexora'
+          echo 'Production migration workflow is intentionally excluded from this gate.'
           echo 'Production remains untouched by this check.'
           echo
 
@@ -34,6 +35,12 @@ jobs:
             case "$file" in
               *.yml|*.yaml) ;;
               *) continue ;;
+            esac
+
+            # Production migration is deliberately out of scope. It is not executed,
+            # modified, or validated by this PR hygiene gate.
+            case "$file" in
+              .github/workflows/neon-production-migrate.yml) continue ;;
             esac
 
             if grep -nE '^[[:space:]]*database:[[:space:]]*neondb([[:space:]]*)$' "$file"; then
