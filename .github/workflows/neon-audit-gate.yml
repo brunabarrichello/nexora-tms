@@ -57,12 +57,10 @@ jobs:
         run: |
           set -euo pipefail
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator, nexora_app, nexora_worker;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
           GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexora_migrator;
           GRANT USAGE, SELECT, UPDATE ON ALL SEQUENCES IN SCHEMA public TO nexora_migrator;
-          RESET ROLE;
           SQL
       - name: Resolve migrator connection
         env: {NEON_API_KEY: ${{ secrets.NEON_API_KEY }}}
