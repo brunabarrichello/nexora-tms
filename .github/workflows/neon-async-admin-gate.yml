@@ -171,6 +171,7 @@ jobs:
             OWNER_MIGRATOR_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
           echo "::add-mask::$OWNER_MIGRATOR_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_MIGRATOR_URL" >> "$GITHUB_ENV"
           DATABASE_URL="$OWNER_MIGRATOR_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify NEX-55 security boundary
