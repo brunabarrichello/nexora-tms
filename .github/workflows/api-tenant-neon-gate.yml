@@ -60,7 +60,7 @@ jobs:
 
       - name: Create isolated branch from staging
         id: create-neon
-        uses: neondatabase/create-branch-action@v5
+        uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent: staging

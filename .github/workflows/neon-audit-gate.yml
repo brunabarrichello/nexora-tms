@@ -52,7 +52,7 @@ jobs:
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-audit-${{ github.run_id }}" >> "$GITHUB_ENV"
       - name: Create isolated Neon branch
         id: admin
-        uses: neondatabase/create-branch-action@v5
+        uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent: production
@@ -82,7 +82,7 @@ jobs:
           SQL
       - name: Resolve migrator connection
         id: migrator
-        uses: neondatabase/create-branch-action@v5
+        uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent: production
@@ -106,7 +106,7 @@ jobs:
         run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
       - name: Resolve nexora_app connection
         id: app
-        uses: neondatabase/create-branch-action@v5
+        uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent: production
