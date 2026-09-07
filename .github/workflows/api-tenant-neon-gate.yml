@@ -17,7 +17,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
-  DATABASE_NAME: neondb
+  DATABASE_NAME: nexora
 
 jobs:
   tenant-context-neon:
@@ -63,10 +63,10 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent: staging
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          username: nexora_migrator
+          role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Ensure PostgreSQL client is available
@@ -238,11 +238,3 @@ jobs:
             echo "- Replacement confirmed contract: verified"
             echo "- IdP integration: intentionally not part of this gate"
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Delete isolated Neon branch
-        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          branch: ${{ steps.create-neon.outputs.branch_id }}
-          api_key: ${{ secrets.NEON_API_KEY }}
