@@ -19,8 +19,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-db-gate-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
