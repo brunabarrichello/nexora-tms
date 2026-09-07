@@ -1,5 +1,7 @@
 name: Neon Audit Gate
 
+# Neon audit gate: serialized to respect the project's 10-branch limit.
+# Application database is always nexora; neondb is administrative only.
 on:
   pull_request:
     branches: [main]
@@ -51,10 +53,9 @@ jobs:
           set -euo pipefail
           if ! command -v psql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
       - name: Bootstrap nexora database access
-        env: {ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }} }
+        env: {ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}}
         run: |
           set -euo pipefail
-          echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           SET ROLE nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator, nexora_app, nexora_worker;
@@ -71,9 +72,7 @@ jobs:
           echo "::add-mask::$url"
           echo "MIGRATOR_DATABASE_URL=$url" >> "$GITHUB_ENV"
       - name: Verify migration connection and journal
-        run: |
-          set -euo pipefail
-          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT current_database(),session_user,current_user; SELECT has_schema_privilege(current_user,'public','CREATE');"
+        run: psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -c "SELECT current_database(),session_user,current_user; SELECT has_schema_privilege(current_user,'public','CREATE');"
       - name: Apply migrations
         run: DATABASE_URL="$MIGRATOR_DATABASE_URL" pnpm --filter @nexora/database db:migrate
       - name: Verify Wave 0024 schema, RLS and grants
