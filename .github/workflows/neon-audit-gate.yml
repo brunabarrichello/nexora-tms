@@ -59,7 +59,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: nexora_owner
+          role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Ensure PostgreSQL client
         shell: bash
@@ -78,6 +78,7 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE nexora_owner;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
