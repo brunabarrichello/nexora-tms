@@ -1,0 +1,38 @@
+name: Neon Workflow Normalize
+
+on:
+  push:
+    branches:
+      - 'dependabot/github_actions/main/neondatabase/create-branch-action-6'
+    paths:
+      - '.github/workflows/**'
+      - '.github/scripts/normalize-neon-workflows.py'
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Normalize workflows
+        run: python3 .github/scripts/normalize-neon-workflows.py
+
+      - name: Commit normalized workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/workflows .github/scripts/normalize-neon-workflows.py
+          if git diff --cached --quiet; then
+            echo 'No workflow normalization changes required.'
+            exit 0
+          fi
+          git commit -m 'fix(neon): normalize remaining workflow database selectors'
+          git push origin HEAD:${GITHUB_REF_NAME}
