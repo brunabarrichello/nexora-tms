@@ -18,6 +18,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   matching-runtime:
@@ -81,7 +82,7 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
-          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string --project-id "$NEON_PROJECT_ID" --branch "$NEON_TEST_BRANCH" --database nexora --role nexora_migrator)"
+          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_migrator)"
           test -n "$MIGRATOR_DATABASE_URL"
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
           echo "db_url=$MIGRATOR_DATABASE_URL" >> "$GITHUB_OUTPUT"
@@ -107,7 +108,7 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
-          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string --project-id "$NEON_PROJECT_ID" --branch "$NEON_TEST_BRANCH" --database nexora --role nexora_app)"
+          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_app)"
           test -n "$APP_DATABASE_URL"
           echo "::add-mask::$APP_DATABASE_URL"
           echo "db_url=$APP_DATABASE_URL" >> "$GITHUB_OUTPUT"
