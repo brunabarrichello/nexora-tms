@@ -61,14 +61,14 @@ jobs:
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
       - name: Create isolated Neon branch
-        id: migrator
+        id: branch
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: nexora_migrator
+          role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -84,28 +84,51 @@ jobs:
 
       - name: Bootstrap migration capability
         env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
-          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
+          BRANCH_ADMIN_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
-          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SET ROLE nexora_owner;
+          echo "::add-mask::$BRANCH_ADMIN_DATABASE_URL"
+          PSQL=(psql "$BRANCH_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1)
+          "${PSQL[@]}" <<'SQL'
+          GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
+          GRANT CONNECT ON DATABASE nexora TO nexora_owner;
+          GRANT CONNECT ON DATABASE nexora TO nexora_app;
+          GRANT nexora_owner TO nexora_migrator;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
+          test "$("${PSQL[@]}" -Atqc "SELECT has_database_privilege('nexora_migrator','nexora','CONNECT')")" = 't'
+          test "$("${PSQL[@]}" -Atqc "SELECT has_schema_privilege('nexora_owner','public','CREATE')")" = 't'
+
+      - name: Resolve nexora_migrator connection
+        id: migrator
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${BRANCH_ID:-}" || { echo 'Neon branch_id output is missing.' >&2; exit 1; }
+          MIGRATOR_DATABASE_URL="$(
+            curl -fsS -G \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              -H 'Accept: application/json' \
+              --data-urlencode "branch_id=${BRANCH_ID}" \
+              --data-urlencode "database_name=${DATABASE_NAME}" \
+              --data-urlencode 'role_name=nexora_migrator' \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+              | jq -er '.uri'
+          )"
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          printf '%s\n' "MIGRATOR_DATABASE_URL=${MIGRATOR_DATABASE_URL}" >> "$GITHUB_ENV"
+          PGPASSWORD='' psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc 'SELECT current_user, current_database()' | grep -q '^nexora_migrator|nexora$'
 
       - name: Apply migrations
-        env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
-          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
           OWNER_DATABASE_URL="$MIGRATOR_DATABASE_URL"
           if [[ "$OWNER_DATABASE_URL" == *"?"* ]]; then
             OWNER_DATABASE_URL="${OWNER_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
@@ -114,16 +137,14 @@ jobs:
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify NEX-43 schema, RLS and grants
-        env:
-          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
-          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $block$
           DECLARE
             v_count integer;
@@ -178,13 +199,11 @@ jobs:
           SQL
 
       - name: Seed NEX-43 integration fixtures
-        env:
-          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
-          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO tenants (id,slug,name) VALUES
             ('73000000-0000-4000-8000-000000000001','nex43-a','NEX-43 Tenant A'),
             ('73000000-0000-4000-8000-000000000002','nex43-b','NEX-43 Tenant B');
@@ -250,36 +269,36 @@ jobs:
 
       - name: Resolve nexora_app connection
         id: app
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: ${{ env.DATABASE_NAME }}
-          role: nexora_app
-          api_key: ${{ secrets.NEON_API_KEY }}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP_DATABASE_URL="$(
+            curl -fsS -G \
+              -H "Authorization: Bearer ${NEON_API_KEY}" \
+              -H 'Accept: application/json' \
+              --data-urlencode "branch_id=${BRANCH_ID}" \
+              --data-urlencode "database_name=${DATABASE_NAME}" \
+              --data-urlencode 'role_name=nexora_app' \
+              "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
+              | jq -er '.uri'
+          )"
+          echo "::add-mask::$APP_DATABASE_URL"
+          printf '%s\n' "APP_DATABASE_URL=${APP_DATABASE_URL}" >> "$GITHUB_ENV"
 
       - name: Build API
         run: pnpm --filter @nexora/api build
 
       - name: Run NEX-43 API integration against Neon
         env:
-          DATABASE_URL: ${{ steps.app.outputs.db_url }}
-          DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
           DATABASE_POOL_MAX: '2'
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$DATABASE_URL"
-          echo "::add-mask::$DATABASE_PASSWORD"
-          AUTH_DATABASE_URL="$DATABASE_URL"
-          if [[ "$AUTH_DATABASE_URL" == *"?"* ]]; then
-            AUTH_DATABASE_URL="${AUTH_DATABASE_URL}&password=$(node -p 'encodeURIComponent(process.env.DATABASE_PASSWORD)')"
-          else
-            AUTH_DATABASE_URL="${AUTH_DATABASE_URL}?password=$(node -p 'encodeURIComponent(process.env.DATABASE_PASSWORD)')"
-          fi
-          echo "::add-mask::$AUTH_DATABASE_URL"
-          DATABASE_URL="$AUTH_DATABASE_URL" node apps/api/dist/trips/trip-occurrence.integration.js
+          echo "::add-mask::$APP_DATABASE_URL"
+          DATABASE_URL="$APP_DATABASE_URL" node apps/api/dist/trips/trip-occurrence.integration.js
 
       - name: Gate summary
         shell: bash
@@ -295,7 +314,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
-        if: ${{ always() && steps.migrator.outputs.branch_id != '' }}
+        if: ${{ always() && steps.branch.outputs.branch_id != '' }}
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
