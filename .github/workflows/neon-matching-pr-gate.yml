@@ -72,16 +72,19 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
 
-      - name: Bootstrap DDL role
+      - name: Temporarily assign ephemeral database ownership to migrator
         env:
-          ADMIN_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
+        shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CONNECT ON DATABASE nexora TO nexora_owner, nexora_migrator, nexora_app, nexora_worker;
-          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
-          SQL
+          curl --fail-with-body --silent --show-error \
+            -X PATCH \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H "Content-Type: application/json" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}/databases/${DATABASE_NAME}" \
+            --data '{"database":{"owner_name":"nexora_migrator"}}' >/dev/null
 
       - name: Resolve migrator connection
         id: migrator
@@ -94,13 +97,18 @@ jobs:
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
-      - name: Apply full migration chain and owner invariants
-        shell: bash
+      - name: Bootstrap database ACL and owner invariants
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT current_user, session_user, current_database();
+          GRANT CONNECT ON DATABASE nexora TO nexora_migrator, nexora_app, nexora_worker;
+          SQL
+
           if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
@@ -109,7 +117,18 @@ jobs:
           echo "::add-mask::$OWNER_DATABASE_URL"
           roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
           [[ "$roles" == "nexora_migrator:nexora_owner" ]] || { echo "Unexpected migration role chain: $roles" >&2; exit 1; }
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Apply full migration chain and owner invariants
+        shell: bash
+        env:
+          OWNER_DATABASE_URL: ${{ env.OWNER_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$OWNER_DATABASE_URL"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0020-matching-owner.sql
 
@@ -131,6 +150,21 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$APP_DATABASE_URL"
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0020-matching-runtime.sql
+
+      - name: Restore canonical database owner
+        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error \
+            -X PATCH \
+            -H "Authorization: Bearer $NEON_API_KEY" \
+            -H "Content-Type: application/json" \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}/databases/${DATABASE_NAME}" \
+            --data '{"database":{"owner_name":"nexora_owner"}}' >/dev/null
 
       - name: Cleanup isolated Neon branch
         if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
