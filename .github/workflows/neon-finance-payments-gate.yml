@@ -73,7 +73,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
-          role: nexora_owner
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -92,7 +92,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
-          role: nexora_owner
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -111,7 +111,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
-          role: nexora_owner
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -143,8 +143,10 @@ jobs:
           echo "::add-mask::$ADMIN_DATABASE_URL"
           echo "::add-mask::$ADMIN_DATABASE_PASSWORD"
           PGPASSWORD="$ADMIN_DATABASE_PASSWORD" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE nexora_owner;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          RESET ROLE;
           SQL
 
       - name: Resolve migrator connection
