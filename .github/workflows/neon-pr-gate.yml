@@ -157,9 +157,10 @@ jobs:
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
-          capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_owner', current_database(), 'CREATE'), has_schema_privilege('nexora_owner','public','CREATE')")"
-          [[ "$capabilities" == "t:t" ]] || {
-            echo "nexora_owner DDL capability bootstrap failed: $capabilities" >&2
+          capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_migrator', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner','nexora','CREATE'), has_schema_privilege('nexora_owner','public','CREATE')")"
+          echo "Verified isolated database capabilities: $capabilities"
+          [[ "$capabilities" == "t:t:t:t" ]] || {
+            echo "Isolated database capability bootstrap failed: $capabilities" >&2
             exit 1
           }
 
@@ -226,6 +227,7 @@ jobs:
             echo "Expected $EXPECTED_MIGRATIONS Drizzle migration records, found $ACTUAL_MIGRATIONS" >&2
             exit 1
           fi
+          echo "Verified Drizzle migration ledger: $ACTUAL_MIGRATIONS/$EXPECTED_MIGRATIONS"
 
       - name: Verify schema ownership, RLS and policies
         shell: bash
