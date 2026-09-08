@@ -68,7 +68,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: neondb_owner
+          role: nexora_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -87,7 +87,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: neondb_owner
+          role: nexora_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -106,7 +106,7 @@ jobs:
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: neondb_owner
+          role: nexora_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -131,11 +131,13 @@ jobs:
       - name: Bootstrap migration capability
         env:
           ADMIN_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
+          ADMIN_DATABASE_PASSWORD: ${{ steps.admin1.outputs.password || steps.admin2.outputs.password || steps.admin3.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$ADMIN_DATABASE_PASSWORD"
+          PGPASSWORD="$ADMIN_DATABASE_PASSWORD" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT CONNECT ON DATABASE nexora TO nexora_owner, nexora_migrator, nexora_app, nexora_worker;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
@@ -154,17 +156,20 @@ jobs:
       - name: Apply migrations on isolated branch
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
-          fi
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          node <<'NODE'
+          const fs = require('fs');
+          const url = new URL(process.env.MIGRATOR_DATABASE_URL);
+          url.password = process.env.MIGRATOR_DATABASE_PASSWORD;
+          url.searchParams.set('options', '-c role=nexora_owner');
+          fs.appendFileSync(process.env.GITHUB_ENV, `OWNER_DATABASE_URL=${url.toString()}\n`);
+          NODE
           echo "::add-mask::$OWNER_DATABASE_URL"
-          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify async schema, RLS, minimum privileges and fixtures
@@ -185,11 +190,13 @@ jobs:
       - name: Verify producer idempotency and tenant isolation
         env:
           APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          APP_DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$APP_DATABASE_URL"
-          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-app-runtime.sql
+          echo "::add-mask::$APP_DATABASE_PASSWORD"
+          PGPASSWORD="$APP_DATABASE_PASSWORD" psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-app-runtime.sql
 
       - name: Resolve nexora_worker connection
         id: worker
@@ -205,20 +212,24 @@ jobs:
       - name: Verify atomic claims, worker ownership, retry backoff and terminal states
         env:
           WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
+          WORKER_DATABASE_PASSWORD: ${{ steps.worker.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$WORKER_DATABASE_URL"
-          psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-worker-runtime.sql
+          echo "::add-mask::$WORKER_DATABASE_PASSWORD"
+          PGPASSWORD="$WORKER_DATABASE_PASSWORD" psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-worker-runtime.sql
 
       - name: Verify exhausted expired lease reaping
         env:
           WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
+          WORKER_DATABASE_PASSWORD: ${{ steps.worker.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$WORKER_DATABASE_URL"
-          psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-lease-reaper.sql
+          echo "::add-mask::$WORKER_DATABASE_PASSWORD"
+          PGPASSWORD="$WORKER_DATABASE_PASSWORD" psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-lease-reaper.sql
 
       - name: Verify execution audit and owner-only controlled reprocessing
         shell: bash
