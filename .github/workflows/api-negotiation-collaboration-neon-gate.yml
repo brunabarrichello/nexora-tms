@@ -18,7 +18,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
-  DATABASE_NAME: neondb
+  DATABASE_NAME: nexora
 
 jobs:
   negotiation-collaboration-api:
@@ -88,7 +88,7 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
@@ -195,3 +195,4 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
+

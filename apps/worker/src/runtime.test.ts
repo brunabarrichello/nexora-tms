@@ -12,7 +12,7 @@ class FakeStore implements AsyncStore {
   failedJobIds: string[] = [];
 
   async connect(): Promise<{ role: string; database: string }> {
-    return { role: 'nexora_worker', database: 'neondb' };
+    return { role: 'nexora_worker', database: 'nexora' };
   }
 
   async close(): Promise<void> {}
@@ -83,7 +83,7 @@ class FakeStore implements AsyncStore {
 
 function workerConfig(overrides: Record<string, string> = {}) {
   return loadWorkerConfig({
-    WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/neondb',
+    WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/nexora',
     ...overrides,
   });
 }
@@ -163,3 +163,4 @@ test('aborts and retries a handler before its lease can expire', async () => {
   assert.deepEqual(store.failedJobIds, ['job-1']);
   assert.equal(runtime.snapshot().failed, 1);
 });
+

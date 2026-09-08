@@ -57,7 +57,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           username: neondb_owner
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Ensure PostgreSQL client
@@ -77,7 +77,7 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
       - name: Resolve migrator connection
@@ -87,7 +87,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           username: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Apply migrations
@@ -111,7 +111,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           username: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
       - name: Verify runtime writes, sensitive payload guard and tenant isolation
@@ -146,3 +146,4 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
+

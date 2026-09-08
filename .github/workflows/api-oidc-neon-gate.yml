@@ -18,7 +18,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
-  DATABASE_NAME: neondb
+  DATABASE_NAME: nexora
 
 jobs:
   oidc-identity-neon:
@@ -163,3 +163,4 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ steps.create-neon.outputs.branch_id }}
           api_key: ${{ secrets.NEON_API_KEY }}
+

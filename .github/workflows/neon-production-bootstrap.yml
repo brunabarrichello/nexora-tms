@@ -102,7 +102,7 @@ jobs:
           raw_admin_url="$(curl -fsSG \
             -H "Authorization: Bearer ${NEON_API_KEY}" \
             --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
-            --data-urlencode "database_name=neondb" \
+            --data-urlencode "database_name=nexora" \
             --data-urlencode "role_name=neondb_owner" \
             --data-urlencode "pooled=false" \
             "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
@@ -243,3 +243,4 @@ jobs:
             echo "- Railway variables changed: no"
             echo "- API redeployed: no"
           } >> "$GITHUB_STEP_SUMMARY"
+

@@ -88,7 +88,7 @@ The later repository governance/hardening SHAs do **not** replace the pinned Pro
 - Neon project: `nexora-tms` / `raspy-river-76339604`.
 - Neon Production branch: `br-silent-feather-a5ku7uyi`.
 - Branch role: canonical root/default `production`.
-- Database: `neondb`.
+- Database: `nexora`.
 - Runtime DB role: `nexora_app`.
 - Migration role: `nexora_migrator`.
 - TLS: `sslmode=verify-full`.
@@ -263,3 +263,4 @@ After promotion:
 5. Record timestamp, result and evidence links.
 6. Verify Vercel and Railway did not auto-promote unintended commits.
 7. Preserve the prior record in Git history.
+

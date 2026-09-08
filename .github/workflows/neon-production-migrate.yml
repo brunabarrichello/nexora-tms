@@ -184,7 +184,7 @@ jobs:
             raw_uri="$(curl -fsSG \
               -H "Authorization: Bearer ${NEON_API_KEY}" \
               --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
-              --data-urlencode "database_name=neondb" \
+              --data-urlencode "database_name=nexora" \
               --data-urlencode "role_name=${role_name}" \
               --data-urlencode "pooled=false" \
               "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
@@ -268,7 +268,7 @@ jobs:
           }
 
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
@@ -424,3 +424,4 @@ jobs:
             echo ""
             echo "Keep retained Production checkpoints until Railway/API Production qualification is complete; remove old checkpoints deliberately to remain within the 10-branch Free limit."
           } >> "$GITHUB_STEP_SUMMARY"
+

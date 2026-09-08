@@ -74,7 +74,7 @@ function loadDatabaseConfig(env: Environment): WorkerDatabaseConfig {
     kind: 'parameters',
     host,
     port: readInteger(env, 'WORKER_DATABASE_PORT', 5432, 1, 65_535),
-    database: env.WORKER_DATABASE_NAME?.trim() || 'neondb',
+    database: env.WORKER_DATABASE_NAME?.trim() || 'nexora',
     user,
     password,
   };
@@ -115,3 +115,4 @@ export function loadWorkerConfig(env: Environment = process.env): WorkerConfig {
     ),
   };
 }
+
