@@ -64,7 +64,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
           role: neondb_owner
@@ -88,8 +88,15 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT nexora_migrator TO neondb_owner;
+          GRANT nexora_owner TO neondb_owner;
+          GRANT nexora_owner TO nexora_migrator;
+          GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
+          GRANT CONNECT ON DATABASE nexora TO nexora_owner;
+          GRANT CONNECT ON DATABASE nexora TO nexora_app;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          GRANT USAGE ON SCHEMA public TO nexora_app;
           SQL
 
       - name: Resolve migrator connection
@@ -97,7 +104,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
           role: nexora_migrator
@@ -157,7 +164,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
           role: nexora_app
@@ -195,4 +202,3 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
-
