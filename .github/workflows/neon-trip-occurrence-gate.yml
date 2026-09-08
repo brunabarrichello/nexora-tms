@@ -103,11 +103,11 @@ jobs:
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_app;
-          GRANT nexora_owner TO nexora_migrator;
+          GRANT nexora_owner TO nexora_migrator WITH INHERIT TRUE, SET TRUE;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
-          echo 'Neon role grants applied or already present; connectivity is validated by the dedicated role connection step.'
+          test "$(psql "$BRANCH_ADMIN_DATABASE_URL" -Atqc "SELECT pg_has_role('nexora_migrator','nexora_owner','USAGE')")" = t
       - name: Resolve migrator connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
