@@ -64,7 +64,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: neondb_owner
@@ -83,7 +83,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: neondb_owner
@@ -102,7 +102,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: neondb_owner
@@ -135,8 +135,14 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT nexora_migrator TO neondb_owner;
+          GRANT nexora_owner TO neondb_owner;
+          GRANT nexora_owner TO nexora_migrator;
+          GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
+          GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
           SQL
 
       - name: Resolve migrator connection
@@ -144,11 +150,26 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Verify migration capability before Drizzle
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT current_user, session_user;
+          SELECT has_database_privilege(current_user, 'nexora', 'CONNECT') AS can_connect;
+          SELECT has_schema_privilege(current_user, 'public', 'USAGE') AS public_usage;
+          SELECT has_schema_privilege(current_user, 'public', 'CREATE') AS public_create;
+          SELECT pg_has_role(current_user, 'nexora_owner', 'member') AS can_assume_owner;
+          SQL
 
       - name: Apply migrations on isolated branch
         env:
@@ -164,6 +185,7 @@ jobs:
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'SELECT current_user, session_user;'
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify async schema, RLS, minimum privileges and fixtures
@@ -175,7 +197,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: nexora_app
@@ -195,7 +217,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: nexora_worker
@@ -253,4 +275,3 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}
-
