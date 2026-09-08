@@ -163,4 +163,3 @@ test('aborts and retries a handler before its lease can expire', async () => {
   assert.deepEqual(store.failedJobIds, ['job-1']);
   assert.equal(runtime.snapshot().failed, 1);
 });
-
