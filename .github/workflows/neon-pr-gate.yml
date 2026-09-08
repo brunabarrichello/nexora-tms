@@ -152,6 +152,7 @@ jobs:
           }
           echo "Verified isolated admin identity: $ADMIN_ID"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT nexora_owner TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
