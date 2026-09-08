@@ -263,4 +263,3 @@ After promotion:
 5. Record timestamp, result and evidence links.
 6. Verify Vercel and Railway did not auto-promote unintended commits.
 7. Preserve the prior record in Git history.
-
