@@ -97,4 +97,3 @@ test('rejects a handler deadline that can collide with lease expiry', () => {
     /WORKER_HANDLER_TIMEOUT_MS must be an integer between 100 and 4000/,
   );
 });
-
