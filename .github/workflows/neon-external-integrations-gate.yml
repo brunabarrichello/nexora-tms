@@ -137,12 +137,13 @@ jobs:
       - name: Bootstrap migration capability
         env:
           ADMIN_DATABASE_URL: ${{ steps.ext1.outputs.db_url || steps.ext2.outputs.db_url || steps.ext3.outputs.db_url }}
+          ADMIN_DATABASE_PASSWORD: ${{ steps.ext1.outputs.password || steps.ext2.outputs.password || steps.ext3.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
-          echo "OWNER_DATABASE_URL=$ADMIN_DATABASE_URL" >> "$GITHUB_ENV"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$ADMIN_DATABASE_PASSWORD"
+          PGPASSWORD="$ADMIN_DATABASE_PASSWORD" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
@@ -161,16 +162,15 @@ jobs:
       - name: Apply full migration chain
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
-            OWNER_MIGRATOR_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_MIGRATOR_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
-          fi
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          OWNER_MIGRATOR_URL="$(node -e 'const u=new URL(process.env.MIGRATOR_DATABASE_URL); u.password=process.env.MIGRATOR_DATABASE_PASSWORD; const role="nexora_owner"; const opts=u.searchParams.get("options"); u.searchParams.set("options", opts ? `${opts} -c role=${role}` : `-c role=${role}`); process.stdout.write(u.toString())')"
           echo "::add-mask::$OWNER_MIGRATOR_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_MIGRATOR_URL" >> "$GITHUB_ENV"
           DATABASE_URL="$OWNER_MIGRATOR_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify NEX-56 secret, RLS and privilege boundary
@@ -216,14 +216,22 @@ jobs:
       - name: Run NEX-56 authentication and durable delivery lifecycle
         env:
           DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
           WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
+          WORKER_DATABASE_PASSWORD: ${{ steps.worker.outputs.password }}
           DATABASE_POOL_MAX: 2
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$DATABASE_URL"
+          echo "::add-mask::$DATABASE_PASSWORD"
           echo "::add-mask::$WORKER_DATABASE_URL"
-          node apps/api/dist/integrations/external-integrations.integration.js
+          echo "::add-mask::$WORKER_DATABASE_PASSWORD"
+          AUTHENTICATED_DATABASE_URL="$(node -e 'const u=new URL(process.env.DATABASE_URL); u.password=process.env.DATABASE_PASSWORD; process.stdout.write(u.toString())')"
+          AUTHENTICATED_WORKER_DATABASE_URL="$(node -e 'const u=new URL(process.env.WORKER_DATABASE_URL); u.password=process.env.WORKER_DATABASE_PASSWORD; process.stdout.write(u.toString())')"
+          echo "::add-mask::$AUTHENTICATED_DATABASE_URL"
+          echo "::add-mask::$AUTHENTICATED_WORKER_DATABASE_URL"
+          DATABASE_URL="$AUTHENTICATED_DATABASE_URL" WORKER_DATABASE_URL="$AUTHENTICATED_WORKER_DATABASE_URL" node apps/api/dist/integrations/external-integrations.integration.js
 
       - name: Verify audit, idempotency and eventual webhook success
         shell: bash
