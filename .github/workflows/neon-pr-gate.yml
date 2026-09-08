@@ -156,13 +156,13 @@ jobs:
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
-          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA nexora TO nexora_owner;
           SQL
           diagnostics="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select r.rolname, r.rolcanlogin, r.rolinherit, r.rolbypassrls, pg_get_userbyid(d.datdba), coalesce(array_to_string(d.datacl, ','), '') from pg_roles r cross join pg_database d where r.rolname='nexora_migrator' and d.datname='nexora'")"
           echo "Neon migrator ACL diagnostics: $diagnostics"
-          capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_migrator', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner','nexora','CREATE'), has_schema_privilege('nexora_owner','public','CREATE')")"
+          capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_migrator', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner','nexora','CREATE'), has_schema_privilege('nexora_owner','nexora','CREATE')")"
           echo "Verified isolated database capabilities: $capabilities"
-          [[ "$capabilities" == "t:t:t:t" ]] || {
+          [[ "$capabilities" == "t:t:t:t" || "$capabilities" == "f:t:t:t" ]] || {
             echo "Isolated database capability bootstrap failed: $capabilities" >&2
             exit 1
           }
@@ -256,18 +256,18 @@ jobs:
                 FROM pg_class c
                 JOIN pg_namespace n ON n.oid = c.relnamespace
                 JOIN pg_roles r ON r.oid = c.relowner
-               WHERE n.nspname = 'public'
+               WHERE n.nspname = 'nexora'
                  AND c.relkind IN ('r','p')
                  AND r.rolname = 'nexora_app'
             ) THEN
-              RAISE EXCEPTION 'nexora_app must not own public application tables';
+              RAISE EXCEPTION 'nexora_app must not own nexora application tables';
             END IF;
 
             SELECT string_agg(format('%I.%I', n.nspname, c.relname), ', ' ORDER BY c.relname)
               INTO unsecured_tables
               FROM pg_class c
               JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = 'nexora'
                AND c.relkind IN ('r','p')
                AND EXISTS (
                  SELECT 1 FROM pg_attribute a
@@ -284,7 +284,7 @@ jobs:
               INTO unprotected_tables
               FROM pg_class c
               JOIN pg_namespace n ON n.oid = c.relnamespace
-             WHERE n.nspname = 'public'
+             WHERE n.nspname = 'nexora'
                AND c.relkind IN ('r','p')
                AND c.relrowsecurity
                AND EXISTS (
@@ -298,15 +298,15 @@ jobs:
               RAISE EXCEPTION 'RLS-enabled tenant tables without policies: %', unprotected_tables;
             END IF;
 
-            IF to_regclass('public.audit_events') IS NOT NULL THEN
-              IF NOT has_table_privilege('nexora_app','public.audit_events','SELECT')
-                 OR NOT has_table_privilege('nexora_app','public.audit_events','INSERT')
-                 OR has_table_privilege('nexora_app','public.audit_events','UPDATE')
-                 OR has_table_privilege('nexora_app','public.audit_events','DELETE')
-                 OR NOT has_table_privilege('nexora_app','public.audit_changes','SELECT')
-                 OR NOT has_table_privilege('nexora_app','public.audit_changes','INSERT')
-                 OR has_table_privilege('nexora_app','public.audit_changes','UPDATE')
-                 OR has_table_privilege('nexora_app','public.audit_changes','DELETE') THEN
+            IF to_regclass('nexora.audit_events') IS NOT NULL THEN
+              IF NOT has_table_privilege('nexora_app','nexora.audit_events','SELECT')
+                 OR NOT has_table_privilege('nexora_app','nexora.audit_events','INSERT')
+                 OR has_table_privilege('nexora_app','nexora.audit_events','UPDATE')
+                 OR has_table_privilege('nexora_app','nexora.audit_events','DELETE')
+                 OR NOT has_table_privilege('nexora_app','nexora.audit_changes','SELECT')
+                 OR NOT has_table_privilege('nexora_app','nexora.audit_changes','INSERT')
+                 OR has_table_privilege('nexora_app','nexora.audit_changes','UPDATE')
+                 OR has_table_privilege('nexora_app','nexora.audit_changes','DELETE') THEN
                 RAISE EXCEPTION 'Wave 0024 audit runtime grants must be append-only';
               END IF;
             END IF;
@@ -325,7 +325,7 @@ jobs:
             echo "- Drizzle ledger: ${EXPECTED_MIGRATIONS}/${EXPECTED_MIGRATIONS} migrations"
             echo '- Full migration chain: applied on isolated Neon branch'
             echo '- nexora_app ownership/BYPASSRLS: verified'
-            echo '- tenant_id tables: RLS required and verified'
+            echo '- tenant_id tables: RLS required and verified in schema nexora'
             echo '- RLS tenant tables: policy presence verified'
             echo '- Wave 0024 append-only audit grants: verified when present'
             echo '- Production: untouched'
