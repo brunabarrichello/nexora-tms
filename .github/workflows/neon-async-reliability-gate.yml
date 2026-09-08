@@ -140,9 +140,13 @@ jobs:
           GRANT nexora_owner TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
+          GRANT CONNECT ON DATABASE nexora TO nexora_app;
+          GRANT CONNECT ON DATABASE nexora TO nexora_worker;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
+          GRANT USAGE ON SCHEMA public TO nexora_app;
+          GRANT USAGE ON SCHEMA public TO nexora_worker;
           SQL
 
       - name: Resolve migrator connection
