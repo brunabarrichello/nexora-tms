@@ -86,6 +86,8 @@ jobs:
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
+          database: nexora
+          role: neondb_owner
 
       - name: Ensure PostgreSQL client and jq are available
         shell: bash
