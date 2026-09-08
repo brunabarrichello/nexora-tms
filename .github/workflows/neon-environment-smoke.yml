@@ -11,11 +11,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-environment-audit-smoke
+  group: neon-ephemeral-branch-capacity
   cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   audit-smoke:
@@ -77,7 +78,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: ${{ steps.target.outputs.environment }}
           branch_name: ${{ steps.smoke.outputs.branch }}
-          database: neondb
+          database: nexora
           role: neondb_owner
           expires_at: ${{ steps.smoke.outputs.expires }}
           api_key: ${{ secrets.NEON_API_KEY }}
@@ -114,7 +115,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: ${{ steps.target.outputs.environment }}
           branch_name: ${{ steps.smoke.outputs.branch }}
-          database: neondb
+          database: nexora
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -144,6 +145,7 @@ jobs:
             echo ''
             echo '- Environment: ${{ steps.target.outputs.environment }}'
             echo '- Source main SHA: ${{ steps.target.outputs.source_sha }}'
+            echo '- Database: nexora'
             echo '- Migration ledger: verified'
             echo '- Wave 0024 schema/grants/RLS: verified'
             echo '- Tenant read/write isolation: verified'

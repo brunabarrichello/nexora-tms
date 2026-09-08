@@ -21,11 +21,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-multichannel-communications-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   multichannel:
@@ -75,8 +76,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -94,8 +95,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -113,8 +114,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -138,34 +139,28 @@ jobs:
 
       - name: Bootstrap migration capability
         env:
-          ADMIN_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
-          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
-          SQL
-
-      - name: Resolve migrator connection
-        id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Apply full migration chain
-        env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.admin1.outputs.password || steps.admin2.outputs.password || steps.admin3.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
+
+      - name: Apply full migration chain
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.admin1.outputs.password || steps.admin2.outputs.password || steps.admin3.outputs.password }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
           if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
@@ -173,15 +168,18 @@ jobs:
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Seed NEX-54 identity baseline and NEX-57 recipients
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.admin1.outputs.password || steps.admin2.outputs.password || steps.admin3.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex54-in-app-notifications-fixtures.sql
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex57-multichannel-communications-fixtures.sql
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex54-in-app-notifications-fixtures.sql
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex57-multichannel-communications-fixtures.sql
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO role_permissions (tenant_id, role_id, permission_id)
           SELECT r.tenant_id, r.id, p.id
             FROM roles r
@@ -197,10 +195,13 @@ jobs:
           SQL
 
       - name: Verify schema, RLS and least privilege
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.admin1.outputs.password || steps.admin2.outputs.password || steps.admin3.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
           DECLARE v_missing integer;
           BEGIN
@@ -246,7 +247,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -285,10 +286,13 @@ jobs:
           SQL
 
       - name: Verify queue, idempotency and blocking invariants
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.admin1.outputs.password || steps.admin2.outputs.password || steps.admin3.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
           DECLARE v_allowed outbound_communications%ROWTYPE; v_blocked outbound_communications%ROWTYPE;
           BEGIN
@@ -319,7 +323,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_worker
           api_key: ${{ secrets.NEON_API_KEY }}
 

@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-negotiation-gate-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
@@ -57,8 +57,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: nexora
+          role: nexora_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -74,12 +74,14 @@ jobs:
       - name: Bootstrap migration capability
         env:
           ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+          ADMIN_DATABASE_PASSWORD: ${{ steps.admin.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          echo "::add-mask::$ADMIN_DATABASE_PASSWORD"
+          PGPASSWORD="$ADMIN_DATABASE_PASSWORD" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
@@ -90,22 +92,20 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Apply migrations
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
-          fi
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          OWNER_DATABASE_URL="$(node -e 'const u=new URL(process.env.MIGRATOR_DATABASE_URL); u.password=process.env.MIGRATOR_DATABASE_PASSWORD; const role="nexora_owner"; const opts=u.searchParams.get("options"); u.searchParams.set("options", opts ? `${opts} -c role=${role}` : `-c role=${role}`); process.stdout.write(u.toString())')"
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
@@ -206,18 +206,20 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Verify runtime RLS and reply scope
         env:
           APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          APP_DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$APP_DATABASE_URL"
-          psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$APP_DATABASE_PASSWORD"
+          PGPASSWORD="$APP_DATABASE_PASSWORD" psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           BEGIN;
           SELECT set_config('app.tenant_id','11111111-1111-4111-8111-111111111111',true);
           INSERT INTO negotiation_threads(id,tenant_id,transport_request_id,subject,created_by_membership_id) VALUES

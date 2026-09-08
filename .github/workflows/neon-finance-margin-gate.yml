@@ -19,11 +19,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-finance-margin-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   finance-margin:
@@ -73,8 +74,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -92,8 +93,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -111,8 +112,8 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -137,13 +138,17 @@ jobs:
       - name: Bootstrap migration capability
         env:
           ADMIN_DATABASE_URL: ${{ steps.admin1.outputs.db_url || steps.admin2.outputs.db_url || steps.admin3.outputs.db_url }}
+          ADMIN_DATABASE_PASSWORD: ${{ steps.admin1.outputs.password || steps.admin2.outputs.password || steps.admin3.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          echo "::add-mask::$ADMIN_DATABASE_PASSWORD"
+          PGPASSWORD="$ADMIN_DATABASE_PASSWORD" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          RESET ROLE;
           SQL
 
       - name: Resolve migrator connection
@@ -153,22 +158,26 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_migrator
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Apply full migration chain
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
-          fi
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          OWNER_DATABASE_URL="$(MIGRATOR_DATABASE_URL="$MIGRATOR_DATABASE_URL" MIGRATOR_DATABASE_PASSWORD="$MIGRATOR_DATABASE_PASSWORD" node - <<'NODE'
+          const u = new URL(process.env.MIGRATOR_DATABASE_URL);
+          u.password = process.env.MIGRATOR_DATABASE_PASSWORD;
+          u.searchParams.set('options', '-c role=nexora_owner');
+          process.stdout.write(u.toString());
+          NODE
+          )"
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
@@ -184,7 +193,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -194,20 +203,38 @@ jobs:
       - name: Run NEX-50 margin integration against Neon
         env:
           DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
           DATABASE_POOL_MAX: '2'
         shell: bash
         run: |
           set -euo pipefail
-          node apps/api/dist/finance/finance-margin.integration.js
+          echo "::add-mask::$DATABASE_URL"
+          echo "::add-mask::$DATABASE_PASSWORD"
+          AUTHENTICATED_DATABASE_URL="$(DATABASE_URL="$DATABASE_URL" DATABASE_PASSWORD="$DATABASE_PASSWORD" node - <<'NODE'
+          const u = new URL(process.env.DATABASE_URL);
+          u.password = process.env.DATABASE_PASSWORD;
+          process.stdout.write(u.toString());
+          NODE
+          )"
+          DATABASE_URL="$AUTHENTICATED_DATABASE_URL" node apps/api/dist/finance/finance-margin.integration.js
 
       - name: Run NEX-59 financial indicators integration against Neon
         env:
           DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
           DATABASE_POOL_MAX: '2'
         shell: bash
         run: |
           set -euo pipefail
-          node apps/api/dist/analytics/financial-analytics.integration.js
+          echo "::add-mask::$DATABASE_URL"
+          echo "::add-mask::$DATABASE_PASSWORD"
+          AUTHENTICATED_DATABASE_URL="$(DATABASE_URL="$DATABASE_URL" DATABASE_PASSWORD="$DATABASE_PASSWORD" node - <<'NODE'
+          const u = new URL(process.env.DATABASE_URL);
+          u.password = process.env.DATABASE_PASSWORD;
+          process.stdout.write(u.toString());
+          NODE
+          )"
+          DATABASE_URL="$AUTHENTICATED_DATABASE_URL" node apps/api/dist/analytics/financial-analytics.integration.js
 
       - name: Gate summary
         shell: bash

@@ -13,11 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-trips-core-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   trips-core:
@@ -60,14 +61,14 @@ jobs:
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
       - name: Create isolated Neon branch
-        id: admin
+        id: migrator
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -84,33 +85,27 @@ jobs:
       - name: Bootstrap migration capability
         shell: bash
         env:
-          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         run: |
           set -euo pipefail
-          echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
-
-      - name: Resolve migrator connection
-        id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Apply migrations
         shell: bash
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
           if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
@@ -118,13 +113,16 @@ jobs:
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify Trips Core schema, RLS and grants
         shell: bash
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $block$
           DECLARE
             v_count integer;
@@ -204,9 +202,12 @@ jobs:
 
       - name: Seed Trips Core integration fixtures
         shell: bash
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO tenants (id, slug, name) VALUES
             ('61000000-0000-4000-8000-000000000001','trips-gate-a','Trips Gate Tenant A'),
             ('61000000-0000-4000-8000-000000000002','trips-gate-b','Trips Gate Tenant B');
@@ -314,7 +315,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -346,9 +347,9 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
-        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        if: ${{ always() && steps.migrator.outputs.branch_id != '' }}
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          branch: ${{ steps.admin.outputs.branch_id }}
+          branch: ${{ env.NEON_TEST_BRANCH }}
           api_key: ${{ secrets.NEON_API_KEY }}

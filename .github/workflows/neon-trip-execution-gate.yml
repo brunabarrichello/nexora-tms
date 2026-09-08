@@ -13,11 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-trip-execution-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-ephemeral-branch-capacity
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   trip-execution:
@@ -60,14 +61,14 @@ jobs:
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
 
       - name: Create isolated Neon branch
-        id: admin
+        id: migrator
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: neondb_owner
+          database: ${{ env.DATABASE_NAME }}
+          role: nexora_migrator
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -83,48 +84,46 @@ jobs:
 
       - name: Bootstrap migration capability
         env:
-          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
-          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
-          SQL
-
-      - name: Resolve migrator connection
-        id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Apply migrations
-        env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
-          fi
-          echo "::add-mask::$OWNER_DATABASE_URL"
-          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SET ROLE nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          SQL
 
-      - name: Verify Wave 0023 schema, RLS and grants
+      - name: Apply migrations
+        env:
+          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          OWNER_DATABASE_URL="$MIGRATOR_DATABASE_URL"
+          if [[ "$OWNER_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${OWNER_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${OWNER_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify Wave 0023 schema, RLS and grants
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $block$
           DECLARE
             v_count integer;
@@ -192,10 +191,13 @@ jobs:
           SQL
 
       - name: Seed Wave 0023 integration fixtures
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO tenants (id,slug,name) VALUES
             ('71000000-0000-4000-8000-000000000001','trip-exec-a','Trip Execution A'),
             ('71000000-0000-4000-8000-000000000002','trip-exec-b','Trip Execution B');
@@ -261,7 +263,7 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           parent_branch: production
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: ${{ env.DATABASE_NAME }}
           role: nexora_app
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -271,12 +273,21 @@ jobs:
       - name: Run Wave 0023 API integration against Neon
         env:
           DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
           DATABASE_POOL_MAX: '2'
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$DATABASE_URL"
-          node apps/api/dist/trips/trip-execution.integration.js
+          echo "::add-mask::$DATABASE_PASSWORD"
+          AUTH_DATABASE_URL="$DATABASE_URL"
+          if [[ "$AUTH_DATABASE_URL" == *"?"* ]]; then
+            AUTH_DATABASE_URL="${AUTH_DATABASE_URL}&password=$(node -p 'encodeURIComponent(process.env.DATABASE_PASSWORD)')"
+          else
+            AUTH_DATABASE_URL="${AUTH_DATABASE_URL}?password=$(node -p 'encodeURIComponent(process.env.DATABASE_PASSWORD)')"
+          fi
+          echo "::add-mask::$AUTH_DATABASE_URL"
+          DATABASE_URL="$AUTH_DATABASE_URL" node apps/api/dist/trips/trip-execution.integration.js
 
       - name: Gate summary
         shell: bash
@@ -295,7 +306,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Delete isolated Neon branch
-        if: ${{ always() && steps.admin.outputs.branch_id != '' }}
+        if: ${{ always() && steps.migrator.outputs.branch_id != '' }}
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
