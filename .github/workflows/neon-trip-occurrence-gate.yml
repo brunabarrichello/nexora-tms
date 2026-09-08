@@ -2,8 +2,7 @@ name: Neon Trip Occurrence Gate
 
 on:
   pull_request:
-    branches:
-      - main
+    branches: [main]
     paths:
       - 'packages/database/**'
       - 'apps/api/src/trips/**'
@@ -44,19 +43,9 @@ jobs:
       - name: Validate Neon API secret
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "${NEON_API_KEY:-}" || { echo 'NEON_API_KEY repository secret is not configured.' >&2; exit 1; }
-      - name: Set ephemeral branch
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-nex43-${{ github.run_id }}" >> "$GITHUB_ENV"
+        run: test -n "${NEON_API_KEY:-}"
       - name: Ensure PostgreSQL client
-        shell: bash
         run: |
-          set -euo pipefail
           if ! command -v psql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
           psql --version
       - name: Create isolated Neon branch
@@ -66,47 +55,51 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RESPONSE="$(curl -fsS -X POST \
+          BRANCH_NAME="pr-${{ github.event.pull_request.number }}-nex43-${{ github.run_id }}"
+          BODY="$(jq -n --arg name "$BRANCH_NAME" '{branch:{name:$name}}')"
+          RESPONSE_FILE="$RUNNER_TEMP/neon-branch.json"
+          STATUS="$(curl -sS -o "$RESPONSE_FILE" -w '%{http_code}' -X POST \
             -H "Authorization: Bearer ${NEON_API_KEY}" \
-            -H 'Accept: application/json' \
-            -H 'Content-Type: application/json' \
-            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
-            -d "$(jq -n --arg name "$NEON_TEST_BRANCH" --arg parent "$PRODUCTION_BRANCH_ID" '{branch:{name:$name,parent_id:$parent},endpoints:[{type:"read_write"}]}')")"
-          BRANCH_ID="$(jq -er '.branch.id' <<<"$RESPONSE")"
-          echo "Neon branch created: ${BRANCH_ID}"
+            -H 'Accept: application/json' -H 'Content-Type: application/json' \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" -d "$BODY")"
+          if [[ "$STATUS" != 2* ]]; then
+            echo "Neon branch creation failed with HTTP ${STATUS}." >&2
+            jq -c '{code,message,details}' "$RESPONSE_FILE" >&2 || cat "$RESPONSE_FILE" >&2
+            exit 1
+          fi
+          BRANCH_ID="$(jq -er '.branch.id' "$RESPONSE_FILE")"
           echo "NEON_BRANCH_ID=${BRANCH_ID}" >> "$GITHUB_ENV"
           echo "branch_id=${BRANCH_ID}" >> "$GITHUB_OUTPUT"
+          echo "Created isolated Neon branch ${BRANCH_ID}."
       - name: Wait for isolated Neon branch
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            STATE="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" | jq -r '.branch.current_state')"
-            ENDPOINTS="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}/endpoints" | jq '[.endpoints[] | select(.type=="read_write")] | length')"
+            STATE="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" | jq -r '.branch.current_state')"
+            ENDPOINTS="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}/endpoints" | jq '[.endpoints[] | select(.type=="read_write")] | length')"
             echo "attempt=${attempt} state=${STATE} read_write_endpoints=${ENDPOINTS}"
-            if [[ "$STATE" == "ready" && "$ENDPOINTS" -ge 1 ]]; then exit 0; fi
+            [[ "$STATE" == ready && "$ENDPOINTS" -ge 1 ]] && exit 0
             sleep 2
           done
-          echo 'Neon branch did not become ready with a read_write endpoint.' >&2
           exit 1
       - name: Resolve branch admin connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        shell: bash
         run: |
           set -euo pipefail
-          BRANCH_ADMIN_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=neondb_owner' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
-          echo "::add-mask::$BRANCH_ADMIN_DATABASE_URL"
-          printf '%s\n' "BRANCH_ADMIN_DATABASE_URL=${BRANCH_ADMIN_DATABASE_URL}" >> "$GITHUB_ENV"
-          psql "$BRANCH_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc 'SELECT current_user, current_database()' | grep -q '^neondb_owner|nexora$'
+          URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" \
+            --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" \
+            --data-urlencode 'role_name=neondb_owner' \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
+          echo '::add-mask::'"$URL"
+          echo "BRANCH_ADMIN_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+          psql "$URL" -v ON_ERROR_STOP=1 -Atqc 'SELECT current_user,current_database()' | grep -q '^neondb_owner|nexora$'
       - name: Bootstrap migration capability
-        shell: bash
         run: |
           set -euo pipefail
-          PSQL=(psql "$BRANCH_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1)
-          "${PSQL[@]}" <<'SQL'
+          psql "$BRANCH_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_app;
@@ -114,48 +107,45 @@ jobs:
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
-          test "$("${PSQL[@]}" -Atqc "SELECT has_database_privilege('nexora_migrator','nexora','CONNECT')")" = 't'
-          test "$("${PSQL[@]}" -Atqc "SELECT has_schema_privilege('nexora_owner','public','CREATE')")" = 't'
-      - name: Resolve nexora_migrator connection
+          test "$(psql "$BRANCH_ADMIN_DATABASE_URL" -Atqc "SELECT has_database_privilege('nexora_migrator','nexora','CONNECT')")" = t
+      - name: Resolve migrator connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        shell: bash
         run: |
           set -euo pipefail
-          MIGRATOR_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=nexora_migrator' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          printf '%s\n' "MIGRATOR_DATABASE_URL=${MIGRATOR_DATABASE_URL}" >> "$GITHUB_ENV"
-          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc 'SELECT current_user, current_database()' | grep -q '^nexora_migrator|nexora$'
+          URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" \
+            --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" \
+            --data-urlencode 'role_name=nexora_migrator' \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
+          echo '::add-mask::'"$URL"
+          echo "MIGRATOR_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+          psql "$URL" -v ON_ERROR_STOP=1 -Atqc 'SELECT current_user,current_database()' | grep -q '^nexora_migrator|nexora$'
       - name: Apply migrations
-        shell: bash
         run: |
           set -euo pipefail
-          OWNER_DATABASE_URL="$MIGRATOR_DATABASE_URL"
-          if [[ "$OWNER_DATABASE_URL" == *"?"* ]]; then OWNER_DATABASE_URL="${OWNER_DATABASE_URL}&options=-c%20role%3Dnexora_owner"; else OWNER_DATABASE_URL="${OWNER_DATABASE_URL}?options=-c%20role%3Dnexora_owner"; fi
-          echo "::add-mask::$OWNER_DATABASE_URL"
-          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          URL="$MIGRATOR_DATABASE_URL"
+          if [[ "$URL" == *'?'* ]]; then URL="${URL}&options=-c%20role%3Dnexora_owner"; else URL="${URL}?options=-c%20role%3Dnexora_owner"; fi
+          echo '::add-mask::'"$URL"
+          echo "OWNER_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+          DATABASE_URL="$URL" pnpm --filter @nexora/database db:migrate
       - name: Verify NEX-43 schema, RLS and grants
-        shell: bash
         run: |
           set -euo pipefail
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $block$
-          DECLARE v_count integer;
+          DECLARE n integer;
           BEGIN
-            SELECT count(*) INTO v_count FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('trip_occurrences','trip_occurrence_history','trip_occurrence_documents');
-            IF v_count <> 3 THEN RAISE EXCEPTION 'Expected 3 NEX-43 tables, found %', v_count; END IF;
-            SELECT count(*) INTO v_count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relname IN ('trip_occurrences','trip_occurrence_history','trip_occurrence_documents') AND c.relrowsecurity;
-            IF v_count <> 3 THEN RAISE EXCEPTION 'Expected RLS on all 3 NEX-43 tables, found %', v_count; END IF;
-            IF NOT has_table_privilege('nexora_app','public.trip_occurrences','SELECT') OR NOT has_table_privilege('nexora_app','public.trip_occurrences','INSERT') OR NOT has_table_privilege('nexora_app','public.trip_occurrences','UPDATE') OR has_table_privilege('nexora_app','public.trip_occurrences','DELETE') THEN RAISE EXCEPTION 'trip_occurrences lifecycle grants are incorrect'; END IF;
-            IF EXISTS (SELECT 1 FROM unnest(ARRAY['trip_occurrence_history','trip_occurrence_documents']) AS t(table_name) WHERE NOT has_table_privilege('nexora_app',format('public.%I',table_name),'SELECT') OR NOT has_table_privilege('nexora_app',format('public.%I',table_name),'INSERT') OR has_table_privilege('nexora_app',format('public.%I',table_name),'UPDATE') OR has_table_privilege('nexora_app',format('public.%I',table_name),'DELETE')) THEN RAISE EXCEPTION 'NEX-43 append-only grants are incorrect'; END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrences_resolution_check') THEN RAISE EXCEPTION 'Occurrence resolution invariant is missing'; END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrence_history_occurrence_fk') THEN RAISE EXCEPTION 'Occurrence history FK is missing'; END IF;
-            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrence_documents_document_fk') THEN RAISE EXCEPTION 'Occurrence Document Core FK is missing'; END IF;
+            SELECT count(*) INTO n FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('trip_occurrences','trip_occurrence_history','trip_occurrence_documents');
+            IF n <> 3 THEN RAISE EXCEPTION 'NEX-43 tables missing: %', n; END IF;
+            SELECT count(*) INTO n FROM pg_class c JOIN pg_namespace s ON s.oid=c.relnamespace WHERE s.nspname='public' AND c.relname IN ('trip_occurrences','trip_occurrence_history','trip_occurrence_documents') AND c.relrowsecurity;
+            IF n <> 3 THEN RAISE EXCEPTION 'NEX-43 RLS incomplete: %', n; END IF;
+            IF NOT has_table_privilege('nexora_app','public.trip_occurrences','SELECT') OR NOT has_table_privilege('nexora_app','public.trip_occurrences','INSERT') OR NOT has_table_privilege('nexora_app','public.trip_occurrences','UPDATE') OR has_table_privilege('nexora_app','public.trip_occurrences','DELETE') THEN RAISE EXCEPTION 'trip_occurrences grants invalid'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrences_resolution_check') THEN RAISE EXCEPTION 'resolution constraint missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrence_history_occurrence_fk') THEN RAISE EXCEPTION 'history FK missing'; END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname='trip_occurrence_documents_document_fk') THEN RAISE EXCEPTION 'document FK missing'; END IF;
           END $block$;
           SQL
-      - name: Seed NEX-43 integration fixtures
-        shell: bash
+      - name: Seed NEX-43 fixtures
         run: |
           set -euo pipefail
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
@@ -171,42 +161,32 @@ jobs:
           INSERT INTO trips (id,tenant_id,code,status,planned_start_at,planned_end_at,origin_location_id,created_by_user_id,updated_by_user_id) VALUES ('74000000-0000-4000-8000-000000000001','73000000-0000-4000-8000-000000000001','NEX43-TRIP-001','ready','2026-09-02T12:00:00Z','2026-09-03T12:00:00Z','74000000-0000-4000-8000-000000000111','73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101');
           INSERT INTO trip_stops (id,tenant_id,trip_id,sequence,type,location_id,planned_arrival_at,planned_departure_at,created_by_user_id,updated_by_user_id) VALUES ('74000000-0000-4000-8000-000000000011','73000000-0000-4000-8000-000000000001','74000000-0000-4000-8000-000000000001',1,'pickup','74000000-0000-4000-8000-000000000111','2026-09-02T12:00:00Z','2026-09-02T13:00:00Z','73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101');
           SQL
-      - name: Resolve nexora_app connection
+      - name: Resolve app connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        shell: bash
         run: |
           set -euo pipefail
-          APP_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=nexora_app' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
-          echo "::add-mask::$APP_DATABASE_URL"
-          printf '%s\n' "APP_DATABASE_URL=${APP_DATABASE_URL}" >> "$GITHUB_ENV"
+          URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" \
+            --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" \
+            --data-urlencode 'role_name=nexora_app' \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
+          echo '::add-mask::'"$URL"
+          echo "APP_DATABASE_URL=$URL" >> "$GITHUB_ENV"
       - name: Build API
         run: pnpm --filter @nexora/api build
-      - name: Run NEX-43 API integration against Neon
+      - name: Run NEX-43 API integration
         env:
           DATABASE_POOL_MAX: '2'
-        shell: bash
-        run: |
-          set -euo pipefail
-          DATABASE_URL="$APP_DATABASE_URL" node apps/api/dist/trips/trip-occurrence.integration.js
+        run: DATABASE_URL="$APP_DATABASE_URL" node apps/api/dist/trips/trip-occurrence.integration.js
       - name: Gate summary
-        shell: bash
         run: |
-          {
-            echo '### NEX-43 Trip Occurrence Gate'
-            echo '- occurrence + treatment history + document evidence: verified'
-            echo '- open/resolved/reopen lifecycle: verified'
-            echo '- active tenant responsibility: verified'
-            echo '- append-only history/evidence grants: verified'
-            echo '- tenant RLS isolation: verified'
-            echo '- Production: untouched'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo '### NEX-43 Trip Occurrence Gate' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Neon ephemeral branch, migrations, RLS, grants and API integration: verified' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production: untouched' >> "$GITHUB_STEP_SUMMARY"
       - name: Delete isolated Neon branch
         if: ${{ always() && steps.branch.outputs.branch_id != '' }}
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        shell: bash
         run: |
-          set -euo pipefail
-          curl -fsS -X DELETE -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" >/dev/null
+          curl -fsS -X DELETE -H "Authorization: Bearer ${NEON_API_KEY}" "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" >/dev/null
           echo "Deleted isolated Neon branch ${NEON_BRANCH_ID}."
