@@ -130,7 +130,7 @@ jobs:
           for attempt in $(seq 1 10); do
             if URI_JSON="$(curl -fsS \
               -H "Authorization: Bearer ${NEON_API_KEY}" \
-              -H "Accept: application/json" \
+              -H 'Accept: application/json' \
               "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=nexora&role_name=neondb_owner")"; then
               ADMIN_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
               if [[ -n "$ADMIN_DATABASE_URL" && "$ADMIN_DATABASE_URL" != "null" ]]; then
@@ -158,6 +158,8 @@ jobs:
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
+          diagnostics="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select r.rolname, r.rolcanlogin, r.rolinherit, r.rolbypassrls, pg_get_userbyid(d.datdba), coalesce(array_to_string(d.datacl, ','), '') from pg_roles r cross join pg_database d where r.rolname='nexora_migrator' and d.datname='nexora'")"
+          echo "Neon migrator ACL diagnostics: $diagnostics"
           capabilities="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select has_database_privilege('nexora_migrator', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner', 'nexora', 'CONNECT'), has_database_privilege('nexora_owner','nexora','CREATE'), has_schema_privilege('nexora_owner','public','CREATE')")"
           echo "Verified isolated database capabilities: $capabilities"
           [[ "$capabilities" == "t:t:t:t" ]] || {
@@ -177,7 +179,7 @@ jobs:
           for attempt in $(seq 1 10); do
             if URI_JSON="$(curl -fsS \
               -H "Authorization: Bearer ${NEON_API_KEY}" \
-              -H "Accept: application/json" \
+              -H 'Accept: application/json' \
               "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=nexora&role_name=nexora_migrator&pooled=false")"; then
               MIGRATOR_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
               if [[ -n "$MIGRATOR_DATABASE_URL" && "$MIGRATOR_DATABASE_URL" != "null" ]]; then
@@ -268,12 +270,9 @@ jobs:
              WHERE n.nspname = 'public'
                AND c.relkind IN ('r','p')
                AND EXISTS (
-                 SELECT 1
-                   FROM pg_attribute a
-                  WHERE a.attrelid = c.oid
-                    AND a.attname = 'tenant_id'
-                    AND a.attnum > 0
-                    AND NOT a.attisdropped
+                 SELECT 1 FROM pg_attribute a
+                  WHERE a.attrelid = c.oid AND a.attname = 'tenant_id'
+                    AND a.attnum > 0 AND NOT a.attisdropped
                )
                AND NOT c.relrowsecurity;
 
@@ -289,18 +288,11 @@ jobs:
                AND c.relkind IN ('r','p')
                AND c.relrowsecurity
                AND EXISTS (
-                 SELECT 1
-                   FROM pg_attribute a
-                  WHERE a.attrelid = c.oid
-                    AND a.attname = 'tenant_id'
-                    AND a.attnum > 0
-                    AND NOT a.attisdropped
+                 SELECT 1 FROM pg_attribute a
+                  WHERE a.attrelid = c.oid AND a.attname = 'tenant_id'
+                    AND a.attnum > 0 AND NOT a.attisdropped
                )
-               AND NOT EXISTS (
-                 SELECT 1
-                   FROM pg_policy p
-                  WHERE p.polrelid = c.oid
-               );
+               AND NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid);
 
             IF unprotected_tables IS NOT NULL THEN
               RAISE EXCEPTION 'RLS-enabled tenant tables without policies: %', unprotected_tables;
