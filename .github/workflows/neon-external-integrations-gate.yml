@@ -70,7 +70,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: neondb_owner
@@ -89,7 +89,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: neondb_owner
@@ -108,7 +108,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: neondb_owner
@@ -142,8 +142,18 @@ jobs:
           echo "::add-mask::$ADMIN_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$ADMIN_DATABASE_URL" >> "$GITHUB_ENV"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          GRANT nexora_migrator TO neondb_owner;
+          GRANT nexora_owner TO neondb_owner;
+          GRANT nexora_owner TO nexora_migrator;
+          GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
+          GRANT CONNECT ON DATABASE nexora TO nexora_owner;
+          GRANT CONNECT ON DATABASE nexora TO nexora_app;
+          GRANT CONNECT ON DATABASE nexora TO nexora_worker;
+          GRANT USAGE ON SCHEMA public TO nexora_app;
+          GRANT USAGE ON SCHEMA public TO nexora_worker;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
+          GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
           SQL
 
       - name: Resolve migrator connection
@@ -151,7 +161,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: nexora_migrator
@@ -185,7 +195,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: nexora_app
@@ -196,7 +206,7 @@ jobs:
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: nexora
           role: nexora_worker
