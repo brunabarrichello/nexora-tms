@@ -85,11 +85,13 @@ jobs:
       - name: Bootstrap migration capability
         env:
           ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+          ADMIN_DATABASE_PASSWORD: ${{ steps.admin.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
-          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$ADMIN_DATABASE_PASSWORD"
+          PGPASSWORD="$ADMIN_DATABASE_PASSWORD" psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
@@ -108,24 +110,30 @@ jobs:
       - name: Apply migrations
         env:
           MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          MIGRATOR_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          echo "::add-mask::$MIGRATOR_DATABASE_PASSWORD"
+          OWNER_DATABASE_URL="$MIGRATOR_DATABASE_URL"
+          if [[ "$OWNER_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${OWNER_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+            OWNER_DATABASE_URL="${OWNER_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          PGPASSWORD="$MIGRATOR_DATABASE_PASSWORD" DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify Wave 0023 schema, RLS and grants
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $block$
           DECLARE
             v_count integer;
@@ -193,10 +201,13 @@ jobs:
           SQL
 
       - name: Seed Wave 0023 integration fixtures
+        env:
+          OWNER_DATABASE_PASSWORD: ${{ steps.migrator.outputs.password }}
         shell: bash
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          echo "::add-mask::$OWNER_DATABASE_PASSWORD"
+          PGPASSWORD="$OWNER_DATABASE_PASSWORD" psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO tenants (id,slug,name) VALUES
             ('71000000-0000-4000-8000-000000000001','trip-exec-a','Trip Execution A'),
             ('71000000-0000-4000-8000-000000000002','trip-exec-b','Trip Execution B');
@@ -272,12 +283,21 @@ jobs:
       - name: Run Wave 0023 API integration against Neon
         env:
           DATABASE_URL: ${{ steps.app.outputs.db_url }}
+          DATABASE_PASSWORD: ${{ steps.app.outputs.password }}
           DATABASE_POOL_MAX: '2'
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$DATABASE_URL"
-          node apps/api/dist/trips/trip-execution.integration.js
+          echo "::add-mask::$DATABASE_PASSWORD"
+          AUTH_DATABASE_URL="$DATABASE_URL"
+          if [[ "$AUTH_DATABASE_URL" == *"?"* ]]; then
+            AUTH_DATABASE_URL="${AUTH_DATABASE_URL}&password=$(node -p 'encodeURIComponent(process.env.DATABASE_PASSWORD)')"
+          else
+            AUTH_DATABASE_URL="${AUTH_DATABASE_URL}?password=$(node -p 'encodeURIComponent(process.env.DATABASE_PASSWORD)')"
+          fi
+          echo "::add-mask::$AUTH_DATABASE_URL"
+          DATABASE_URL="$AUTH_DATABASE_URL" node apps/api/dist/trips/trip-execution.integration.js
 
       - name: Gate summary
         shell: bash
