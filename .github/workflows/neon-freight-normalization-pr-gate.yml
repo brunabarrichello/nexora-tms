@@ -13,8 +13,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-freight-normalization-gate-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
@@ -82,16 +82,17 @@ jobs:
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
 
-      - name: Resolve migrator connection
+      - name: Resolve migrator connection on existing branch
         id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string --project-id "$NEON_PROJECT_ID" --branch "$NEON_TEST_BRANCH" --database nexora --role nexora_migrator)"
+          test -n "$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "db_url=$MIGRATOR_DATABASE_URL" >> "$GITHUB_OUTPUT"
 
       - name: Apply full migration chain and owner invariants
         shell: bash
@@ -109,16 +110,17 @@ jobs:
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0019-freight-normalization-owner.sql
 
-      - name: Resolve runtime connection
+      - name: Resolve runtime connection on existing branch
         id: app
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_app
-          api_key: ${{ secrets.NEON_API_KEY }}
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string --project-id "$NEON_PROJECT_ID" --branch "$NEON_TEST_BRANCH" --database nexora --role nexora_app)"
+          test -n "$APP_DATABASE_URL"
+          echo "::add-mask::$APP_DATABASE_URL"
+          echo "db_url=$APP_DATABASE_URL" >> "$GITHUB_OUTPUT"
 
       - name: Validate Wave 0019 runtime invariants
         env:
@@ -139,4 +141,3 @@ jobs:
             -X DELETE \
             -H "Authorization: Bearer $NEON_API_KEY" \
             "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID"
-
