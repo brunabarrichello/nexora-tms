@@ -144,7 +144,7 @@ jobs:
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT nexora_migrator TO neondb_owner;
           GRANT nexora_owner TO neondb_owner;
-          GRANT nexora_migrator TO nexora_owner;
+          GRANT nexora_owner TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_app;
