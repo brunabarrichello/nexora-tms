@@ -152,13 +152,20 @@ jobs:
           }
           echo "Verified isolated admin identity: $ADMIN_ID"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          -- The isolated database is owned by nexora_owner. Neon exposes
+          -- neondb_owner as the administrative login, so database-level ACLs
+          -- must be granted through the actual database owner rather than
+          -- directly by the administrative login.
           GRANT nexora_owner TO nexora_migrator;
           GRANT nexora_migrator TO neondb_owner;
+          GRANT nexora_owner TO neondb_owner;
+          SET ROLE nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
           CREATE SCHEMA IF NOT EXISTS nexora AUTHORIZATION nexora_migrator;
           GRANT USAGE, CREATE ON SCHEMA nexora TO nexora_owner;
+          RESET ROLE;
           SQL
           diagnostics="$(psql "$ADMIN_DATABASE_URL" -At -F ':' -c "select r.rolname, r.rolcanlogin, r.rolinherit, r.rolbypassrls, pg_get_userbyid(d.datdba), coalesce(array_to_string(d.datacl, ','), '') from pg_roles r cross join pg_database d where r.rolname='nexora_migrator' and d.datname='nexora'")"
           echo "Neon migrator ACL diagnostics: $diagnostics"
