@@ -115,4 +115,3 @@ export function loadWorkerConfig(env: Environment = process.env): WorkerConfig {
     ),
   };
 }
-
