@@ -19,6 +19,7 @@ concurrency:
 env:
   NEON_PROJECT_ID: raspy-river-76339604
   DATABASE_NAME: nexora
+  PRODUCTION_BRANCH_ID: br-silent-feather-a5ku7uyi
 
 jobs:
   trip-occurrence:
@@ -26,7 +27,6 @@ jobs:
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-
     steps:
       - name: Checkout PR
         uses: actions/checkout@v7
@@ -42,9 +42,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Validate Neon API secret
-        shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        shell: bash
         run: |
           set -euo pipefail
           test -n "${NEON_API_KEY:-}" || { echo 'NEON_API_KEY repository secret is not configured.' >&2; exit 1; }
@@ -54,30 +54,58 @@ jobs:
           set -euo pipefail
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-nex43-${{ github.run_id }}" >> "$GITHUB_ENV"
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+4 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-      - name: Create isolated Neon branch
-        id: branch
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: ${{ env.DATABASE_NAME }}
-          role: neondb_owner
-          suspend_timeout: 300
-          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
-          api_key: ${{ secrets.NEON_API_KEY }}
       - name: Ensure PostgreSQL client
         shell: bash
         run: |
           set -euo pipefail
           if ! command -v psql >/dev/null 2>&1; then sudo apt-get update && sudo apt-get install -y postgresql-client; fi
           psql --version
-      - name: Bootstrap migration capability
+      - name: Create isolated Neon branch
+        id: branch
         env:
-          BRANCH_ADMIN_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
+          RESPONSE="$(curl -fsS -X POST \
+            -H "Authorization: Bearer ${NEON_API_KEY}" \
+            -H 'Accept: application/json' \
+            -H 'Content-Type: application/json' \
+            "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches" \
+            -d "$(jq -n --arg name "$NEON_TEST_BRANCH" --arg parent "$PRODUCTION_BRANCH_ID" --arg expires "$NEON_TEST_EXPIRES_AT" '{branch:{name:$name,parent_id:$parent,expires_at:$expires},endpoints:[{type:"read_write",suspend_timeout_seconds:300}]}')")"
+          BRANCH_ID="$(jq -er '.branch.id' <<<"$RESPONSE")"
+          echo "Neon branch created: ${BRANCH_ID}"
+          echo "NEON_BRANCH_ID=${BRANCH_ID}" >> "$GITHUB_ENV"
+          echo "branch_id=${BRANCH_ID}" >> "$GITHUB_OUTPUT"
+      - name: Wait for isolated Neon branch
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            STATE="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" | jq -r '.branch.current_state')"
+            ENDPOINTS="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}/endpoints" | jq '[.endpoints[] | select(.type=="read_write")] | length')"
+            echo "attempt=${attempt} state=${STATE} read_write_endpoints=${ENDPOINTS}"
+            if [[ "$STATE" == "ready" && "$ENDPOINTS" -ge 1 ]]; then exit 0; fi
+            sleep 2
+          done
+          echo 'Neon branch did not become ready with a read_write endpoint.' >&2
+          exit 1
+      - name: Resolve branch admin connection
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          BRANCH_ADMIN_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=neondb_owner' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
           echo "::add-mask::$BRANCH_ADMIN_DATABASE_URL"
+          printf '%s\n' "BRANCH_ADMIN_DATABASE_URL=${BRANCH_ADMIN_DATABASE_URL}" >> "$GITHUB_ENV"
+          psql "$BRANCH_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc 'SELECT current_user, current_database()' | grep -q '^neondb_owner|nexora$'
+      - name: Bootstrap migration capability
+        shell: bash
+        run: |
+          set -euo pipefail
           PSQL=(psql "$BRANCH_ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1)
           "${PSQL[@]}" <<'SQL'
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
@@ -92,12 +120,10 @@ jobs:
       - name: Resolve nexora_migrator connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${BRANCH_ID:-}" || { echo 'Neon branch_id output is missing.' >&2; exit 1; }
-          MIGRATOR_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=nexora_migrator' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
+          MIGRATOR_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=nexora_migrator' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
           printf '%s\n' "MIGRATOR_DATABASE_URL=${MIGRATOR_DATABASE_URL}" >> "$GITHUB_ENV"
           psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc 'SELECT current_user, current_database()' | grep -q '^nexora_migrator|nexora$'
@@ -147,14 +173,12 @@ jobs:
           INSERT INTO trip_stops (id,tenant_id,trip_id,sequence,type,location_id,planned_arrival_at,planned_departure_at,created_by_user_id,updated_by_user_id) VALUES ('74000000-0000-4000-8000-000000000011','73000000-0000-4000-8000-000000000001','74000000-0000-4000-8000-000000000001',1,'pickup','74000000-0000-4000-8000-000000000111','2026-09-02T12:00:00Z','2026-09-02T13:00:00Z','73000000-0000-4000-8000-000000000101','73000000-0000-4000-8000-000000000101');
           SQL
       - name: Resolve nexora_app connection
-        id: app
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
         shell: bash
         run: |
           set -euo pipefail
-          APP_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=nexora_app' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
+          APP_DATABASE_URL="$(curl -fsS -G -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' --data-urlencode "branch_id=${NEON_BRANCH_ID}" --data-urlencode "database_name=${DATABASE_NAME}" --data-urlencode 'role_name=nexora_app' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
           echo "::add-mask::$APP_DATABASE_URL"
           printf '%s\n' "APP_DATABASE_URL=${APP_DATABASE_URL}" >> "$GITHUB_ENV"
       - name: Build API
@@ -180,8 +204,10 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Delete isolated Neon branch
         if: ${{ always() && steps.branch.outputs.branch_id != '' }}
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          branch: ${{ env.NEON_TEST_BRANCH }}
-          api_key: ${{ secrets.NEON_API_KEY }}
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -X DELETE -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${NEON_BRANCH_ID}" >/dev/null
+          echo "Deleted isolated Neon branch ${NEON_BRANCH_ID}."
