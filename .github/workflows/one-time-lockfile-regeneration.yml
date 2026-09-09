@@ -1,6 +1,6 @@
 name: One-time lockfile regeneration
 
-# Temporary maintenance workflow; removes its own dependency override after regeneration.
+# Temporary maintenance workflow; explicitly updates the vulnerable transitive dependency.
 on:
   push:
     branches:
@@ -25,26 +25,27 @@ jobs:
         with:
           node-version: 24.20.0
           cache: pnpm
-      - name: Regenerate lockfile with security override
-        run: pnpm install --no-frozen-lockfile
-      - name: Remove temporary override and re-resolve lockfile
+      - name: Regenerate lockfile with explicit multer security update
+        run: pnpm update multer@2.3.0 --lockfile-only
+      - name: Verify resolved multer version
         run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('pnpm-workspace.yaml')
-          text = p.read_text()
-          text = text.replace("\noverrides:\n  multer: 2.3.0\n", "\n")
-          p.write_text(text)
-          PY
-          pnpm install --no-frozen-lockfile
+          grep -n -A4 -B2 "multer@" pnpm-lock.yaml
+          if ! grep -q "multer@2.3.0:" pnpm-lock.yaml; then
+            echo "Expected multer 2.3.0 resolution not found."
+            exit 1
+          fi
+      - name: Validate frozen install and production audit
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm audit --prod --audit-level=high
       - name: Commit regenerated lockfile
         run: |
-          if git diff --quiet -- pnpm-lock.yaml pnpm-workspace.yaml; then
-            echo "No dependency metadata changes."
-            exit 0
+          if git diff --quiet -- pnpm-lock.yaml; then
+            echo "No lockfile changes were generated."
+            exit 1
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pnpm-lock.yaml pnpm-workspace.yaml
-          git commit -m "fix(deps): regenerate lockfile for multer security update"
+          git add pnpm-lock.yaml
+          git commit -m "fix(deps): update multer to patched release"
           git push origin HEAD:brunabarrichello-database-target-update
