@@ -18,6 +18,7 @@ concurrency:
 env:
   NEON_PROJECT_ID: raspy-river-76339604
   DATABASE_NAME: nexora
+  NEON_PARENT_BRANCH_ID: br-autumn-frog-a5ticm98
 
 jobs:
   negotiation-isolation:
@@ -43,29 +44,60 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Set ephemeral branch
+      - name: Validate Neon API secret
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: test -n "${NEON_API_KEY:-}"
+
+      - name: Create isolated Neon branch via API
+        id: admin
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
-          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-negotiation-${{ github.run_id }}" >> "$GITHUB_ENV"
-          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
+          branch_name="pr-${{ github.event.pull_request.number }}-negotiation-${{ github.run_id }}"
+          echo "NEON_TEST_BRANCH=$branch_name" >> "$GITHUB_ENV"
+          payload="$(jq -cn \
+            --arg name "$branch_name" \
+            --arg parent "$NEON_PARENT_BRANCH_ID" \
+            '{branch:{name:$name,parent_id:$parent},endpoints:[{type:"read_write",autoscaling_limit_min_cu:0.25,autoscaling_limit_max_cu:0.25,suspend_timeout_seconds:0}]}')"
+          body=/tmp/neon-create.json
+          status="$(curl --silent --show-error --request POST \
+            --header "Authorization: Bearer $NEON_API_KEY" \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            --output "$body" --write-out '%{http_code}' \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
+          if [[ "$status" != '201' ]]; then
+            echo "Neon branch creation failed: HTTP $status" >&2
+            jq -c 'del(.password,.connection_uri,.connection_string)' "$body" 2>/dev/null || cat "$body"
+            exit 1
+          fi
+          branch_id="$(jq -er '.branch.id' "$body")"
+          endpoint_id="$(jq -er '.endpoints[] | select(.type=="read_write") | .id' "$body" | head -n1)"
+          echo "NEON_TEST_BRANCH_ID=$branch_id" >> "$GITHUB_ENV"
+          echo "NEON_TEST_ENDPOINT_ID=$endpoint_id" >> "$GITHUB_ENV"
+          echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
+          echo "Created Neon branch $branch_name ($branch_id) with endpoint $endpoint_id"
 
-      - name: Create isolated Neon branch from staging
-        id: admin
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: neondb_owner
-          expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
-          api_key: ${{ secrets.NEON_API_KEY }}
+      - name: Ensure PostgreSQL client
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
 
       - name: Bootstrap roles and database access
         env:
-          ADMIN_DATABASE_URL: ${{ steps.admin.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
+          ADMIN_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name neondb_owner)"
+          echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT nexora_owner TO nexora_migrator;
           GRANT nexora_migrator TO neondb_owner;
