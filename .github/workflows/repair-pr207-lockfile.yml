@@ -1,9 +1,10 @@
 name: Repair PR207 lockfile
 
 on:
-  push:
+  pull_request:
+    types: [synchronize]
     branches:
-      - brunabarrichello-database-target-update
+      - main
 
 permissions:
   contents: write
@@ -15,6 +16,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: brunabarrichello-database-target-update
           fetch-depth: 0
       - uses: pnpm/action-setup@v4
         with:
@@ -33,13 +35,12 @@ jobs:
           test "$(grep -c '^  multer@2\.2\.0:' pnpm-lock.yaml || true)" = "0"
           test "$(grep -c '      multer: 2\.3\.0' pnpm-lock.yaml)" = "1"
           test "$(grep -c 'specifier: 12\.0\.1' pnpm-lock.yaml)" -ge "2"
+          test "$(grep -c '^snapshots:' pnpm-lock.yaml)" = "1"
       - name: Commit corrected lockfile
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pnpm-lock.yaml
-          git diff --cached --exit-code && exit 1 || true
+          git diff --cached --quiet && exit 1
           git commit -m "fix(deps): regenerate complete lockfile for multer 2.3.0"
-          git push
-
-# Triggered by repository push to execute the one-time remediation.
+          git push origin HEAD:brunabarrichello-database-target-update
