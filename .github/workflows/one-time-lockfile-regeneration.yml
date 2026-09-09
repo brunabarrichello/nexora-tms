@@ -1,7 +1,6 @@
 name: One-time lockfile regeneration
 
 # Temporary maintenance workflow; explicitly updates the vulnerable transitive dependency.
-# Triggered again after the CI audit identified multer 2.2.0 still pinned in the lockfile.
 on:
   push:
     branches:
@@ -12,7 +11,7 @@ permissions:
 
 jobs:
   regenerate:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.head_commit.message != 'fix(deps): update multer to patched release'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
