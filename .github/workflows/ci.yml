@@ -52,16 +52,16 @@ jobs:
           fi
           git fetch origin cfde201d3e4ccaec4af505d08b0910fc64859db1 --depth=1
           git show cfde201d3e4ccaec4af505d08b0910fc64859db1:pnpm-lock.yaml > pnpm-lock.yaml
-          cp package.json package.json.repair
-          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json','utf8'));p.pnpm={...(p.pnpm||{}),overrides:{...((p.pnpm||{}).overrides||{}),'multer@^2.2.0':'2.3.0'}};fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\\n')"
-          trap 'mv package.json.repair package.json' EXIT
+          cp pnpm-workspace.yaml pnpm-workspace.yaml.repair
+          printf '\n\noverrides:\n  multer@^2.2.0: 2.3.0\n' >> pnpm-workspace.yaml
+          trap 'mv pnpm-workspace.yaml.repair pnpm-workspace.yaml' EXIT
           pnpm install --lockfile-only
           test "$(grep -c '^  multer@2\.3\.0:' pnpm-lock.yaml)" = "1"
           test "$(grep -c '^  multer@2\.2\.0:' pnpm-lock.yaml || true)" = "0"
           test "$(grep -c '^snapshots:' pnpm-lock.yaml)" = "1"
-          mv package.json.repair package.json
+          mv pnpm-workspace.yaml.repair pnpm-workspace.yaml
           trap - EXIT
-          git diff --exit-code -- package.json
+          git diff --exit-code -- pnpm-workspace.yaml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pnpm-lock.yaml
