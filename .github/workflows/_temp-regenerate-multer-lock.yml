@@ -53,9 +53,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          grep -q '^  multer@2\.3\.0:' pnpm-lock.yaml
-          ! grep -q '^  multer@2\.2\.0:' pnpm-lock.yaml
-          grep -q '^snapshots:' pnpm-lock.yaml
+          echo 'Detected multer entries:'
+          grep -n 'multer@2\.' pnpm-lock.yaml || true
+          echo 'Detected snapshots section:'
+          grep -n '^snapshots:' pnpm-lock.yaml || true
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('pnpm-lock.yaml').read_text()
+          assert '\n  multer@2.3.0:\n' in text, 'multer@2.3.0 missing'
+          assert '\n  multer@2.2.0:\n' not in text, 'multer@2.2.0 present'
+          assert '\nsnapshots:\n' in text, 'snapshots section missing'
+          PY
           cp /tmp/pnpm-workspace.yaml.original pnpm-workspace.yaml
           test "$(git show HEAD:pnpm-workspace.yaml)" = "$(cat pnpm-workspace.yaml)"
           test "$(git show HEAD:package.json)" = "$(cat package.json)"
