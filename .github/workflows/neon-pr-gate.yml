@@ -24,7 +24,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
-  NEON_PARENT_BRANCH_ID: br-silent-feather-a5ku7uyi
+  NEON_PARENT_BRANCH_ID: br-autumn-frog-a5ticm98
 
 jobs:
   isolated-migration-rls:
@@ -127,9 +127,6 @@ jobs:
         run: |
           set -euo pipefail
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          -- nexora is owned by nexora_owner; neondb_owner is the admin login.
-          -- Schema creation must occur while neondb_owner can SET ROLE to the
-          -- canonical migrator. Schema ACL changes must occur as its owner.
           GRANT nexora_owner TO nexora_migrator;
           GRANT nexora_migrator TO neondb_owner;
           CREATE SCHEMA IF NOT EXISTS nexora AUTHORIZATION nexora_migrator;
