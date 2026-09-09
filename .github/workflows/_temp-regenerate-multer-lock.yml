@@ -1,0 +1,87 @@
+name: _temp-regenerate-multer-lock
+
+on:
+  push:
+    branches:
+      - chore/temp-regenerate-multer-lock-20260909
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-publish:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_BRANCH: brunabarrichello-database-target-update
+      REFERENCE_SHA: cfde201d3e4ccaec4af505d08b0910fc64859db1
+    steps:
+      - name: Checkout temporary repair branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: chore/temp-regenerate-multer-lock-20260909
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+
+      - name: Restore reference lockfile and apply temporary override
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$REFERENCE_SHA"
+          git restore --source="$REFERENCE_SHA" -- pnpm-lock.yaml
+          cp pnpm-workspace.yaml /tmp/pnpm-workspace.yaml.original
+          cp package.json /tmp/package.json.original
+          printf '\noverrides:\n  multer: 2.3.0\n' >> pnpm-workspace.yaml
+          test "$(git show HEAD:pnpm-workspace.yaml)" = "$(cat /tmp/pnpm-workspace.yaml.original)"
+          test "$(git show HEAD:package.json)" = "$(cat /tmp/package.json.original)"
+
+      - name: Regenerate lockfile
+        shell: bash
+        run: pnpm install --lockfile-only
+
+      - name: Validate generated lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'Detected multer entries:'
+          grep -n 'multer@2\.' pnpm-lock.yaml || true
+          echo 'Detected snapshots section:'
+          grep -n '^snapshots:' pnpm-lock.yaml || true
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('pnpm-lock.yaml').read_text()
+          assert '\n  multer@2.3.0:\n' in text, 'multer@2.3.0 missing'
+          assert '\n  multer@2.2.0:\n' not in text, 'multer@2.2.0 present'
+          assert '\nsnapshots:\n' in text, 'snapshots section missing'
+          PY
+          cp /tmp/pnpm-workspace.yaml.original pnpm-workspace.yaml
+          test "$(git show HEAD:pnpm-workspace.yaml)" = "$(cat pnpm-workspace.yaml)"
+          test "$(git show HEAD:package.json)" = "$(cat package.json)"
+          test "$(git diff --name-only)" = "pnpm-lock.yaml"
+          cp pnpm-lock.yaml /tmp/generated-pnpm-lock.yaml
+
+      - name: Publish lockfile-only commit onto PR #207 branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$TARGET_BRANCH"
+          git checkout -B publish-target "origin/$TARGET_BRANCH"
+          cp /tmp/generated-pnpm-lock.yaml pnpm-lock.yaml
+          test "$(git diff --name-only)" = "pnpm-lock.yaml"
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add pnpm-lock.yaml
+          git diff --cached --name-only
+          git commit -m 'chore(deps): regenerate pnpm lockfile with multer 2.3.0'
+          git show --stat --oneline --summary HEAD
+          git push origin HEAD:"$TARGET_BRANCH"

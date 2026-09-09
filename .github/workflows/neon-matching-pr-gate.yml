@@ -13,11 +13,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-matching-gate-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   matching-runtime:
@@ -28,40 +29,34 @@ jobs:
     steps:
       - name: Checkout PR
         uses: actions/checkout@v7
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 11.24.0
           run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24.20.0
-
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
       - name: Set isolated branch name and expiry
         shell: bash
         run: |
           set -euo pipefail
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-matching-0020-${{ github.run_id }}" >> "$GITHUB_ENV"
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-
       - name: Create isolated Neon branch
         id: create-neon
         uses: neondatabase/create-branch-action@v6
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
+          parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
+          database: nexora
           role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
-
       - name: Ensure PostgreSQL client
         shell: bash
         run: |
@@ -70,7 +65,6 @@ jobs:
             sudo apt-get update
             sudo apt-get install -y postgresql-client
           fi
-
       - name: Bootstrap DDL role
         env:
           ADMIN_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
@@ -78,21 +72,20 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT CREATE ON DATABASE neondb TO nexora_owner;
+          GRANT CREATE ON DATABASE nexora TO nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_owner;
           SQL
-
-      - name: Resolve migrator connection
+      - name: Resolve migrator connection on existing branch
         id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
-
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_migrator)"
+          test -n "$MIGRATOR_DATABASE_URL"
+          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "db_url=$MIGRATOR_DATABASE_URL" >> "$GITHUB_OUTPUT"
       - name: Apply full migration chain and owner invariants
         shell: bash
         env:
@@ -108,18 +101,17 @@ jobs:
           echo "::add-mask::$OWNER_DATABASE_URL"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0020-matching-owner.sql
-
-      - name: Resolve runtime connection
+      - name: Resolve runtime connection on existing branch
         id: app
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: production
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: neondb
-          role: nexora_app
-          api_key: ${{ secrets.NEON_API_KEY }}
-
+        shell: bash
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        run: |
+          set -euo pipefail
+          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_app)"
+          test -n "$APP_DATABASE_URL"
+          echo "::add-mask::$APP_DATABASE_URL"
+          echo "db_url=$APP_DATABASE_URL" >> "$GITHUB_OUTPUT"
       - name: Validate Wave 0020 runtime invariants
         env:
           APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
@@ -127,7 +119,6 @@ jobs:
           set -euo pipefail
           echo "::add-mask::$APP_DATABASE_URL"
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0020-matching-runtime.sql
-
       - name: Cleanup isolated Neon branch
         if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
         env:
@@ -135,7 +126,4 @@ jobs:
           BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          curl --fail-with-body --silent --show-error \
-            -X DELETE \
-            -H "Authorization: Bearer $NEON_API_KEY" \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID"
+          curl --fail-with-body --silent --show-error -X DELETE -H "Authorization: Bearer $NEON_API_KEY" "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches/$BRANCH_ID"

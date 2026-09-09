@@ -7,18 +7,19 @@ on:
     paths:
       - "apps/api/src/security/**"
       - "apps/api/package.json"
+      - "packages/database/**"
       - ".github/workflows/api-oidc-neon-gate.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: api-oidc-neon-gate-pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: neon-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
-  DATABASE_NAME: neondb
+  DATABASE_NAME: nexora
 
 jobs:
   oidc-identity-neon:
@@ -68,7 +69,7 @@ jobs:
           parent_branch: staging
           branch_name: ${{ env.NEON_TEST_BRANCH }}
           database: ${{ env.DATABASE_NAME }}
-          role: nexora_migrator
+          role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
@@ -82,13 +83,45 @@ jobs:
           fi
           psql --version
 
-      - name: Seed external identity fixtures through owner capability
+      - name: Resolve nexora_migrator connection
         shell: bash
         env:
-          MIGRATOR_DATABASE_URL: ${{ steps.create-neon.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
+          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name nexora_migrator)"
+          test -n "$MIGRATOR_DATABASE_URL"
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
+
+          identity="$(psql "$MIGRATOR_DATABASE_URL" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
+          [[ "$identity" == "nexora_migrator|nexora_migrator|f" ]] || { echo "Unexpected migration identity: $identity" >&2; exit 1; }
+
+      - name: Apply database migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+
+      - name: Verify migrated OIDC tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select to_regclass('public.users'), to_regclass('public.external_identities')" | grep -F 'users|external_identities'
+
+      - name: Seed external identity fixtures through owner capability
+        shell: bash
+        run: |
+          set -euo pipefail
           if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
@@ -147,6 +180,8 @@ jobs:
             echo ""
             echo "- Parent branch: staging"
             echo "- Ephemeral branch: ${NEON_TEST_BRANCH}"
+            echo "- Bootstrap: single branch creation"
+            echo "- Migration role: nexora_migrator"
             echo "- Runtime role: nexora_app"
             echo "- Runtime BYPASSRLS: false"
             echo "- Active external identity mapping: verified"

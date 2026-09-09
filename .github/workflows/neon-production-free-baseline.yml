@@ -141,7 +141,7 @@ jobs:
             raw_uri="$(curl -fsSG \
               -H "Authorization: Bearer ${NEON_API_KEY}" \
               --data-urlencode "branch_id=${PRODUCTION_BRANCH_ID}" \
-              --data-urlencode "database_name=neondb" \
+              --data-urlencode "database_name=nexora" \
               --data-urlencode "role_name=${role_name}" \
               --data-urlencode "pooled=false" \
               "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" \
@@ -228,3 +228,4 @@ jobs:
             echo ""
             echo "Residual Free-tier risks are accepted by architecture policy: short restore window and no platform-enforced IP perimeter/branch protection."
           } >> "$GITHUB_STEP_SUMMARY"
+

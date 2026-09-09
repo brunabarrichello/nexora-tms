@@ -85,7 +85,7 @@ connection_uri() {
   raw_uri="$(curl -fsSG \
     -H "Authorization: Bearer ${NEON_API_KEY}" \
     --data-urlencode "branch_id=${branch_id}" \
-    --data-urlencode 'database_name=neondb' \
+    --data-urlencode 'database_name=nexora' \
     --data-urlencode "role_name=${role_name}" \
     --data-urlencode 'pooled=false' \
     "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri" | jq -er '.uri')"
@@ -257,3 +257,4 @@ if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     echo '- Temporary recovery branch is deleted by the guarded EXIT cleanup.'
   } >> "$GITHUB_STEP_SUMMARY"
 fi
+
