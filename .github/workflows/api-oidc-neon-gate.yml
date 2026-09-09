@@ -14,7 +14,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-pr-${{ github.event.pull_request.number }}
+  group: api-oidc-neon-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 env:
@@ -31,21 +31,17 @@ jobs:
     steps:
       - name: Checkout PR
         uses: actions/checkout@v7
-
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
           version: 11.24.0
           run_install: false
-
       - name: Setup Node.js
         uses: actions/setup-node@v7
         with:
           node-version: 24.20.0
-
       - name: Install dependencies
         run: pnpm install --no-frozen-lockfile
-
       - name: Validate Neon API secret
         shell: bash
         env:
@@ -53,14 +49,12 @@ jobs:
         run: |
           set -euo pipefail
           test -n "${NEON_API_KEY:-}" || { echo "NEON_API_KEY repository secret is not configured." >&2; exit 1; }
-
       - name: Set ephemeral branch name and expiry
         shell: bash
         run: |
           set -euo pipefail
           echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-oidc-${{ github.run_id }}" >> "$GITHUB_ENV"
           echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-
       - name: Create isolated branch from staging
         id: create-neon
         uses: neondatabase/create-branch-action@v6
@@ -72,7 +66,6 @@ jobs:
           role: neondb_owner
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
-
       - name: Ensure PostgreSQL client is available
         shell: bash
         run: |
@@ -82,7 +75,6 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
           psql --version
-
       - name: Resolve nexora_migrator connection
         shell: bash
         env:
@@ -96,10 +88,8 @@ jobs:
           test -n "$MIGRATOR_DATABASE_URL"
           echo "::add-mask::$MIGRATOR_DATABASE_URL"
           echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
-
           identity="$(psql "$MIGRATOR_DATABASE_URL" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
           [[ "$identity" == "nexora_migrator|nexora_migrator|f" ]] || { echo "Unexpected migration identity: $identity" >&2; exit 1; }
-
       - name: Apply database migrations
         shell: bash
         run: |
@@ -111,13 +101,11 @@ jobs:
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
           DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
-
       - name: Verify migrated OIDC tables
         shell: bash
         run: |
           set -euo pipefail
           psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 -Atqc "select to_regclass('public.users'), to_regclass('public.external_identities')" | grep -F 'users|external_identities'
-
       - name: Seed external identity fixtures through owner capability
         shell: bash
         run: |
@@ -128,22 +116,17 @@ jobs:
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
           echo "::add-mask::$OWNER_DATABASE_URL"
-
           roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
           [[ "$roles" == "nexora_migrator:nexora_owner" ]] || { echo "Unexpected migration role chain: $roles" >&2; exit 1; }
-
           psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           INSERT INTO users (id, display_name, status) VALUES
             ('52000000-0000-4000-8000-000000000101', 'OIDC Active User', 'active'),
             ('52000000-0000-4000-8000-000000000102', 'OIDC Suspended User', 'suspended');
-
           INSERT INTO external_identities (id, user_id, provider, subject) VALUES
             ('52000000-0000-4000-8000-000000000201', '52000000-0000-4000-8000-000000000101', 'ci-oidc', 'subject-active'),
             ('52000000-0000-4000-8000-000000000202', '52000000-0000-4000-8000-000000000102', 'ci-oidc', 'subject-suspended');
           SQL
-
       - name: Resolve nexora_app connection
-        shell: bash
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
@@ -154,15 +137,11 @@ jobs:
             --role-name nexora_app)"
           test -n "$APP_DATABASE_URL"
           echo "::add-mask::$APP_DATABASE_URL"
-
           identity="$(psql "$APP_DATABASE_URL" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
           [[ "$identity" == "nexora_app|nexora_app|f" ]] || { echo "Unexpected API runtime identity: $identity" >&2; exit 1; }
-
           echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
-
       - name: Build API
         run: pnpm --filter @nexora/api build
-
       - name: Run OIDC identity mapping integration
         shell: bash
         env:
@@ -171,7 +150,6 @@ jobs:
         run: |
           set -euo pipefail
           node apps/api/dist/security/oidc-identity.integration.js
-
       - name: Gate summary
         shell: bash
         run: |
@@ -190,7 +168,6 @@ jobs:
             echo "- AuthenticatedPrincipal creation after DB mapping: verified"
             echo "- Tenant authorization remains delegated to TenantContextGuard"
           } >> "$GITHUB_STEP_SUMMARY"
-
       - name: Delete isolated Neon branch
         if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
         uses: neondatabase/delete-branch-action@v3
