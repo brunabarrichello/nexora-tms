@@ -52,11 +52,15 @@ jobs:
           fi
           git fetch origin cfde201d3e4ccaec4af505d08b0910fc64859db1 --depth=1
           git show cfde201d3e4ccaec4af505d08b0910fc64859db1:pnpm-lock.yaml > pnpm-lock.yaml
-          pnpm update multer --lockfile-only
+          cp pnpm-workspace.yaml pnpm-workspace.yaml.repair
+          printf '\n\noverrides:\n  multer@^2.2.0: 2.3.0\n' >> pnpm-workspace.yaml
+          pnpm install --lockfile-only
+          mv pnpm-workspace.yaml.repair pnpm-workspace.yaml
           test "$(grep -c '^  multer@2\.3\.0:' pnpm-lock.yaml)" = "1"
           test "$(grep -c '^  multer@2\.2\.0:' pnpm-lock.yaml || true)" = "0"
           test "$(grep -c '      multer: 2\.3\.0' pnpm-lock.yaml)" = "1"
           test "$(grep -c '^snapshots:' pnpm-lock.yaml)" = "1"
+          git diff --exit-code -- pnpm-workspace.yaml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add pnpm-lock.yaml
