@@ -54,10 +54,5 @@
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged",
     "pre-push": "pnpm validate"
-  },
-  "pnpm": {
-    "overrides": {
-      "multer": "2.3.0"
-    }
   }
 }
