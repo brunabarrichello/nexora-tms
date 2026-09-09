@@ -2,9 +2,11 @@ name: One-time lockfile regeneration
 
 # Temporary maintenance workflow; explicitly updates the vulnerable transitive dependency.
 on:
-  push:
+  pull_request:
+    types:
+      - synchronize
     branches:
-      - brunabarrichello-database-target-update
+      - main
 
 permissions:
   contents: write
