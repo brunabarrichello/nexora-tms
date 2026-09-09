@@ -1,0 +1,68 @@
+name: _temp-regenerate-multer-lock
+
+on:
+  push:
+    branches:
+      - chore/temp-regenerate-multer-lock-20260909
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout temporary repair branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.24.0
+          run_install: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+
+      - name: Restore reference lockfile and apply temporary override
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin cfde201d3e4ccaec4af505d08b0910fc64859db1
+          git restore --source=cfde201d3e4ccaec4af505d08b0910fc64859db1 -- pnpm-lock.yaml
+          cp pnpm-workspace.yaml /tmp/pnpm-workspace.yaml.original
+          printf '\noverrides:\n  multer: 2.3.0\n' >> pnpm-workspace.yaml
+          test "$(git show HEAD:pnpm-workspace.yaml)" = "$(cat /tmp/pnpm-workspace.yaml.original)"
+          test "$(git show HEAD:package.json)" = "$(cat package.json)"
+
+      - name: Regenerate lockfile
+        shell: bash
+        run: pnpm install --lockfile-only
+
+      - name: Validate lockfile and restore workspace files
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^  multer@2\.3\.0:' pnpm-lock.yaml
+          ! grep -q '^  multer@2\.2\.0:' pnpm-lock.yaml
+          grep -q '^snapshots:' pnpm-lock.yaml
+          cp /tmp/pnpm-workspace.yaml.original pnpm-workspace.yaml
+          test "$(git show HEAD:pnpm-workspace.yaml)" = "$(cat pnpm-workspace.yaml)"
+          test "$(git show HEAD:package.json)" = "$(cat package.json)"
+          test "$(git diff --name-only)" = "pnpm-lock.yaml"
+
+      - name: Commit only regenerated lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add pnpm-lock.yaml
+          git diff --cached --name-only
+          git commit -m 'chore(deps): regenerate pnpm lockfile with multer 2.3.0'
+          git push origin HEAD:chore/temp-regenerate-multer-lock-20260909
