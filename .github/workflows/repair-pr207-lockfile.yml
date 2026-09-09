@@ -41,3 +41,5 @@ jobs:
           git diff --cached --exit-code && exit 1 || true
           git commit -m "fix(deps): regenerate complete lockfile for multer 2.3.0"
           git push
+
+# Triggered by repository push to execute the one-time remediation.
