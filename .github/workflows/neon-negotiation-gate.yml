@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: neon-pr-${{ github.event.pull_request.number }}
+  group: neon-negotiation-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 env:
@@ -21,7 +21,7 @@ env:
 
 jobs:
   negotiation-isolation:
-    name: Negotiation schema, grants and RLS
+    name: Negotiation schema, grants and RLS isolation
     if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
