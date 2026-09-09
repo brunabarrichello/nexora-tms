@@ -1,5 +1,6 @@
 name: One-time lockfile regeneration
 
+# Temporary maintenance workflow; removes its own dependency override after regeneration.
 on:
   push:
     branches:
