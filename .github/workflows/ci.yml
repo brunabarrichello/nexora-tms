@@ -52,7 +52,7 @@ jobs:
           fi
           git fetch origin cfde201d3e4ccaec4af505d08b0910fc64859db1 --depth=1
           git show cfde201d3e4ccaec4af505d08b0910fc64859db1:pnpm-lock.yaml > pnpm-lock.yaml
-          pnpm update multer@2.3.0 --lockfile-only
+          pnpm update multer --lockfile-only
           test "$(grep -c '^  multer@2\.3\.0:' pnpm-lock.yaml)" = "1"
           test "$(grep -c '^  multer@2\.2\.0:' pnpm-lock.yaml || true)" = "0"
           test "$(grep -c '      multer: 2\.3\.0' pnpm-lock.yaml)" = "1"
