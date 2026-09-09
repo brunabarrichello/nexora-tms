@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -40,33 +40,6 @@ jobs:
 
       - name: Configure npm registry
         run: pnpm config set registry https://registry.npmjs.org/
-
-      - name: Repair malformed PR207 lockfile once
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 207 && github.event.pull_request.head.ref == 'brunabarrichello-database-target-update' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if grep -q '^  multer@2\.3\.0:' pnpm-lock.yaml && grep -q '^snapshots:' pnpm-lock.yaml; then
-            echo "PR207 lockfile already structurally repaired; no mutation required."
-            exit 0
-          fi
-          git fetch origin cfde201d3e4ccaec4af505d08b0910fc64859db1 --depth=1
-          git show cfde201d3e4ccaec4af505d08b0910fc64859db1:pnpm-lock.yaml > pnpm-lock.yaml
-          cp pnpm-workspace.yaml pnpm-workspace.yaml.repair
-          printf '\n\noverrides:\n  multer@^2.2.0: 2.3.0\n' >> pnpm-workspace.yaml
-          trap 'mv pnpm-workspace.yaml.repair pnpm-workspace.yaml' EXIT
-          pnpm install --lockfile-only
-          test "$(grep -c '^  multer@2\.3\.0:' pnpm-lock.yaml)" = "1"
-          test "$(grep -c '^  multer@2\.2\.0:' pnpm-lock.yaml || true)" = "0"
-          test "$(grep -c '^snapshots:' pnpm-lock.yaml)" = "1"
-          mv pnpm-workspace.yaml.repair pnpm-workspace.yaml
-          trap - EXIT
-          git diff --exit-code -- pnpm-workspace.yaml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pnpm-lock.yaml
-          git commit -m "fix(deps): regenerate complete lockfile for multer 2.3.0"
-          git push origin HEAD:brunabarrichello-database-target-update
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -134,5 +107,3 @@ jobs:
       - name: Verify Drizzle artifacts are versioned
         if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
         run: git diff --exit-code -- packages/database/migrations
-
-# PR207 temporary lockfile repair gate; remove after verified remediation.
