@@ -41,6 +41,7 @@ jobs:
       - name: Configure npm registry
         run: pnpm config set registry https://registry.npmjs.org/
 
+      # CI is intentionally read-only; lockfile integrity is validated by frozen install.
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

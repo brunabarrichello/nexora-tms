@@ -11,7 +11,7 @@ test('requires worker-specific database configuration', () => {
 
 test('loads bounded worker defaults and explicit runtime values', () => {
   const config = loadWorkerConfig({
-    WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/neondb',
+    WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/nexora',
     WORKER_ID: 'worker-test-1',
     APP_ENV: 'staging',
     PORT: '9090',
@@ -24,7 +24,7 @@ test('loads bounded worker defaults and explicit runtime values', () => {
 
   assert.deepEqual(config.database, {
     kind: 'url',
-    url: 'postgresql://nexora_worker:secret@example.invalid/neondb',
+    url: 'postgresql://nexora_worker:secret@example.invalid/nexora',
   });
   assert.equal(config.workerId, 'worker-test-1');
   assert.equal(config.environment, 'staging');
@@ -47,7 +47,7 @@ test('loads a TLS-enforced parameterized nexora_worker database configuration', 
     kind: 'parameters',
     host: 'ep-example.us-east-2.aws.neon.tech',
     port: 5432,
-    database: 'neondb',
+    database: 'nexora',
     user: 'nexora_worker',
     password: 'secret',
   });
@@ -69,7 +69,7 @@ test('does not accept generic DATABASE_URL as a worker credential', () => {
   assert.throws(
     () =>
       loadWorkerConfig({
-        DATABASE_URL: 'postgresql://nexora_app:secret@example.invalid/neondb',
+        DATABASE_URL: 'postgresql://nexora_app:secret@example.invalid/nexora',
       }),
     /WORKER_DATABASE_URL or WORKER_DATABASE_HOST \+ WORKER_DATABASE_PASSWORD is required/,
   );
@@ -79,7 +79,7 @@ test('rejects unsafe worker bounds', () => {
   assert.throws(
     () =>
       loadWorkerConfig({
-        WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/neondb',
+        WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/nexora',
         WORKER_BATCH_SIZE: '9999',
       }),
     /WORKER_BATCH_SIZE must be an integer between 1 and 500/,
@@ -90,7 +90,7 @@ test('rejects a handler deadline that can collide with lease expiry', () => {
   assert.throws(
     () =>
       loadWorkerConfig({
-        WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/neondb',
+        WORKER_DATABASE_URL: 'postgresql://nexora_worker:secret@example.invalid/nexora',
         WORKER_LEASE_SECONDS: '5',
         WORKER_HANDLER_TIMEOUT_MS: '5000',
       }),
