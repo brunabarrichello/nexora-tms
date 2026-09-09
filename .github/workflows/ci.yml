@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -40,26 +40,6 @@ jobs:
 
       - name: Configure npm registry
         run: pnpm config set registry https://registry.npmjs.org/
-
-      # Temporary security remediation. Regenerate the lockfile with the patched
-      # multer release, validate it, and commit only the lockfile change.
-      - name: Remediate vulnerable multer lockfile entry
-        shell: bash
-        run: |
-          set -euo pipefail
-          pnpm update multer@2.3.0 --lockfile-only
-          grep -q "multer@2.3.0:" pnpm-lock.yaml
-          if grep -q "multer@2.2.0:" pnpm-lock.yaml; then
-            echo "Vulnerable multer 2.2.0 resolution remains in lockfile."
-            exit 1
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add pnpm-lock.yaml
-          if ! git diff --cached --quiet -- pnpm-lock.yaml; then
-            git commit -m "fix(deps): update multer to patched release"
-            git push origin HEAD:${{ github.head_ref || github.ref_name }}
-          fi
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
