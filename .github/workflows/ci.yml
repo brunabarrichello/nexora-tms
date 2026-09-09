@@ -134,3 +134,5 @@ jobs:
       - name: Verify Drizzle artifacts are versioned
         if: ${{ hashFiles('packages/database/drizzle.config.ts') != '' }}
         run: git diff --exit-code -- packages/database/migrations
+
+# PR207 temporary lockfile repair gate; remove after verified remediation.
