@@ -4,12 +4,15 @@ on:
   push:
     branches:
       - chore/temp-regenerate-multer-lock-20260909
+  pull_request:
+    types: [opened, synchronize]
 
 permissions:
   contents: write
 
 jobs:
   repair:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'chore/temp-regenerate-multer-lock-20260909'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout temporary repair branch
