@@ -1,6 +1,7 @@
 name: One-time lockfile regeneration
 
 # Temporary maintenance workflow; explicitly updates the vulnerable transitive dependency.
+# Triggered again after the CI audit identified multer 2.2.0 still pinned in the lockfile.
 on:
   push:
     branches:
