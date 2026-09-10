@@ -13,6 +13,7 @@ const tenantB = '78200000-0000-4000-8000-000000000002';
 const adminA = '78200000-0000-4000-8000-000000000101';
 const clientA = '78200000-0000-4000-8000-000000000501';
 const sourceEvent = '78200000-0000-4000-8000-000000000701';
+const targetIdempotencyKey = process.env.DR_FIXTURE_IDEMPOTENCY_KEY ?? 'nex56:source:event-001';
 const validHash = '11'.repeat(32);
 
 const app = new Pool({ connectionString: appUrl, max: 2, application_name: 'nex56-api-gate' });
@@ -105,9 +106,9 @@ try {
     idempotency_key: string;
   }>(
     'select id::text,job_type,attempt,max_attempts,idempotency_key from nexora_claim_durable_jobs($1,$2,$3)',
-    ['nex56-worker', 10, 30],
+    ['nex56-worker', 500, 30],
   );
-  const first = claimed1.rows.find((row) => row.job_type === 'integrations.webhook.deliver');
+  const first = claimed1.rows.find((row) => row.idempotency_key === targetIdempotencyKey);
   assert.ok(first);
   assert.equal(first.attempt, 1);
   assert.equal(first.max_attempts, 2);
@@ -164,7 +165,7 @@ try {
   );
   const claimed2 = await worker.query<{ id: string; job_type: string; attempt: number }>(
     'select id::text,job_type,attempt from nexora_claim_durable_jobs($1,$2,$3)',
-    ['nex56-worker', 10, 30],
+    ['nex56-worker', 500, 30],
   );
   const second = claimed2.rows.find((row) => row.id === first.id);
   assert.ok(second);
@@ -210,7 +211,7 @@ try {
 
   const claimed3 = await worker.query<{ id: string; attempt: number; idempotency_key: string }>(
     'select id::text,attempt,idempotency_key from nexora_claim_durable_jobs($1,$2,$3)',
-    ['nex56-worker', 10, 30],
+    ['nex56-worker', 500, 30],
   );
   const third = claimed3.rows.find((row) => row.id === first.id);
   assert.ok(third);
