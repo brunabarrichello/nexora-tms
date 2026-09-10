@@ -113,18 +113,18 @@ jobs:
         run: |
           set -euo pipefail
           if [[ "$ADMIN_DATABASE_URL" == *"?"* ]]; then
-            MIGRATOR_DATABASE_URL="${ADMIN_DATABASE_URL}&options=-c%20role%3Dnexora_migrator"
+            OWNER_DATABASE_URL="${ADMIN_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
-            MIGRATOR_DATABASE_URL="${ADMIN_DATABASE_URL}?options=-c%20role%3Dnexora_migrator"
+            OWNER_DATABASE_URL="${ADMIN_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
           fi
-          echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          roles="$(psql "$MIGRATOR_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
-          [[ "$roles" == "neondb_owner:nexora_migrator" ]] || { echo "Unexpected migrator role chain: $roles" >&2; exit 1; }
+          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
+          echo "::add-mask::$OWNER_DATABASE_URL"
+          roles="$(psql "$OWNER_DATABASE_URL" -Atqc "select session_user || ':' || current_user")"
+          [[ "$roles" == "neondb_owner:nexora_owner" ]] || { echo "Unexpected migration capability role: $roles" >&2; exit 1; }
 
       - name: Apply migrations and seed collaboration fixtures
         env:
-          DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
+          DATABASE_URL: ${{ env.OWNER_DATABASE_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -203,7 +203,7 @@ jobs:
             echo '- Database target: nexora'
             echo '- Parent branch: staging'
             echo '- Runtime role: nexora_app'
-            echo '- Migration capability: nexora_migrator -> nexora_owner'
+            echo '- Migration capability: neondb_owner -> nexora_owner (via nexora_migrator membership validation)'
             echo '- Thread creation and creator membership: verified by integration'
             echo '- Internal/external participant lifecycle: verified by integration'
             echo '- Message and reply persistence through nexora_app: verified by integration'
