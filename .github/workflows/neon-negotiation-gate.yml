@@ -45,6 +45,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Ensure PostgreSQL client and Neon CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+          npx --yes neonctl@v2 --version
+
       - name: Validate Neon API secret
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
@@ -64,17 +75,13 @@ jobs:
       - name: Resolve isolated admin connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 10); do
-            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=neondb_owner")"; then
-              ADMIN_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
-              if [[ -n "$ADMIN_DATABASE_URL" && "$ADMIN_DATABASE_URL" != "null" ]]; then break; fi
-            fi
-            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return admin URI.' >&2; exit 1; }
-            sleep 3
-          done
+          ADMIN_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "${{ steps.create-neon.outputs.branch_id }}" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name neondb_owner)"
+          test -n "$ADMIN_DATABASE_URL"
           echo '::add-mask::'"$ADMIN_DATABASE_URL"
           ADMIN_ID="$(psql "$ADMIN_DATABASE_URL" -Atqc 'select session_user || '"'"':'"'"' || current_user')"
           [[ "$ADMIN_ID" == 'neondb_owner:neondb_owner' ]]
@@ -96,17 +103,13 @@ jobs:
       - name: Resolve migrator connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 10); do
-            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=nexora_migrator&pooled=false")"; then
-              MIGRATOR_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
-              if [[ -n "$MIGRATOR_DATABASE_URL" && "$MIGRATOR_DATABASE_URL" != "null" ]]; then break; fi
-            fi
-            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return migrator URI.' >&2; exit 1; }
-            sleep 3
-          done
+          MIGRATOR_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "${{ steps.create-neon.outputs.branch_id }}" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name nexora_migrator)"
+          test -n "$MIGRATOR_DATABASE_URL"
           echo '::add-mask::'"$MIGRATOR_DATABASE_URL"
           echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
 
@@ -147,17 +150,13 @@ jobs:
       - name: Resolve app connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 10); do
-            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=nexora_app")"; then
-              APP_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
-              if [[ -n "$APP_DATABASE_URL" && "$APP_DATABASE_URL" != "null" ]]; then break; fi
-            fi
-            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return app URI.' >&2; exit 1; }
-            sleep 3
-          done
+          APP_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "${{ steps.create-neon.outputs.branch_id }}" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name nexora_app)"
+          test -n "$APP_DATABASE_URL"
           echo '::add-mask::'"$APP_DATABASE_URL"
           echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
 
@@ -181,6 +180,7 @@ jobs:
           {
             echo '### Neon Negotiation Gate'
             echo '- Isolated branch: create-branch-action@v6'
+            echo '- Connection resolution: neonctl@v2'
             echo '- Database: nexora'
             echo '- Negotiation schema, RLS and least-privilege grants: verified'
             echo '- Runtime tenant isolation and reply scope: verified'
