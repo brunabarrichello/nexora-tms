@@ -17,6 +17,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   async-reliability:
@@ -117,7 +118,7 @@ jobs:
           set -euo pipefail
           test -n "${BRANCH_ID:-}" || { echo "Unable to allocate an isolated Neon branch after bounded retries." >&2; exit 1; }
 
-      - name: Ensure PostgreSQL client
+      - name: Ensure PostgreSQL client and Neon CLI
         shell: bash
         run: |
           set -euo pipefail
@@ -126,6 +127,7 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
           psql --version
+          npx --yes neonctl@v2 --version
 
       - name: Bootstrap migration capability
         env:
@@ -149,39 +151,44 @@ jobs:
           GRANT USAGE ON SCHEMA public TO nexora_worker;
           SQL
 
-      - name: Resolve migrator connection
-        id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Verify migration capability before Drizzle
+      - name: Resolve role connection strings on existing branch
         env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          psql "$MIGRATOR_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT current_user, session_user;
-          SELECT has_database_privilege(current_user, 'nexora', 'CONNECT') AS can_connect;
-          SELECT has_schema_privilege(current_user, 'public', 'USAGE') AS public_usage;
-          SELECT has_schema_privilege(current_user, 'public', 'CREATE') AS public_create;
-          SELECT pg_has_role(current_user, 'nexora_owner', 'member') AS can_assume_owner;
-          SQL
+          for role in nexora_migrator nexora_app nexora_worker; do
+            url="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+              --project-id "$NEON_PROJECT_ID" \
+              --database-name "$DATABASE_NAME" \
+              --role-name "$role")"
+            test -n "$url" || { echo "Unable to resolve connection string for $role." >&2; exit 1; }
+            echo "::add-mask::$url"
+            case "$role" in
+              nexora_migrator) echo "MIGRATOR_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+              nexora_app) echo "APP_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+              nexora_worker) echo "WORKER_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+            esac
+          done
+
+      - name: Verify runtime role identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          for expected in nexora_migrator nexora_app nexora_worker; do
+            case "$expected" in
+              nexora_migrator) url="$MIGRATOR_DATABASE_URL" ;;
+              nexora_app) url="$APP_DATABASE_URL" ;;
+              nexora_worker) url="$WORKER_DATABASE_URL" ;;
+            esac
+            identity="$(psql "$url" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
+            [[ "$identity" == "$expected|$expected|f" ]] || { echo "Unexpected $expected identity: $identity" >&2; exit 1; }
+          done
 
       - name: Apply migrations on isolated branch
-        env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
           if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
             OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
@@ -196,40 +203,14 @@ jobs:
         shell: bash
         run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-schema.sql
 
-      - name: Resolve nexora_app connection
-        id: app
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_app
-          api_key: ${{ secrets.NEON_API_KEY }}
-
       - name: Verify producer idempotency and tenant isolation
-        env:
-          APP_DATABASE_URL: ${{ steps.app.outputs.db_url }}
         shell: bash
         run: |
           set -euo pipefail
           echo "::add-mask::$APP_DATABASE_URL"
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-app-runtime.sql
 
-      - name: Resolve nexora_worker connection
-        id: worker
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_worker
-          api_key: ${{ secrets.NEON_API_KEY }}
-
       - name: Verify atomic claims, worker ownership, retry backoff and terminal states
-        env:
-          WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
         shell: bash
         run: |
           set -euo pipefail
@@ -237,8 +218,6 @@ jobs:
           psql "$WORKER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-async-worker-runtime.sql
 
       - name: Verify exhausted expired lease reaping
-        env:
-          WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
         shell: bash
         run: |
           set -euo pipefail
