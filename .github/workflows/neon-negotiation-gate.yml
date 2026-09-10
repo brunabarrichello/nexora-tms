@@ -40,6 +40,7 @@ jobs:
         uses: actions/setup-node@v7
         with:
           node-version: 24.20.0
+          cache: pnpm
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -49,85 +50,81 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: test -n "${NEON_API_KEY:-}"
 
-      - name: Create isolated Neon branch via API
-        id: admin
-        shell: bash
+      - name: Create isolated Neon branch
+        id: create-neon
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ env.NEON_PROJECT_ID }}
+          parent_branch_id: ${{ env.NEON_PARENT_BRANCH_ID }}
+          branch_name: pr-${{ github.event.pull_request.number }}-negotiation-${{ github.run_id }}
+          database_name: ${{ env.DATABASE_NAME }}
+          role: neondb_owner
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Resolve isolated admin connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          branch_name="pr-${{ github.event.pull_request.number }}-negotiation-${{ github.run_id }}"
-          echo "NEON_TEST_BRANCH=$branch_name" >> "$GITHUB_ENV"
-          payload="$(jq -cn \
-            --arg name "$branch_name" \
-            --arg parent "$NEON_PARENT_BRANCH_ID" \
-            '{branch:{name:$name,parent_id:$parent},endpoints:[{type:"read_write",autoscaling_limit_min_cu:0.25,autoscaling_limit_max_cu:0.25,suspend_timeout_seconds:0}]}')"
-          body=/tmp/neon-create.json
-          status="$(curl --silent --show-error --request POST \
-            --header "Authorization: Bearer $NEON_API_KEY" \
-            --header 'Content-Type: application/json' \
-            --data "$payload" \
-            --output "$body" --write-out '%{http_code}' \
-            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/branches")"
-          if [[ "$status" != '201' ]]; then
-            echo "Neon branch creation failed: HTTP $status" >&2
-            jq -c 'del(.password,.connection_uri,.connection_string)' "$body" 2>/dev/null || cat "$body"
-            exit 1
-          fi
-          branch_id="$(jq -er '.branch.id' "$body")"
-          endpoint_id="$(jq -er '.endpoints[] | select(.type=="read_write") | .id' "$body" | head -n1)"
-          echo "NEON_TEST_BRANCH_ID=$branch_id" >> "$GITHUB_ENV"
-          echo "NEON_TEST_ENDPOINT_ID=$endpoint_id" >> "$GITHUB_ENV"
-          echo "branch_id=$branch_id" >> "$GITHUB_OUTPUT"
-          echo "Created Neon branch $branch_name ($branch_id) with endpoint $endpoint_id"
+          for attempt in $(seq 1 10); do
+            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=neondb_owner")"; then
+              ADMIN_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
+              if [[ -n "$ADMIN_DATABASE_URL" && "$ADMIN_DATABASE_URL" != "null" ]]; then break; fi
+            fi
+            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return admin URI.' >&2; exit 1; }
+            sleep 3
+          done
+          echo '::add-mask::'"$ADMIN_DATABASE_URL"
+          ADMIN_ID="$(psql "$ADMIN_DATABASE_URL" -Atqc 'select session_user || '"'"':'"'"' || current_user')"
+          [[ "$ADMIN_ID" == 'neondb_owner:neondb_owner' ]]
+          echo "ADMIN_DATABASE_URL=$ADMIN_DATABASE_URL" >> "$GITHUB_ENV"
+          echo "Verified isolated admin identity: $ADMIN_ID"
 
-      - name: Ensure PostgreSQL client
-        shell: bash
+      - name: Bootstrap migration and application capabilities
         run: |
           set -euo pipefail
-          if ! command -v psql >/dev/null 2>&1; then
-            sudo apt-get update
-            sudo apt-get install -y postgresql-client
-          fi
-          psql --version
-
-      - name: Bootstrap roles and database access
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          set -euo pipefail
-          ADMIN_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name neondb_owner)"
-          echo "::add-mask::$ADMIN_DATABASE_URL"
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
-          GRANT nexora_owner TO nexora_migrator;
           GRANT nexora_migrator TO neondb_owner;
           GRANT nexora_owner TO neondb_owner;
-          CREATE SCHEMA IF NOT EXISTS nexora AUTHORIZATION nexora_migrator;
+          GRANT nexora_owner TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_app;
-          GRANT CREATE ON DATABASE nexora TO nexora_owner;
-          GRANT USAGE, CREATE ON SCHEMA nexora TO nexora_owner;
-          GRANT USAGE ON SCHEMA public TO nexora_app;
           SQL
 
       - name: Resolve migrator connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_migrator)"
-          echo "::add-mask::$URL"
-          echo "MIGRATOR_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 10); do
+            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=nexora_migrator&pooled=false")"; then
+              MIGRATOR_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
+              if [[ -n "$MIGRATOR_DATABASE_URL" && "$MIGRATOR_DATABASE_URL" != "null" ]]; then break; fi
+            fi
+            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return migrator URI.' >&2; exit 1; }
+            sleep 3
+          done
+          echo '::add-mask::'"$MIGRATOR_DATABASE_URL"
+          echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
 
-      - name: Apply migrations as owner
+      - name: Resolve migration capability
         run: |
           set -euo pipefail
-          OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          echo "::add-mask::$OWNER_DATABASE_URL"
+          if [[ "$MIGRATOR_DATABASE_URL" == *'?'* ]]; then
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
+          else
+            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
+          fi
+          echo '::add-mask::'"$OWNER_DATABASE_URL"
           echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -c 'SELECT session_user, current_user;'
-          DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+          roles="$(psql "$OWNER_DATABASE_URL" -Atqc 'select session_user || '"'"':'"'"' || current_user')"
+          [[ "$roles" == 'nexora_migrator:nexora_owner' ]]
+
+      - name: Apply migrations for negotiation schema
+        run: DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
 
       - name: Verify negotiation schema and grants
         run: |
@@ -150,11 +147,19 @@ jobs:
       - name: Resolve app connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          URL="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" --project-id "$NEON_PROJECT_ID" --database-name "$DATABASE_NAME" --role-name nexora_app)"
-          echo "::add-mask::$URL"
-          echo "APP_DATABASE_URL=$URL" >> "$GITHUB_ENV"
+          for attempt in $(seq 1 10); do
+            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=nexora_app")"; then
+              APP_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
+              if [[ -n "$APP_DATABASE_URL" && "$APP_DATABASE_URL" != "null" ]]; then break; fi
+            fi
+            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return app URI.' >&2; exit 1; }
+            sleep 3
+          done
+          echo '::add-mask::'"$APP_DATABASE_URL"
+          echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
 
       - name: Verify runtime tenant isolation and reply scope
         run: |
@@ -171,10 +176,21 @@ jobs:
           ROLLBACK;
           SQL
 
+      - name: Gate summary
+        run: |
+          {
+            echo '### Neon Negotiation Gate'
+            echo '- Isolated branch: create-branch-action@v6'
+            echo '- Database: nexora'
+            echo '- Negotiation schema, RLS and least-privilege grants: verified'
+            echo '- Runtime tenant isolation and reply scope: verified'
+            echo '- Production: untouched'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Delete ephemeral Neon branch
-        if: always() && steps.admin.outputs.branch_id != ''
+        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
         uses: neondatabase/delete-branch-action@v3
         with:
           project_id: ${{ env.NEON_PROJECT_ID }}
-          branch_id: ${{ steps.admin.outputs.branch_id }}
+          branch_id: ${{ steps.create-neon.outputs.branch_id }}
           api_key: ${{ secrets.NEON_API_KEY }}
