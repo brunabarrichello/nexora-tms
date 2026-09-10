@@ -20,7 +20,11 @@ async function bootstrap(): Promise<void> {
   const config = loadWorkerConfig();
   const logger = new StructuredLogger(config.workerId, config.environment);
   const app = await NestFactory.createApplicationContext(WorkerModule, { logger: false });
-  const store = new PgAsyncStore(config.database, config.maxConcurrency);
+  const store = new PgAsyncStore(
+    config.database,
+    config.maxConcurrency,
+    config.connectionTimeoutMs,
+  );
   const communicationProviders = new CommunicationProviderRegistry();
   if (
     config.environment !== 'production' &&

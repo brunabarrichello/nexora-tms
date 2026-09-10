@@ -83,20 +83,22 @@ function databasePoolConfig(database: WorkerDatabaseConfig): PoolConfig {
 export class PgAsyncStore implements AsyncStore {
   private readonly pool: Pool;
 
-  constructor(database: WorkerDatabaseConfig, maxConnections: number) {
+  constructor(database: WorkerDatabaseConfig, maxConnections: number, connectionTimeoutMs: number) {
     this.pool = new Pool({
       ...databasePoolConfig(database),
       application_name: 'nexora-tms-worker',
       max: Math.max(2, maxConnections + 2),
       idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 10_000,
+      connectionTimeoutMillis: connectionTimeoutMs,
     });
   }
 
   async connect(): Promise<{ role: string; database: string }> {
-    const result = await this.pool.query<{ role: string; database: string }>(
-      'select current_user as role, current_database() as database',
-    );
+    const result = await this.pool.query<{
+      role: string;
+      session_role: string;
+      database: string;
+    }>('select current_user as role, session_user as session_role, current_database() as database');
     const row = result.rows[0];
     if (!row) {
       throw new Error('Worker database identity query returned no rows');
@@ -104,7 +106,15 @@ export class PgAsyncStore implements AsyncStore {
     if (row.role !== 'nexora_worker') {
       throw new Error(`Worker database identity mismatch: expected nexora_worker, got ${row.role}`);
     }
-    return row;
+    if (row.session_role !== 'nexora_worker') {
+      throw new Error(
+        `Worker session identity mismatch: expected nexora_worker, got ${row.session_role}`,
+      );
+    }
+    if (row.database !== 'nexora') {
+      throw new Error(`Worker database target mismatch: expected nexora, got ${row.database}`);
+    }
+    return { role: row.role, database: row.database };
   }
 
   async close(): Promise<void> {
