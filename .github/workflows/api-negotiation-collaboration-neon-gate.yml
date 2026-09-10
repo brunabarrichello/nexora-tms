@@ -92,6 +92,7 @@ jobs:
           GRANT nexora_migrator TO neondb_owner;
           GRANT nexora_owner TO neondb_owner;
           GRANT nexora_owner TO nexora_migrator;
+          GRANT nexora_app TO neondb_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_app;
