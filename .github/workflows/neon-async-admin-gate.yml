@@ -23,6 +23,7 @@ concurrency:
 
 env:
   NEON_PROJECT_ID: raspy-river-76339604
+  DATABASE_NAME: nexora
 
 jobs:
   async-admin:
@@ -156,24 +157,44 @@ jobs:
           GRANT USAGE, CREATE ON SCHEMA public TO nexora_migrator;
           SQL
 
-      - name: Resolve migrator connection
-        id: migrator
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_migrator
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Apply full migration chain
+      - name: Resolve role connection strings on existing branch
         env:
-          MIGRATOR_DATABASE_URL: ${{ steps.migrator.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
+          for role in nexora_migrator nexora_app nexora_worker; do
+            url="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+              --project-id "$NEON_PROJECT_ID" \
+              --database-name "$DATABASE_NAME" \
+              --role-name "$role")"
+            test -n "$url" || { echo "Unable to resolve connection string for $role." >&2; exit 1; }
+            echo "::add-mask::$url"
+            case "$role" in
+              nexora_migrator) echo "MIGRATOR_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+              nexora_app) echo "APP_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+              nexora_worker) echo "WORKER_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+            esac
+          done
+
+      - name: Verify runtime role identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          for expected in nexora_migrator nexora_app nexora_worker; do
+            case "$expected" in
+              nexora_migrator) url="$MIGRATOR_DATABASE_URL" ;;
+              nexora_app) url="$APP_DATABASE_URL" ;;
+              nexora_worker) url="$WORKER_DATABASE_URL" ;;
+            esac
+            identity="$(psql "$url" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
+            [[ "$identity" == "$expected|$expected|f" ]] || { echo "Unexpected $expected identity: $identity" >&2; exit 1; }
+          done
+
+      - name: Apply full migration chain
+        shell: bash
+        run: |
+          set -euo pipefail
           if [[ "$MIGRATOR_DATABASE_URL" == *"?"* ]]; then
             OWNER_MIGRATOR_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
           else
@@ -190,28 +211,6 @@ jobs:
         shell: bash
         run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/nex55-async-admin-fixtures.sql
 
-      - name: Resolve nexora_app connection
-        id: app
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_app
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Resolve nexora_worker connection
-        id: worker
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: staging
-          branch_name: ${{ env.NEON_TEST_BRANCH }}
-          database: nexora
-          role: nexora_worker
-          api_key: ${{ secrets.NEON_API_KEY }}
-
       - name: Build API and Worker
         run: |
           pnpm --filter @nexora/api build
@@ -222,8 +221,8 @@ jobs:
 
       - name: Run NEX-55 async administration integration
         env:
-          DATABASE_URL: ${{ steps.app.outputs.db_url }}
-          WORKER_DATABASE_URL: ${{ steps.worker.outputs.db_url }}
+          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
+          WORKER_DATABASE_URL: ${{ env.WORKER_DATABASE_URL }}
           DATABASE_POOL_MAX: 2
         shell: bash
         run: |
