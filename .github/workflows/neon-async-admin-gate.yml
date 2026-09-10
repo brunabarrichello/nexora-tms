@@ -124,7 +124,7 @@ jobs:
           set -euo pipefail
           test -n "${BRANCH_ID:-}" || { echo "Unable to allocate an isolated Neon branch after bounded retries." >&2; exit 1; }
 
-      - name: Ensure PostgreSQL client
+      - name: Ensure PostgreSQL client and Neon CLI
         shell: bash
         run: |
           set -euo pipefail
@@ -133,6 +133,7 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
           psql --version
+          npx --yes neonctl@v2 --version
 
       - name: Bootstrap migration capability
         env:
@@ -220,16 +221,12 @@ jobs:
         run: pnpm --filter @nexora/worker test
 
       - name: Run NEX-55 async administration integration
-        env:
-          DATABASE_URL: ${{ env.APP_DATABASE_URL }}
-          WORKER_DATABASE_URL: ${{ env.WORKER_DATABASE_URL }}
-          DATABASE_POOL_MAX: 2
         shell: bash
         run: |
           set -euo pipefail
-          echo "::add-mask::$DATABASE_URL"
+          echo "::add-mask::$APP_DATABASE_URL"
           echo "::add-mask::$WORKER_DATABASE_URL"
-          node apps/api/dist/reliability/async-admin.integration.js
+          DATABASE_URL="$APP_DATABASE_URL" WORKER_DATABASE_URL="$WORKER_DATABASE_URL" DATABASE_POOL_MAX=2 node apps/api/dist/reliability/async-admin.integration.js
 
       - name: Verify audit, idempotency and final success
         shell: bash
