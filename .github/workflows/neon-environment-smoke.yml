@@ -42,8 +42,8 @@ jobs:
             development|staging) ;;
             *) echo "Only development and staging are allowed." >&2; exit 1 ;;
           esac
-          [[ "$wave" == "0024" ]] || {
-            echo "Expected Wave 0024 promotion marker, found $wave" >&2
+          [[ "$wave" == "0024-async" ]] || {
+            echo "Expected Wave 0024-async promotion marker, found $wave" >&2
             exit 1
           }
           echo "environment=$target" >> "$GITHUB_OUTPUT"
@@ -159,4 +159,3 @@ jobs:
           project_id: ${{ env.NEON_PROJECT_ID }}
           branch: ${{ steps.smoke.outputs.branch }}
           api_key: ${{ secrets.NEON_API_KEY }}
-
