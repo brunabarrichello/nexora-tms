@@ -70,7 +70,7 @@ jobs:
           expires_at: ${{ env.NEON_TEST_EXPIRES_AT }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
-      - name: Ensure PostgreSQL client is available
+      - name: Ensure PostgreSQL client and Neon CLI
         shell: bash
         run: |
           set -euo pipefail
@@ -79,10 +79,7 @@ jobs:
             sudo apt-get install -y postgresql-client
           fi
           psql --version
-
-      - name: Install Neon CLI
-        shell: bash
-        run: npm i -g neonctl@2
+          npx --yes neonctl@v2 --version
 
       - name: Bootstrap migration capability
         shell: bash
@@ -101,21 +98,37 @@ jobs:
           GRANT USAGE, CREATE ON SCHEMA nexora TO nexora_owner;
           SQL
 
-      - name: Resolve nexora_migrator connection
-        shell: bash
+      - name: Resolve role connection strings on existing branch
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+        shell: bash
         run: |
           set -euo pipefail
-          MIGRATOR_DATABASE_URL="$(neonctl connection-string "$NEON_TEST_BRANCH" \
-            --project-id "$NEON_PROJECT_ID" \
-            --database-name "$DATABASE_NAME" \
-            --role-name nexora_migrator)"
-          test -n "$MIGRATOR_DATABASE_URL"
-          echo "::add-mask::$MIGRATOR_DATABASE_URL"
-          echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
-          identity="$(psql "$MIGRATOR_DATABASE_URL" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
-          [[ "$identity" == "nexora_migrator|nexora_migrator|f" ]] || { echo "Unexpected migration identity: $identity" >&2; exit 1; }
+          for role in nexora_migrator nexora_app; do
+            url="$(npx --yes neonctl@v2 connection-string "$NEON_TEST_BRANCH" \
+              --project-id "$NEON_PROJECT_ID" \
+              --database-name "$DATABASE_NAME" \
+              --role-name "$role")"
+            test -n "$url" || { echo "Unable to resolve connection string for $role." >&2; exit 1; }
+            echo "::add-mask::$url"
+            case "$role" in
+              nexora_migrator) echo "MIGRATOR_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+              nexora_app) echo "APP_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+            esac
+          done
+
+      - name: Verify runtime role identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          for expected in nexora_migrator nexora_app; do
+            case "$expected" in
+              nexora_migrator) url="$MIGRATOR_DATABASE_URL" ;;
+              nexora_app) url="$APP_DATABASE_URL" ;;
+            esac
+            identity="$(psql "$url" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
+            [[ "$identity" == "$expected|$expected|f" ]] || { echo "Unexpected $expected identity: $identity" >&2; exit 1; }
+          done
 
       - name: Apply migrations
         shell: bash
@@ -129,22 +142,6 @@ jobs:
       - name: Verify Wave 0024 schema, immutability, grants and RLS
         shell: bash
         run: psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/database/ci/wave-0024-audit-schema.sql
-
-      - name: Resolve nexora_app connection
-        shell: bash
-        env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          set -euo pipefail
-          APP_DATABASE_URL="$(neonctl connection-string "$NEON_TEST_BRANCH" \
-            --project-id "$NEON_PROJECT_ID" \
-            --database-name "$DATABASE_NAME" \
-            --role-name nexora_app)"
-          test -n "$APP_DATABASE_URL"
-          echo "::add-mask::$APP_DATABASE_URL"
-          identity="$(psql "$APP_DATABASE_URL" -At -F '|' -c "select current_user, session_user, (select rolbypassrls from pg_roles where rolname=current_user)")"
-          [[ "$identity" == "nexora_app|nexora_app|f" ]] || { echo "Unexpected API runtime identity: $identity" >&2; exit 1; }
-          echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
 
       - name: Verify runtime writes, sensitive payload guard and tenant isolation
         shell: bash
