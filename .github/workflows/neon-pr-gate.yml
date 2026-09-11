@@ -68,20 +68,27 @@ jobs:
           role: neondb_owner
           api_key: ${{ secrets.NEON_API_KEY }}
 
+      - name: Ensure PostgreSQL client and Neon CLI
+        run: |
+          set -euo pipefail
+          if ! command -v psql >/dev/null 2>&1; then
+            sudo apt-get update
+            sudo apt-get install -y postgresql-client
+          fi
+          psql --version
+          npx --yes neonctl@v2 --version
+
       - name: Resolve isolated admin connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 10); do
-            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=neondb_owner")"; then
-              ADMIN_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
-              if [[ -n "$ADMIN_DATABASE_URL" && "$ADMIN_DATABASE_URL" != "null" ]]; then break; fi
-            fi
-            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return admin URI.' >&2; exit 1; }
-            sleep 3
-          done
+          ADMIN_DATABASE_URL="$(npx --yes neonctl@v2 connection-string "$BRANCH_ID" \
+            --project-id "$NEON_PROJECT_ID" \
+            --database-name "$DATABASE_NAME" \
+            --role-name neondb_owner)"
+          test -n "$ADMIN_DATABASE_URL"
           echo '::add-mask::'"$ADMIN_DATABASE_URL"
           ADMIN_ID="$(psql "$ADMIN_DATABASE_URL" -Atqc 'select session_user || '"'"':'"'"' || current_user')"
           [[ "$ADMIN_ID" == 'neondb_owner:neondb_owner' ]]
@@ -99,33 +106,62 @@ jobs:
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           SQL
 
-      - name: Resolve app connection
+      - name: Resolve runtime role connections
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 10); do
-            if URI_JSON="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/connection_uri?branch_id=${BRANCH_ID}&database_name=${DATABASE_NAME}&role_name=nexora_app")"; then
-              APP_DATABASE_URL="$(printf '%s' "$URI_JSON" | jq -r '.uri // .connection_uri // empty')"
-              if [[ -n "$APP_DATABASE_URL" && "$APP_DATABASE_URL" != "null" ]]; then break; fi
-            fi
-            [[ "$attempt" -eq 10 ]] && { echo 'Neon API did not return app URI.' >&2; exit 1; }
-            sleep 3
+          for role in nexora_migrator nexora_app; do
+            url="$(npx --yes neonctl@v2 connection-string "$BRANCH_ID" \
+              --project-id "$NEON_PROJECT_ID" \
+              --database-name "$DATABASE_NAME" \
+              --role-name "$role")"
+            test -n "$url"
+            echo "::add-mask::$url"
+            case "$role" in
+              nexora_migrator) echo "MIGRATOR_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+              nexora_app) echo "APP_DATABASE_URL=$url" >> "$GITHUB_ENV" ;;
+            esac
           done
-          echo '::add-mask::'"$APP_DATABASE_URL"
-          echo "APP_DATABASE_URL=$APP_DATABASE_URL" >> "$GITHUB_ENV"
 
-      - name: Verify application role security boundary
+      - name: Verify runtime role security boundaries
         run: |
           set -euo pipefail
           psql "$APP_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
+          DECLARE
+            app_role pg_roles%ROWTYPE;
+            migrator_role pg_roles%ROWTYPE;
+            owner_role pg_roles%ROWTYPE;
           BEGIN
-            IF current_user <> 'nexora_app' THEN RAISE EXCEPTION 'Expected nexora_app runtime role, got %', current_user; END IF;
-            IF session_user <> 'nexora_app' THEN RAISE EXCEPTION 'Expected nexora_app session role, got %', session_user; END IF;
-            IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname='nexora_app' AND rolbypassrls) THEN RAISE EXCEPTION 'nexora_app must not BYPASSRLS'; END IF;
-            IF EXISTS (SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace JOIN pg_roles r ON r.oid=c.relowner WHERE n.nspname='nexora' AND c.relkind IN ('r','p') AND r.rolname='nexora_app') THEN RAISE EXCEPTION 'nexora_app must not own nexora application tables'; END IF;
+            SELECT * INTO app_role FROM pg_roles WHERE rolname='nexora_app';
+            SELECT * INTO migrator_role FROM pg_roles WHERE rolname='nexora_migrator';
+            SELECT * INTO owner_role FROM pg_roles WHERE rolname='nexora_owner';
+
+            IF current_user <> 'nexora_app' OR session_user <> 'nexora_app' THEN
+              RAISE EXCEPTION 'Expected nexora_app runtime identity, got current=% session=%', current_user, session_user;
+            END IF;
+            IF app_role.rolbypassrls OR app_role.rolcreaterole OR app_role.rolcreatedb OR NOT app_role.rolcanlogin THEN
+              RAISE EXCEPTION 'nexora_app has unsafe role attributes';
+            END IF;
+            IF migrator_role.rolbypassrls OR migrator_role.rolcreaterole OR migrator_role.rolcreatedb OR NOT migrator_role.rolcanlogin OR migrator_role.rolinherit THEN
+              RAISE EXCEPTION 'nexora_migrator has unsafe role attributes';
+            END IF;
+            IF owner_role.rolcanlogin OR owner_role.rolbypassrls OR owner_role.rolcreaterole OR owner_role.rolcreatedb OR owner_role.rolinherit THEN
+              RAISE EXCEPTION 'nexora_owner must remain NOLOGIN, non-bypass, non-inheriting capability role';
+            END IF;
+            IF EXISTS (
+              SELECT 1
+              FROM pg_class c
+              JOIN pg_namespace n ON n.oid=c.relnamespace
+              JOIN pg_roles r ON r.oid=c.relowner
+              WHERE n.nspname='public'
+                AND c.relkind IN ('r','p')
+                AND r.rolname IN ('nexora_app','nexora_migrator','nexora_worker')
+            ) THEN
+              RAISE EXCEPTION 'Runtime roles must not own application tables';
+            END IF;
           END $$;
           SQL
 
@@ -156,8 +192,10 @@ jobs:
             echo '### Neon Database Gate'
             echo '- Canonical migration/ledger/RLS baseline: neon-migrate.yml'
             echo '- Isolated branch: create-branch-action@v6'
+            echo '- Connection resolution: neonctl@v2'
             echo '- Database: nexora'
-            echo '- Runtime role boundary: nexora_app verified'
+            echo '- Runtime role boundaries: app/migrator/owner verified'
+            echo '- Runtime roles do not own application tables'
             echo '- Wave 0024 append-only grants: verified when present'
             echo '- Production: untouched'
           } >> "$GITHUB_STEP_SUMMARY"
