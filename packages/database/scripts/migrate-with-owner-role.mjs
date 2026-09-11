@@ -11,21 +11,41 @@ const sql = postgres(url, {
 });
 
 try {
-  const [identity] = await sql`select session_user, current_user, current_database()`;
-  if (identity.session_user !== 'nexora_migrator' || identity.current_user !== 'nexora_migrator' || identity.current_database !== 'nexora') {
-    throw new Error(`Unexpected migration identity: ${identity.session_user}:${identity.current_user}:${identity.current_database}`);
+  const [identity] = await sql`
+    select session_user, current_user, current_database()
+  `;
+  if (
+    identity.session_user !== 'nexora_migrator' ||
+    identity.current_user !== 'nexora_migrator' ||
+    identity.current_database !== 'nexora'
+  ) {
+    throw new Error(
+      `Unexpected migration identity: ${identity.session_user}:${identity.current_user}:${identity.current_database}`,
+    );
   }
 
   await sql`set role nexora_owner`;
 
-  const [elevated] = await sql`select session_user, current_user, current_database()`;
-  if (elevated.session_user !== 'nexora_migrator' || elevated.current_user !== 'nexora_owner' || elevated.current_database !== 'nexora') {
-    throw new Error(`SET ROLE validation failed: ${elevated.session_user}:${elevated.current_user}:${elevated.current_database}`);
+  const [elevated] = await sql`
+    select session_user, current_user, current_database()
+  `;
+  if (
+    elevated.session_user !== 'nexora_migrator' ||
+    elevated.current_user !== 'nexora_owner' ||
+    elevated.current_database !== 'nexora'
+  ) {
+    throw new Error(
+      `SET ROLE validation failed: ${elevated.session_user}:${elevated.current_user}:${elevated.current_database}`,
+    );
   }
 
   const db = drizzle(sql);
-  await migrate(db, { migrationsFolder: new URL('../migrations', import.meta.url).pathname });
-  console.log(`Migration role chain verified: ${elevated.session_user} -> ${elevated.current_user}`);
+  await migrate(db, {
+    migrationsFolder: new URL('../migrations', import.meta.url).pathname,
+  });
+  console.log(
+    `Migration role chain verified: ${elevated.session_user} -> ${elevated.current_user}`,
+  );
 } finally {
   await sql.end({ timeout: 5 });
 }
