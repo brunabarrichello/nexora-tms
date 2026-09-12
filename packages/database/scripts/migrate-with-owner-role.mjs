@@ -1,6 +1,7 @@
 import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
+import { fileURLToPath } from 'node:url';
 
 const url = process.env.MIGRATOR_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!url) throw new Error('MIGRATOR_DATABASE_URL or DATABASE_URL is required');
@@ -50,7 +51,7 @@ try {
 
   const db = drizzle(sql);
   await migrate(db, {
-    migrationsFolder: new URL('../migrations', import.meta.url).pathname,
+    migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
   });
 
   console.log(
