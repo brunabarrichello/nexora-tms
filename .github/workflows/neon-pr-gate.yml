@@ -60,20 +60,27 @@ jobs:
           test "$EXPECTED_MIGRATIONS" -gt 0
           echo "EXPECTED_MIGRATIONS=$EXPECTED_MIGRATIONS" >> "$GITHUB_ENV"
           echo "Expected Drizzle migrations: $EXPECTED_MIGRATIONS"
-      - name: Set ephemeral branch name and expiry
-        run: |
-          set -euo pipefail
-          echo "NEON_TEST_BRANCH=pr-${{ github.event.pull_request.number }}-db-${{ github.run_id }}" >> "$GITHUB_ENV"
-          echo "NEON_TEST_EXPIRES_AT=$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_ENV"
-      - name: Create isolated Neon branch
-        id: create-neon
+      - name: Resolve reusable Neon preview branch
+        id: resolve-neon
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           set -euo pipefail
           sudo apt-get update
           sudo apt-get install -y postgresql-client jq
-          payload="$(jq -nc --arg parent_id "$NEON_PARENT_BRANCH_ID" --arg branch_name "$NEON_TEST_BRANCH" --arg expires_at "$NEON_TEST_EXPIRES_AT" '{branch:{parent_id:$parent_id,name:$branch_name,expires_at:$expires_at},endpoints:[{type:"read_write"}]}')"
+          requested_name="preview/${{ github.head_ref }}"
+          branches_json="$(curl -fsS -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
+          BRANCH_ID="$(printf '%s' "$branches_json" | jq -r --arg name "$requested_name" '.branches[] | select(.name == $name) | .id' | head -n1)"
+          if [[ -n "$BRANCH_ID" ]]; then
+            echo "branch_id=$BRANCH_ID" >> "$GITHUB_OUTPUT"
+            echo 'created=false' >> "$GITHUB_OUTPUT"
+            echo "Reusing existing Neon preview branch: $requested_name ($BRANCH_ID)"
+            exit 0
+          fi
+
+          branch_name="pr-${{ github.event.pull_request.number }}-db-${{ github.run_id }}"
+          expires_at="$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
+          payload="$(jq -nc --arg parent_id "$NEON_PARENT_BRANCH_ID" --arg branch_name "$branch_name" --arg expires_at "$expires_at" '{branch:{parent_id:$parent_id,name:$branch_name,expires_at:$expires_at},endpoints:[{type:"read_write"}]}')"
           response_file="$(mktemp)"
           status="$(curl -sS -o "$response_file" -w '%{http_code}' -X POST -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' -H 'Content-Type: application/json' --data "$payload" "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches")"
           if [[ "$status" != "201" ]]; then
@@ -84,11 +91,12 @@ jobs:
           BRANCH_ID="$(jq -r '.branch.id // empty' "$response_file")"
           test -n "$BRANCH_ID"
           echo "branch_id=$BRANCH_ID" >> "$GITHUB_OUTPUT"
-          echo "Created isolated Neon branch: $NEON_TEST_BRANCH ($BRANCH_ID)"
+          echo 'created=true' >> "$GITHUB_OUTPUT"
+          echo "Created isolated Neon branch: $branch_name ($BRANCH_ID)"
       - name: Resolve isolated admin connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
+          BRANCH_ID: ${{ steps.resolve-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
           for attempt in $(seq 1 10); do
@@ -109,12 +117,8 @@ jobs:
           set -euo pipefail
           psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           GRANT nexora_owner TO nexora_migrator;
-          GRANT nexora_migrator TO neondb_owner;
-          CREATE SCHEMA IF NOT EXISTS nexora AUTHORIZATION nexora_migrator;
-          SET ROLE nexora_migrator;
+          CREATE SCHEMA IF NOT EXISTS nexora AUTHORIZATION nexora_owner;
           GRANT USAGE, CREATE ON SCHEMA nexora TO nexora_owner;
-          RESET ROLE;
-          GRANT nexora_owner TO neondb_owner;
           GRANT CONNECT ON DATABASE nexora TO nexora_migrator;
           GRANT CONNECT ON DATABASE nexora TO nexora_owner;
           GRANT CREATE ON DATABASE nexora TO nexora_owner;
@@ -128,7 +132,7 @@ jobs:
         id: migrator-connection
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
+          BRANCH_ID: ${{ steps.resolve-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
           for attempt in $(seq 1 10); do
@@ -141,31 +145,20 @@ jobs:
           done
           echo '::add-mask::'"$MIGRATOR_DATABASE_URL"
           echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
-      - name: Resolve migration capability
-        run: |
-          set -euo pipefail
-          if [[ "$MIGRATOR_DATABASE_URL" == *'?'* ]]; then
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}&options=-c%20role%3Dnexora_owner"
-          else
-            OWNER_DATABASE_URL="${MIGRATOR_DATABASE_URL}?options=-c%20role%3Dnexora_owner"
-          fi
-          echo '::add-mask::'"$OWNER_DATABASE_URL"
-          roles="$(psql "$OWNER_DATABASE_URL" -Atqc 'select session_user || '"'"':'"'"' || current_user')"
-          [[ "$roles" == 'nexora_migrator:nexora_owner' ]]
-          echo "OWNER_DATABASE_URL=$OWNER_DATABASE_URL" >> "$GITHUB_ENV"
-          echo "Verified migration role chain: $roles"
-      - name: Apply full versioned Drizzle migration chain
-        run: DATABASE_URL="$OWNER_DATABASE_URL" pnpm --filter @nexora/database db:migrate
+      - name: Apply full versioned Drizzle migration chain with session-scoped owner role
+        run: pnpm --filter @nexora/database db:migrate:owner
+        env:
+          MIGRATOR_DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
       - name: Verify migration ledger
         run: |
           set -euo pipefail
-          ACTUAL_MIGRATIONS="$(psql "$OWNER_DATABASE_URL" -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
+          ACTUAL_MIGRATIONS="$(psql "$ADMIN_DATABASE_URL" -Atqc 'select count(*) from drizzle.__drizzle_migrations')"
           [[ "$ACTUAL_MIGRATIONS" == "$EXPECTED_MIGRATIONS" ]]
           echo "Verified Drizzle migration ledger: $ACTUAL_MIGRATIONS/$EXPECTED_MIGRATIONS"
       - name: Verify schema ownership, RLS and policies
         run: |
           set -euo pipefail
-          psql "$OWNER_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          psql "$ADMIN_DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
           DO $$
           DECLARE unsecured_tables text; unprotected_tables text;
           BEGIN
@@ -185,17 +178,18 @@ jobs:
           {
             echo '### Neon Database Gate'
             echo "- Drizzle ledger: ${EXPECTED_MIGRATIONS}/${EXPECTED_MIGRATIONS}"
-            echo '- Full migration chain: applied on isolated Neon branch'
+            echo '- Full migration chain: session-scoped nexora_migrator -> nexora_owner on isolated Neon branch'
+            echo '- No pooled startup role option used'
             echo '- nexora_app LOGIN/BYPASSRLS and table ownership: verified'
             echo '- tenant_id tables: RLS and policy presence verified'
             echo '- Wave 0024 append-only audit grants: verified when present'
             echo '- Production: untouched'
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Delete isolated Neon branch
-        if: ${{ always() && steps.create-neon.outputs.branch_id != '' }}
+      - name: Delete created ephemeral Neon branch
+        if: ${{ always() && steps.resolve-neon.outputs.created == 'true' && steps.resolve-neon.outputs.branch_id != '' }}
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-          BRANCH_ID: ${{ steps.create-neon.outputs.branch_id }}
+          BRANCH_ID: ${{ steps.resolve-neon.outputs.branch_id }}
         run: |
           set -euo pipefail
           status="$(curl -sS -o /tmp/neon-delete.json -w '%{http_code}' -X DELETE -H "Authorization: Bearer ${NEON_API_KEY}" -H 'Accept: application/json' "https://console.neon.tech/api/v2/projects/${NEON_PROJECT_ID}/branches/${BRANCH_ID}")"
