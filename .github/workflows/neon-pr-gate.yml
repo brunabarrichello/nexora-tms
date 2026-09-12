@@ -77,7 +77,6 @@ jobs:
             echo "Reusing existing Neon preview branch: $requested_name ($BRANCH_ID)"
             exit 0
           fi
-
           branch_name="pr-${{ github.event.pull_request.number }}-db-${{ github.run_id }}"
           expires_at="$(date -u --date '+2 hours' +'%Y-%m-%dT%H:%M:%SZ')"
           payload="$(jq -nc --arg parent_id "$NEON_PARENT_BRANCH_ID" --arg branch_name "$branch_name" --arg expires_at "$expires_at" '{branch:{parent_id:$parent_id,name:$branch_name,expires_at:$expires_at},endpoints:[{type:"read_write"}]}')"
@@ -147,8 +146,6 @@ jobs:
           echo "MIGRATOR_DATABASE_URL=$MIGRATOR_DATABASE_URL" >> "$GITHUB_ENV"
       - name: Apply full versioned Drizzle migration chain with session-scoped owner role
         run: pnpm --filter @nexora/database db:migrate:owner
-        env:
-          MIGRATOR_DATABASE_URL: ${{ env.MIGRATOR_DATABASE_URL }}
       - name: Verify migration ledger
         run: |
           set -euo pipefail
