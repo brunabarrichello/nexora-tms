@@ -5,44 +5,54 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator';
 const url = process.env.MIGRATOR_DATABASE_URL ?? process.env.DATABASE_URL;
 if (!url) throw new Error('MIGRATOR_DATABASE_URL or DATABASE_URL is required');
 
+const parsedUrl = new URL(url);
+if (parsedUrl.hostname.includes('-pooler.')) {
+  throw new Error(
+    'Migration runner requires a direct Neon endpoint; pooled endpoints are not supported for SET ROLE',
+  );
+}
+if (parsedUrl.searchParams.has('options')) {
+  throw new Error(
+    'Migration runner does not accept startup options; use session-scoped SET ROLE instead',
+  );
+}
+
 const sql = postgres(url, {
   max: 1,
   prepare: false,
+  connect_timeout: 10,
 });
 
-try {
-  const [identity] = await sql`
-    select session_user, current_user, current_database()
-  `;
+const assertIdentity = (identity, expectedUser) => {
   if (
     identity.session_user !== 'nexora_migrator' ||
-    identity.current_user !== 'nexora_migrator' ||
+    identity.current_user !== expectedUser ||
     identity.current_database !== 'nexora'
   ) {
     throw new Error(
       `Unexpected migration identity: ${identity.session_user}:${identity.current_user}:${identity.current_database}`,
     );
   }
+};
+
+try {
+  const [identity] = await sql`
+    select session_user, current_user, current_database()
+  `;
+  assertIdentity(identity, 'nexora_migrator');
 
   await sql`set role nexora_owner`;
 
   const [elevated] = await sql`
     select session_user, current_user, current_database()
   `;
-  if (
-    elevated.session_user !== 'nexora_migrator' ||
-    elevated.current_user !== 'nexora_owner' ||
-    elevated.current_database !== 'nexora'
-  ) {
-    throw new Error(
-      `SET ROLE validation failed: ${elevated.session_user}:${elevated.current_user}:${elevated.current_database}`,
-    );
-  }
+  assertIdentity(elevated, 'nexora_owner');
 
   const db = drizzle(sql);
   await migrate(db, {
     migrationsFolder: new URL('../migrations', import.meta.url).pathname,
   });
+
   console.log(
     `Migration role chain verified: ${elevated.session_user} -> ${elevated.current_user}`,
   );
