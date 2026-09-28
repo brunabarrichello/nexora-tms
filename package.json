@@ -35,12 +35,12 @@
     "validate": "pnpm lint && pnpm format:check && pnpm typecheck && pnpm test && pnpm build"
   },
   "devDependencies": {
-    "eslint": "10.9.1",
-    "lint-staged": "17.3.0",
-    "prettier": "3.9.6",
+    "eslint": "10.11.0",
+    "lint-staged": "17.5.1",
+    "prettier": "3.9.9",
     "simple-git-hooks": "2.14.0",
-    "turbo": "2.10.12",
-    "typescript-eslint": "8.68.0"
+    "turbo": "2.11.4",
+    "typescript-eslint": "8.70.1"
   },
   "lint-staged": {
     "*.{ts,tsx}": [
